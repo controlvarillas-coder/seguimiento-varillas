@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Varillas · Control de Producción</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">V</div>
+        <div>
+          <p class="eyebrow">Sistema interno</p>
+          <h1>Varillas Control</h1>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-link active" data-section="dashboard">Dashboard</button>
+        <button class="nav-link" data-section="movimientos">Movimientos</button>
+        <button class="nav-link" data-section="stock">Stock</button>
+        <button class="nav-link gerencia-only" data-section="alertas">Alertas</button>
+        <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card" id="userCardMini">
+          <div class="avatar" id="avatarMini">G</div>
+          <div>
+            <strong id="miniName">Invitado</strong>
+            <span id="miniRole">Sin sesión</span>
+          </div>
+        </div>
+        <button class="ghost-btn hidden" id="logoutBtn">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-btn" id="menuBtn">☰</button>
+          <div>
+            <p class="eyebrow">Seguimiento de producción y stock</p>
+            <h2 id="pageTitle">Dashboard general</h2>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="pill" id="connectionPill">Modo demo</span>
+        </div>
+      </header>
+
+      <section class="screen active" id="screen-login">
+        <div class="login-wrap">
+          <div class="login-card premium-card">
+            <div class="login-copy">
+              <p class="eyebrow">Acceso seguro</p>
+              <h3>Control integral de varillas</h3>
+              <p>Ingresá con tu usuario para ver tu panel, registrar movimientos y controlar diferencias entre depósitos.</p>
+            </div>
+
+            <form id="loginForm" class="form-grid">
+              <label>
+                <span>Email</span>
+                <input type="email" id="email" placeholder="gerencia@empresa.com" required>
+              </label>
+              <label>
+                <span>Contraseña</span>
+                <input type="password" id="password" placeholder="••••••••" required>
+              </label>
+              <button type="submit" class="primary-btn">Ingresar</button>
+              <p class="helper-text">Primero habilitá Authentication en Firebase y creá tus usuarios.</p>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-app">
+        <section class="section active" id="section-dashboard">
+          <div class="hero premium-card">
+            <div>
+              <p class="eyebrow">Visión consolidada</p>
+              <h3>Tablero operativo en tiempo real</h3>
+              <p>Controlá producción, traslados, recepciones pendientes y diferencias desde un solo lugar.</p>
+            </div>
+            <div class="hero-badges">
+              <span class="metric-chip">Producción</span>
+              <span class="metric-chip">Stock</span>
+              <span class="metric-chip">Alertas</span>
+            </div>
+          </div>
+
+          <div class="stats-grid" id="statsGrid">
+            <article class="stat-card premium-card">
+              <span>Movimientos hoy</span>
+              <strong id="statMovimientos">0</strong>
+            </article>
+            <article class="stat-card premium-card">
+              <span>Pendientes de recepción</span>
+              <strong id="statPendientes">0</strong>
+            </article>
+            <article class="stat-card premium-card">
+              <span>Alertas por diferencia</span>
+              <strong id="statAlertas">0</strong>
+            </article>
+            <article class="stat-card premium-card gerencia-only">
+              <span>Stock total consolidado</span>
+              <strong id="statStock">0</strong>
+            </article>
+          </div>
+
+          <div class="grid-2">
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Últimos movimientos</h4>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Producto</th>
+                      <th>Origen</th>
+                      <th>Destino</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboardMovimientos"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Alertas activas</h4>
+              </div>
+              <div id="alertasList" class="stack-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-movimientos">
+          <div class="grid-2">
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Registrar salida</h4>
+              </div>
+              <form id="formMovimiento" class="form-grid two-cols">
+                <label>
+                  <span>Fecha</span>
+                  <input type="date" id="movFecha" required>
+                </label>
+                <label>
+                  <span>Producto</span>
+                  <select id="movProducto" required></select>
+                </label>
+                <label>
+                  <span>Depósito origen</span>
+                  <select id="movOrigen" required></select>
+                </label>
+                <label>
+                  <span>Depósito destino</span>
+                  <select id="movDestino" required></select>
+                </label>
+                <label>
+                  <span>Cantidad enviada</span>
+                  <input type="number" id="movCantidad" min="1" required>
+                </label>
+                <label>
+                  <span>Observaciones</span>
+                  <input type="text" id="movObs" placeholder="Detalle opcional">
+                </label>
+                <button type="submit" class="primary-btn full">Guardar movimiento</button>
+              </form>
+            </div>
+
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Confirmar recepción</h4>
+              </div>
+              <form id="formRecepcion" class="form-grid">
+                <label>
+                  <span>Movimiento pendiente</span>
+                  <select id="recepcionMovimiento" required></select>
+                </label>
+                <label>
+                  <span>Cantidad recibida</span>
+                  <input type="number" id="recepcionCantidad" min="1" required>
+                </label>
+                <label>
+                  <span>Observaciones</span>
+                  <input type="text" id="recepcionObs" placeholder="Ej: faltaron 2 bultos">
+                </label>
+                <button type="submit" class="primary-btn">Confirmar recepción</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="premium-card mt-24">
+            <div class="card-head">
+              <h4>Historial de movimientos</h4>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Producto</th>
+                    <th>Enviado</th>
+                    <th>Recibido</th>
+                    <th>Origen</th>
+                    <th>Destino</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaMovimientos"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-stock">
+          <div class="premium-card">
+            <div class="card-head">
+              <h4>Stock por depósito</h4>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Depósito</th>
+                    <th>Cantidad</th>
+                    <th>Actualizado</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaStock"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-alertas">
+          <div class="premium-card">
+            <div class="card-head">
+              <h4>Alertas y diferencias</h4>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Movimiento</th>
+                    <th>Mensaje</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaAlertas"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-usuarios">
+          <div class="grid-2">
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Usuarios del sistema</h4>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Email</th>
+                      <th>Rol</th>
+                      <th>Depósito</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tablaUsuarios"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="premium-card">
+              <div class="card-head">
+                <h4>Cómo cargar usuarios</h4>
+              </div>
+              <div class="info-box">
+                <p><strong>1.</strong> Creá el usuario en Firebase Authentication.</p>
+                <p><strong>2.</strong> Luego agregá un documento en la colección <code>usuarios</code> con el mismo email.</p>
+                <p><strong>3.</strong> Campos sugeridos: <code>nombre</code>, <code>email</code>, <code>rol</code>, <code>depositoId</code>, <code>activo</code>.</p>
+                <p><strong>4.</strong> Roles sugeridos: <code>gerencia</code>, <code>deposito</code>, <code>produccion</code>.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
