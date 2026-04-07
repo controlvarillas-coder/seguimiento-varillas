@@ -4,13 +4,12 @@ import {
   onAuthStateChanged,
   signOut
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
 import {
   collection,
   addDoc,
   getDocs,
-  getDoc,
   doc,
-  setDoc,
   updateDoc,
   serverTimestamp,
   query,
@@ -28,7 +27,8 @@ const state = {
   movimientos: [],
   stock: [],
   alertas: [],
-  usuarios: []
+  usuarios: [],
+  filtroFecha: ''
 };
 
 const els = {
@@ -44,9 +44,10 @@ const els = {
 };
 
 function toast(message) {
+  if (!els.toast) return;
   els.toast.textContent = message;
   els.toast.classList.add('show');
-  setTimeout(() => els.toast.classList.remove('show'), 2400);
+  setTimeout(() => els.toast.classList.remove('show'), 2500);
 }
 
 function formatDate(value) {
@@ -76,28 +77,16 @@ function badge(status) {
 function setLoggedUI(logged) {
   els.loginScreen.classList.toggle('active', !logged);
   els.appScreen.classList.toggle('active', logged);
-  els.logoutBtn.classList.toggle('hidden', !logged);
-  els.connectionPill.textContent = logged ? 'Conectado a Firebase' : 'Modo demo';
-}
-
-function applyRoleUI() {
-  const rol = state.perfil?.rol || 'deposito';
-  document.querySelectorAll('.gerencia-only').forEach((el) => {
-    el.classList.toggle('hidden', rol !== 'gerencia');
-  });
-
-  if (rol === 'gerencia') {
-    els.pageTitle.textContent = 'Dashboard gerencial';
-  } else if (rol === 'produccion') {
-    els.pageTitle.textContent = 'Panel de producción';
-  } else {
-    els.pageTitle.textContent = 'Panel de depósito';
+  if (els.logoutBtn) els.logoutBtn.classList.toggle('hidden', !logged);
+  if (els.connectionPill) {
+    els.connectionPill.textContent = logged ? 'Conectado a Firebase' : 'Modo demo';
   }
 }
 
 function fillUserCard() {
   const name = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
-  const role = state.perfil?.rol || 'sin rol';
+  const role = state.perfil?.rol || 'gerencia';
+
   $('miniName').textContent = name;
   $('miniRole').textContent = role;
   $('avatarMini').textContent = name.trim().charAt(0).toUpperCase();
@@ -105,15 +94,22 @@ function fillUserCard() {
 
 function setSection(sectionId) {
   document.querySelectorAll('.section').forEach((el) => el.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach((el) => el.classList.toggle('active', el.dataset.section === sectionId));
-  $(`section-${sectionId}`).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach((el) => {
+    el.classList.toggle('active', el.dataset.section === sectionId);
+  });
+
+  const target = $(`section-${sectionId}`);
+  if (target) target.classList.add('active');
+
   const titles = {
     dashboard: 'Dashboard general',
-    movimientos: 'Movimientos entre depósitos',
+    productos: 'Gestión de productos',
+    movimientos: 'Movimientos por fecha',
     stock: 'Stock por depósito',
     alertas: 'Alertas y diferencias',
     usuarios: 'Usuarios del sistema'
   };
+
   els.pageTitle.textContent = titles[sectionId] || 'Varillas Control';
 }
 
@@ -127,15 +123,16 @@ function mountNavigation() {
 }
 
 async function fetchPerfil(email) {
-  const querySnap = await getDocs(query(collection(db, 'usuarios'), where('email', '==', email)));
-  if (querySnap.empty) return null;
-  const docSnap = querySnap.docs[0];
-  return { id: docSnap.id, ...docSnap.data() };
+  const q = query(collection(db, 'usuarios'), where('email', '==', email));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() };
 }
 
 async function loadCollection(name, options = {}) {
-  let ref = collection(db, name);
-  const snap = options.query ? await getDocs(options.query(ref)) : await getDocs(ref);
+  const ref = collection(db, name);
+  const snap = options.queryBuilder ? await getDocs(options.queryBuilder(ref)) : await getDocs(ref);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -143,12 +140,36 @@ function byId(arr, id) {
   return arr.find((x) => x.id === id);
 }
 
+function getVisibleParaText(item) {
+  const map = {
+    gerencia: 'Gerencia',
+    banado: 'Bañado',
+    alvear: 'Alvear',
+    moron: 'Morón',
+    produccion: 'Producción'
+  };
+  const values = Array.isArray(item.visiblePara) ? item.visiblePara : [];
+  return values.length ? values.map((v) => map[v] || v).join(' · ') : 'Sin sectores';
+}
+
 function populateSelects() {
-  $('movProducto').innerHTML = state.productos.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join('');
-  $('movOrigen').innerHTML = state.depositos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('');
-  $('movDestino').innerHTML = state.depositos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('');
+  const productosActivos = state.productos.filter((p) => p.activo !== false);
+  const depositosActivos = state.depositos.filter((d) => d.activo !== false);
+
+  $('movProducto').innerHTML = productosActivos.length
+    ? productosActivos.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join('')
+    : '<option value="">Sin productos</option>';
+
+  $('movOrigen').innerHTML = depositosActivos.length
+    ? depositosActivos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('')
+    : '<option value="">Sin depósitos</option>';
+
+  $('movDestino').innerHTML = depositosActivos.length
+    ? depositosActivos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('')
+    : '<option value="">Sin depósitos</option>';
 
   const pendientes = state.movimientos.filter((m) => m.estado === 'pendiente');
+
   $('recepcionMovimiento').innerHTML = pendientes.length
     ? pendientes.map((m) => {
         const producto = byId(state.productos, m.productoId)?.nombre || 'Producto';
@@ -161,10 +182,12 @@ function populateSelects() {
 
 function renderDashboard() {
   const hoy = new Date().toISOString().slice(0, 10);
+
   const movimientosHoy = state.movimientos.filter((m) => {
-    const f = m.fechaSimple || (m.fechaEnvio ? new Date(m.fechaEnvio).toISOString().slice(0,10) : '');
+    const f = m.fechaSimple || (m.fechaEnvio ? new Date(m.fechaEnvio).toISOString().slice(0, 10) : '');
     return f === hoy;
   });
+
   const pendientes = state.movimientos.filter((m) => m.estado === 'pendiente');
   const alertasAbiertas = state.alertas.filter((a) => !a.resuelta);
   const totalStock = state.stock.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
@@ -178,13 +201,16 @@ function renderDashboard() {
     const producto = byId(state.productos, m.productoId)?.nombre || '-';
     const origen = byId(state.depositos, m.origenId)?.nombre || '-';
     const destino = byId(state.depositos, m.destinoId)?.nombre || '-';
-    return `<tr>
-      <td>${formatDate(m.fechaEnvio)}</td>
-      <td>${producto}</td>
-      <td>${origen}</td>
-      <td>${destino}</td>
-      <td>${badge(m.estado)}</td>
-    </tr>`;
+
+    return `
+      <tr>
+        <td>${formatDate(m.fechaEnvio)}</td>
+        <td>${producto}</td>
+        <td>${origen}</td>
+        <td>${destino}</td>
+        <td>${badge(m.estado)}</td>
+      </tr>
+    `;
   }).join('') || '<tr><td colspan="5">Sin movimientos cargados.</td></tr>';
 
   $('alertasList').innerHTML = alertasAbiertas.slice(0, 6).map((a) => `
@@ -195,33 +221,115 @@ function renderDashboard() {
   `).join('') || '<div class="alert-item"><strong>Sin alertas activas</strong><p>Todo viene correcto por ahora.</p></div>';
 }
 
+function renderProductos() {
+  $('productosCount').textContent = state.productos.length;
+  $('productosActivos').textContent = state.productos.filter((p) => p.activo !== false).length;
+
+  $('productosList').innerHTML = state.productos.length
+    ? state.productos.map((p) => `
+      <div class="product-row">
+        <div class="product-main">
+          <div class="product-title">${p.nombre || '-'}</div>
+          <div class="product-sub">
+            Código: ${p.codigo || '-'} · Visible para: ${getVisibleParaText(p)}
+          </div>
+        </div>
+        <div class="product-actions">
+          <button class="btn btn-outline btn-sm" data-action="toggle-producto" data-id="${p.id}">
+            ${p.activo === false ? 'Activar' : 'Desactivar'}
+          </button>
+        </div>
+      </div>
+    `).join('')
+    : '<div class="empty-state">Todavía no hay productos cargados.</div>';
+
+  document.querySelectorAll('[data-action="toggle-producto"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const item = byId(state.productos, id);
+      if (!item) return;
+
+      await updateDoc(doc(db, 'productos', id), {
+        activo: item.activo === false ? true : false
+      });
+
+      toast('Producto actualizado.');
+      await refreshAll();
+    });
+  });
+}
+
+function getMovimientosFiltrados() {
+  if (!state.filtroFecha) return state.movimientos;
+  return state.movimientos.filter((m) => (m.fechaSimple || '') === state.filtroFecha);
+}
+
 function renderMovimientos() {
-  $('tablaMovimientos').innerHTML = state.movimientos.map((m) => {
+  const rows = getMovimientosFiltrados();
+  const totalEnviado = rows.reduce((acc, m) => acc + Number(m.cantidadEnviada || 0), 0);
+
+  $('movimientosFechaCount').textContent = rows.length;
+  $('movimientosFechaTotal').textContent = totalEnviado;
+
+  $('tablaMovimientos').innerHTML = rows.map((m) => {
     const producto = byId(state.productos, m.productoId)?.nombre || '-';
     const origen = byId(state.depositos, m.origenId)?.nombre || '-';
     const destino = byId(state.depositos, m.destinoId)?.nombre || '-';
-    return `<tr>
-      <td>${formatDate(m.fechaEnvio)}</td>
-      <td>${producto}</td>
-      <td>${m.cantidadEnviada ?? '-'}</td>
-      <td>${m.cantidadRecibida ?? '-'}</td>
-      <td>${origen}</td>
-      <td>${destino}</td>
-      <td>${badge(m.estado)}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="7">Todavía no hay movimientos.</td></tr>';
+
+    return `
+      <tr>
+        <td>${formatDate(m.fechaEnvio)}</td>
+        <td>${producto}</td>
+        <td>${m.cantidadEnviada ?? '-'}</td>
+        <td>${m.cantidadRecibida ?? '-'}</td>
+        <td>${origen}</td>
+        <td>${destino}</td>
+        <td>${badge(m.estado)}</td>
+        <td>
+          <input type="date" class="table-date-input" value="${m.fechaSimple || ''}" data-date-id="${m.id}" />
+          <button class="btn btn-outline btn-sm mt-8" data-action="guardar-fecha" data-id="${m.id}">
+            Guardar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="8">No hay movimientos para mostrar.</td></tr>';
+
+  document.querySelectorAll('[data-action="guardar-fecha"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const input = document.querySelector(`[data-date-id="${id}"]`);
+      const nuevaFecha = input?.value;
+
+      if (!nuevaFecha) {
+        toast('Elegí una fecha válida.');
+        return;
+      }
+
+      await updateDoc(doc(db, 'movimientos', id), {
+        fechaEnvio: nuevaFecha,
+        fechaSimple: nuevaFecha
+      });
+
+      toast('Fecha actualizada correctamente.');
+      await refreshAll();
+    });
+  });
 }
 
 function renderStock() {
   $('tablaStock').innerHTML = state.stock.map((s) => {
     const producto = byId(state.productos, s.productoId)?.nombre || '-';
     const deposito = byId(state.depositos, s.depositoId)?.nombre || '-';
-    return `<tr>
-      <td>${producto}</td>
-      <td>${deposito}</td>
-      <td>${s.cantidad ?? 0}</td>
-      <td>${formatDateTime(s.actualizadoEn)}</td>
-    </tr>`;
+
+    return `
+      <tr>
+        <td>${producto}</td>
+        <td>${deposito}</td>
+        <td>${s.cantidad ?? 0}</td>
+        <td>${formatDateTime(s.actualizadoEn)}</td>
+      </tr>
+    `;
   }).join('') || '<tr><td colspan="4">Sin stock cargado todavía.</td></tr>';
 }
 
@@ -239,25 +347,40 @@ function renderAlertas() {
 function renderUsuarios() {
   $('tablaUsuarios').innerHTML = state.usuarios.map((u) => {
     const deposito = byId(state.depositos, u.depositoId)?.nombre || '-';
-    return `<tr>
-      <td>${u.nombre || '-'}</td>
-      <td>${u.email || '-'}</td>
-      <td>${u.rol || '-'}</td>
-      <td>${deposito}</td>
-    </tr>`;
+    return `
+      <tr>
+        <td>${u.nombre || '-'}</td>
+        <td>${u.email || '-'}</td>
+        <td>${u.rol || '-'}</td>
+        <td>${deposito}</td>
+      </tr>
+    `;
   }).join('') || '<tr><td colspan="4">Sin usuarios cargados.</td></tr>';
 }
 
 async function refreshAll() {
-  state.productos = await loadCollection('productos');
-  state.depositos = await loadCollection('depositos');
-  state.movimientos = await loadCollection('movimientos', { query: (ref) => query(ref, orderBy('creadoEn', 'desc')) });
+  state.productos = await loadCollection('productos', {
+    queryBuilder: (ref) => query(ref, orderBy('nombre'))
+  });
+
+  state.depositos = await loadCollection('depositos', {
+    queryBuilder: (ref) => query(ref, orderBy('nombre'))
+  });
+
+  state.movimientos = await loadCollection('movimientos', {
+    queryBuilder: (ref) => query(ref, orderBy('creadoEn', 'desc'))
+  });
+
   state.stock = await loadCollection('stock');
-  state.alertas = await loadCollection('alertas', { query: (ref) => query(ref, orderBy('creadoEn', 'desc')) });
+  state.alertas = await loadCollection('alertas', {
+    queryBuilder: (ref) => query(ref, orderBy('creadoEn', 'desc'))
+  });
+
   state.usuarios = await loadCollection('usuarios');
 
   populateSelects();
   renderDashboard();
+  renderProductos();
   renderMovimientos();
   renderStock();
   renderAlertas();
@@ -266,6 +389,7 @@ async function refreshAll() {
 
 async function updateStock(productoId, depositoId, delta) {
   const existing = state.stock.find((s) => s.productoId === productoId && s.depositoId === depositoId);
+
   if (existing) {
     const nuevaCantidad = Number(existing.cantidad || 0) + Number(delta || 0);
     await updateDoc(doc(db, 'stock', existing.id), {
@@ -280,6 +404,34 @@ async function updateStock(productoId, depositoId, delta) {
       actualizadoEn: serverTimestamp()
     });
   }
+}
+
+async function registrarProducto(ev) {
+  ev.preventDefault();
+
+  const nombre = $('prodNombre').value.trim();
+  const codigo = $('prodCodigo').value.trim();
+  const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((el) => el.value);
+
+  if (!nombre) {
+    toast('Ingresá el nombre del producto.');
+    return;
+  }
+
+  await addDoc(collection(db, 'productos'), {
+    nombre,
+    codigo,
+    visiblePara,
+    activo: true,
+    creadoEn: serverTimestamp(),
+    creadoPor: state.currentUser?.email || ''
+  });
+
+  ev.target.reset();
+  document.querySelector('input[name="visiblePara"][value="gerencia"]').checked = true;
+
+  toast('Producto creado correctamente.');
+  await refreshAll();
 }
 
 async function registrarMovimiento(ev) {
@@ -312,14 +464,15 @@ async function registrarMovimiento(ev) {
     cantidadRecibida: null,
     estado: 'pendiente',
     observaciones,
-    enviadoPor: state.currentUser.email,
+    enviadoPor: state.currentUser?.email || '',
     creadoEn: serverTimestamp()
   });
 
   await updateStock(productoId, origenId, -cantidadEnviada);
 
   ev.target.reset();
-  $('movFecha').value = new Date().toISOString().slice(0,10);
+  $('movFecha').value = new Date().toISOString().slice(0, 10);
+
   toast('Movimiento guardado correctamente.');
   await refreshAll();
 }
@@ -330,6 +483,7 @@ async function confirmarRecepcion(ev) {
   const movimientoId = $('recepcionMovimiento').value;
   const cantidadRecibida = Number($('recepcionCantidad').value || 0);
   const observacionesRecepcion = $('recepcionObs').value.trim();
+
   if (!movimientoId || cantidadRecibida <= 0) {
     toast('Seleccioná un movimiento y la cantidad recibida.');
     return;
@@ -347,8 +501,8 @@ async function confirmarRecepcion(ev) {
   await updateDoc(doc(db, 'movimientos', movimientoId), {
     cantidadRecibida,
     estado: nuevoEstado,
-    recibidoPor: state.currentUser.email,
-    fechaRecepcion: new Date().toISOString().slice(0,10),
+    recibidoPor: state.currentUser?.email || '',
+    fechaRecepcion: new Date().toISOString().slice(0, 10),
     observacionesRecepcion
   });
 
@@ -360,7 +514,7 @@ async function confirmarRecepcion(ev) {
       movimientoId,
       mensaje: `Se enviaron ${movimiento.cantidadEnviada} y se recibieron ${cantidadRecibida}.`,
       resuelta: false,
-      fecha: new Date().toISOString().slice(0,10),
+      fecha: new Date().toISOString().slice(0, 10),
       creadoEn: serverTimestamp()
     });
   }
@@ -375,15 +529,11 @@ async function seedBaseData() {
   if (deposits.empty) {
     const defaults = ['Bañado', 'Alvear', 'Morón', 'Producción', 'Gerencia'];
     for (const nombre of defaults) {
-      await addDoc(collection(db, 'depositos'), { nombre, activo: true, creadoEn: serverTimestamp() });
-    }
-  }
-
-  const products = await getDocs(collection(db, 'productos'));
-  if (products.empty) {
-    const defaults = ['Varilla clásica', 'Varilla premium', 'Varilla perfumada'];
-    for (const nombre of defaults) {
-      await addDoc(collection(db, 'productos'), { nombre, activo: true, creadoEn: serverTimestamp() });
+      await addDoc(collection(db, 'depositos'), {
+        nombre,
+        activo: true,
+        creadoEn: serverTimestamp()
+      });
     }
   }
 }
@@ -391,6 +541,7 @@ async function seedBaseData() {
 function bindEvents() {
   els.loginForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+
     try {
       await signInWithEmailAndPassword(auth, $('email').value, $('password').value);
       toast('Sesión iniciada correctamente.');
@@ -405,10 +556,25 @@ function bindEvents() {
     toast('Sesión cerrada.');
   });
 
+  $('formProducto').addEventListener('submit', registrarProducto);
   $('formMovimiento').addEventListener('submit', registrarMovimiento);
   $('formRecepcion').addEventListener('submit', confirmarRecepcion);
 
-  els.menuBtn.addEventListener('click', () => els.sidebar.classList.toggle('open'));
+  $('formFiltroFecha').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    state.filtroFecha = $('filtroFecha').value || '';
+    renderMovimientos();
+  });
+
+  $('btnLimpiarFiltro').addEventListener('click', () => {
+    state.filtroFecha = '';
+    $('filtroFecha').value = '';
+    renderMovimientos();
+  });
+
+  els.menuBtn.addEventListener('click', () => {
+    els.sidebar.classList.toggle('open');
+  });
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -420,11 +586,11 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   state.currentUser = user;
+
   try {
     await seedBaseData();
     state.perfil = await fetchPerfil(user.email);
     setLoggedUI(true);
-    applyRoleUI();
     fillUserCard();
     await refreshAll();
     setSection('dashboard');
@@ -436,4 +602,4 @@ onAuthStateChanged(auth, async (user) => {
 
 mountNavigation();
 bindEvents();
-$('movFecha').value = new Date().toISOString().slice(0,10);
+$('movFecha').value = new Date().toISOString().slice(0, 10);
