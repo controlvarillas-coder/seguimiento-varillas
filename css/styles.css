@@ -628,3 +628,31 @@ textarea {
     padding: 18px;
   }
 }
+
+.category-row td {
+  background: rgba(255,255,255,0.04);
+  border-top: 1px solid rgba(255,255,255,0.14);
+  border-bottom: 1px solid rgba(255,255,255,0.14);
+  height: 36px;
+}
+
+.category-sticky {
+  background: #223152 !important;
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.product-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.product-main {
+  min-width: 0;
+}
+
+.excel-table tbody tr.category-row td:not(.category-sticky) {
+  background: rgba(34, 49, 82, 0.55);
+}
