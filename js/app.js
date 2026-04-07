@@ -750,7 +750,8 @@ async function seedBaseData() {
 }
 
 async function refreshAll() {
-  state.productos = await loadCollection('productos');
+  state.productos = (await loadCollection('productos'))
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios');
 
