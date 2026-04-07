@@ -1,10 +1,10 @@
 import { auth, db } from './firebase-config.js';
-import { PRODUCT_MASTER } from './product-master.js';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
 import {
   collection,
   addDoc,
@@ -20,6 +20,15 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const $ = (id) => document.getElementById(id);
+
+const state = {
+  currentUser: null,
+  perfil: null,
+  productos: [],
+  usuarios: [],
+  reportes: [],
+  reporteActual: null
+};
 
 const FABRICAS = {
   caja_chica: 'Caja chica',
@@ -106,19 +115,10 @@ const INITIAL_STOCK_COLUMNS = [
 ];
 
 const INPUT_GROUP_BY_FABRICA = {
-  caja_chica: ['cajaChica', 'cajaChicaMor'],
+  caja_chica: ['cajaChica'],
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
   neutro: ['neutro'],
   banado: ['banado']
-};
-
-const state = {
-  currentUser: null,
-  perfil: null,
-  productos: [],
-  usuarios: [],
-  reportes: [],
-  reporteActual: null
 };
 
 const els = {
@@ -132,116 +132,113 @@ const els = {
   pageTitle: $('pageTitle')
 };
 
-function num(v) { return Number(v || 0); }
-
 function toast(message) {
+  if (!els.toast) return;
   els.toast.textContent = message;
   els.toast.classList.add('show');
-  setTimeout(() => els.toast.classList.remove('show'), 2600);
+  setTimeout(() => els.toast.classList.remove('show'), 3200);
 }
 
 function setLoggedUI(logged) {
-  els.loginScreen.classList.toggle('active', !logged);
-  els.appScreen.classList.toggle('active', logged);
+  if (els.loginScreen) els.loginScreen.classList.toggle('active', !logged);
+  if (els.appScreen) els.appScreen.classList.toggle('active', logged);
 }
 
 function setSection(sectionId) {
   document.querySelectorAll('.section').forEach((el) => el.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach((el) => el.classList.toggle('active', el.dataset.section === sectionId));
+  document.querySelectorAll('.nav-link').forEach((el) => {
+    el.classList.toggle('active', el.dataset.section === sectionId);
+  });
+
   const target = $(`section-${sectionId}`);
   if (target) target.classList.add('active');
 
   const titles = {
     dashboard: 'Dashboard',
     productos: 'Productos',
-    carga: 'Carga diaria',
     gerencia: 'Excel gerencia',
+    carga: 'Carga diaria',
     usuarios: 'Usuarios'
   };
-  $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
+
+  if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
 }
 
 function mountNavigation() {
   document.querySelectorAll('.nav-link').forEach((btn) => {
     btn.addEventListener('click', () => {
       setSection(btn.dataset.section);
-      els.sidebar.classList.remove('open');
+      if (els.sidebar) els.sidebar.classList.remove('open');
     });
   });
 }
 
-function setMonthlyDefault() {
-  const now = new Date();
-  $('mesGerencia').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  $('cargaFecha').value = new Date().toISOString().slice(0, 10);
+function applyRoleUI() {
+  const isGerencia = state.perfil?.rol === 'gerencia';
+
+  document.querySelectorAll('.gerencia-only').forEach((el) => {
+    el.classList.toggle('hidden', !isGerencia);
+  });
+
+  const fabricaSelect = $('cargaFabrica');
+  if (!fabricaSelect) return;
+
+  if (!isGerencia && state.perfil?.fabrica) {
+    fabricaSelect.value = state.perfil.fabrica;
+    fabricaSelect.disabled = true;
+  } else {
+    fabricaSelect.disabled = false;
+  }
 }
 
 function fillUserCard() {
   const name = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
   const role = state.perfil?.rol || 'usuario';
-  $('miniName').textContent = name;
-  $('miniRole').textContent = role;
-  $('avatarMini').textContent = name.trim().charAt(0).toUpperCase();
-}
 
-function applyRoleUI() {
-  const isGerencia = state.perfil?.rol === 'gerencia';
-  document.querySelectorAll('.gerencia-only').forEach((el) => el.classList.toggle('hidden', !isGerencia));
-
-  if (!isGerencia && state.perfil?.fabrica) {
-    $('cargaFabrica').value = state.perfil.fabrica;
-    $('cargaFabrica').disabled = true;
-  } else {
-    $('cargaFabrica').disabled = false;
-  }
+  if ($('miniName')) $('miniName').textContent = name;
+  if ($('miniRole')) $('miniRole').textContent = role;
+  if ($('avatarMini')) $('avatarMini').textContent = name.trim().charAt(0).toUpperCase();
 }
 
 async function fetchPerfil(email) {
   const q = query(collection(db, 'usuarios'), where('email', '==', email));
   const snap = await getDocs(q);
+
   if (snap.empty) return null;
+
   const d = snap.docs[0];
   return { id: d.id, ...d.data() };
 }
 
 async function loadCollection(name, options = {}) {
   const ref = collection(db, name);
-  const snap = options.queryBuilder ? await getDocs(options.queryBuilder(ref)) : await getDocs(ref);
+  const snap = options.queryBuilder
+    ? await getDocs(options.queryBuilder(ref))
+    : await getDocs(ref);
+
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function getReporteId(fecha, fabrica) {
-  return `${fecha}_${fabrica}`;
-}
-
-function getProductMasterByFactory(fabrica) {
-  return PRODUCT_MASTER.filter((p) => p.visibleFor.includes(fabrica));
-}
-
-function groupProductsByCategory(productos) {
-  const groups = new Map();
-  productos.forEach((p) => {
-    if (!groups.has(p.category)) groups.set(p.category, []);
-    groups.get(p.category).push(p);
-  });
-  return groups;
+function formatVisiblePara(arr = []) {
+  return arr.map((v) => FABRICAS[v] || v).join(' · ');
 }
 
 function createEmptyGroupData(groupKey) {
   const group = DAY_GROUPS.find((g) => g.key === groupKey);
   const base = {};
+
   group.columns.forEach((col) => {
     if (!col.readonly) base[col.key] = 0;
   });
+
   return base;
 }
 
 function createEmptyRow(producto) {
   const row = {
-    productoId: producto.id || null,
-    order: producto.order || 0,
-    productoNombre: producto.name || producto.nombre,
-    category: producto.category || producto.categoria || '',
+    productoId: producto.id,
+    productoNombre: producto.nombre,
+    categoria: producto.categoria || '',
     stockInicial: {
       alvear: 0,
       moron: 0,
@@ -250,28 +247,32 @@ function createEmptyRow(producto) {
     },
     groups: {}
   };
+
   DAY_GROUPS.forEach((group) => {
     row.groups[group.key] = createEmptyGroupData(group.key);
   });
+
   return row;
 }
 
+function getProductosParaFabrica(fabrica) {
+  const activos = state.productos.filter((p) => p.activo !== false);
+
+  if (state.perfil?.rol === 'gerencia') return activos;
+
+  return activos.filter((p) => (p.visiblePara || []).includes(fabrica));
+}
+
 function buildDefaultRows(fabrica) {
-  return getProductMasterByFactory(fabrica).map(createEmptyRow);
+  return getProductosParaFabrica(fabrica).map(createEmptyRow);
 }
 
-function currentReporteIsLocked() {
-  if (!state.reporteActual) return false;
-  if (state.perfil?.rol === 'gerencia') return false;
-  return state.reporteActual.estado === 'enviada';
+function getReporteId(fecha, fabrica) {
+  return `${fecha}_${fabrica}`;
 }
 
-function getEditableGroupsForCurrentUser() {
-  const fabrica = $('cargaFabrica').value;
-  if (state.perfil?.rol === 'gerencia') {
-    return DAY_GROUPS.map((g) => g.key);
-  }
-  return INPUT_GROUP_BY_FABRICA[fabrica] || [];
+function num(v) {
+  return Number(v || 0);
 }
 
 function computeGroupTotal(groupKey, data = {}) {
@@ -297,51 +298,73 @@ function computeStockInitialTotal(stock = {}) {
   return num(stock.alvear) + num(stock.moron) + num(stock.secando) + num(stock.banado);
 }
 
-function renderDashboard() {
-  $('statProductos').textContent = state.productos.length;
-  $('statReportes').textContent = state.reportes.length;
-  $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
-  $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
+function setMonthlyDefault() {
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  $('tablaDashboardReportes').innerHTML = state.reportes.slice(0, 12).map((r) => `
-    <tr>
-      <td>${r.fecha || '-'}</td>
-      <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
-      <td>${r.estado || '-'}</td>
-      <td>${r.creadoPor || '-'}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
+  if ($('mesGerencia')) $('mesGerencia').value = ym;
+  if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
+}
+
+function renderDashboard() {
+  if ($('statProductos')) $('statProductos').textContent = state.productos.length;
+  if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
+  if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
+  if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
+
+  if ($('tablaDashboardReportes')) {
+    $('tablaDashboardReportes').innerHTML = state.reportes.slice(0, 12).map((r) => `
+      <tr>
+        <td>${r.fecha || '-'}</td>
+        <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
+        <td>${r.estado || '-'}</td>
+        <td>${r.creadoPor || '-'}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
+  }
 }
 
 function renderProductos() {
-  $('productosCount').textContent = state.productos.filter((p) => p.active !== false).length;
-  $('productosActivos').textContent = state.productos.filter((p) => p.active !== false).length;
+  if ($('productosCount')) $('productosCount').textContent = state.productos.length;
+  if ($('productosActivos')) $('productosActivos').textContent = state.productos.filter((p) => p.activo !== false).length;
 
-  const groups = groupProductsByCategory(state.productos);
-  let html = '';
+  if (!$('productosList')) return;
 
-  groups.forEach((items, category) => {
-    html += `<div class="category-block"><div class="category-title">${category}</div>`;
-    items.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((p) => {
-      html += `
-        <div class="product-row">
-          <div class="product-main">
-            <div class="product-title">${p.name || p.nombre}</div>
-            <div class="product-sub">Orden: ${p.order || '-'} · Código: ${p.code || p.codigo || '-'} · Visible para: ${(p.visibleFor || p.visiblePara || []).map((v) => FABRICAS[v] || v).join(' · ')}</div>
-          </div>
-          <div class="product-actions">
-            <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id || ''}">Ver</button>
-          </div>
+  $('productosList').innerHTML = state.productos.map((p) => `
+    <div class="product-row">
+      <div class="product-main">
+        <div class="product-title">${p.nombre || '-'}</div>
+        <div class="product-sub">
+          Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'} · Visible para: ${formatVisiblePara(p.visiblePara || [])}
         </div>
-      `;
-    });
-    html += `</div>`;
-  });
+      </div>
+      <div class="product-actions">
+        <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
+          ${p.activo === false ? 'Activar' : 'Desactivar'}
+        </button>
+      </div>
+    </div>
+  `).join('') || '<div class="empty-state">Sin productos.</div>';
 
-  $('productosList').innerHTML = html || '<div class="empty-state">Sin productos.</div>';
+  document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.toggleProducto;
+      const item = state.productos.find((p) => p.id === id);
+      if (!item) return;
+
+      await updateDoc(doc(db, 'productos', id), {
+        activo: item.activo === false ? true : false
+      });
+
+      toast('Producto actualizado.');
+      await refreshAll();
+    });
+  });
 }
 
 function renderUsuarios() {
+  if (!$('tablaUsuarios')) return;
+
   $('tablaUsuarios').innerHTML = state.usuarios.map((u) => `
     <tr>
       <td>${u.nombre || '-'}</td>
@@ -355,9 +378,9 @@ function renderUsuarios() {
 async function registrarProducto(ev) {
   ev.preventDefault();
 
-  const nombre = $('prodNombre').value.trim();
-  const codigo = $('prodCodigo').value.trim();
-  const categoria = $('prodCategoria').value.trim();
+  const nombre = $('prodNombre')?.value.trim();
+  const codigo = $('prodCodigo')?.value.trim();
+  const categoria = $('prodCategoria')?.value.trim();
   const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((el) => el.value);
 
   if (!nombre) {
@@ -365,38 +388,52 @@ async function registrarProducto(ev) {
     return;
   }
 
-  const maxOrder = state.productos.reduce((acc, p) => Math.max(acc, Number(p.order || 0)), 0);
-
   await addDoc(collection(db, 'productos'), {
-    name: nombre,
-    code: codigo,
-    category: categoria || 'SIN CATEGORÍA',
-    visibleFor: visiblePara,
-    active: true,
-    order: maxOrder + 1,
-    createdAt: serverTimestamp()
+    nombre,
+    codigo,
+    categoria,
+    visiblePara,
+    activo: true,
+    creadoEn: serverTimestamp()
   });
 
   ev.target.reset();
-  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => el.checked = true);
+  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => (el.checked = true));
+
   toast('Producto guardado.');
   await refreshAll();
 }
 
+function getEditableGroupsForCurrentUser() {
+  const fabrica = $('cargaFabrica')?.value;
+  if (state.perfil?.rol === 'gerencia') return DAY_GROUPS.map((g) => g.key);
+  return INPUT_GROUP_BY_FABRICA[fabrica] || [];
+}
+
+function currentReporteIsLocked() {
+  if (!state.reporteActual) return false;
+  if (state.perfil?.rol === 'gerencia') return false;
+  return state.reporteActual.estado === 'enviada';
+}
+
 function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
-  const fecha = $('cargaFecha').value;
-  const fabrica = $('cargaFabrica').value;
+  if (!table) return;
+
+  const fecha = $('cargaFecha')?.value;
+  const fabrica = $('cargaFabrica')?.value;
   const rows = state.reporteActual?.rows || buildDefaultRows(fabrica);
   const editableGroups = getEditableGroupsForCurrentUser();
   const locked = currentReporteIsLocked();
 
-  $('estadoCarga').textContent = state.reporteActual
-    ? `Estado: ${state.reporteActual.estado || 'borrador'}`
-    : `Nueva planilla ${fecha || ''}`;
+  if ($('estadoCarga')) {
+    $('estadoCarga').textContent = state.reporteActual
+      ? `Estado: ${state.reporteActual.estado || 'borrador'}`
+      : `Nueva planilla ${fecha || ''}`;
+  }
 
-  $('btnGuardarReporte').disabled = locked;
-  $('btnEnviarReporte').disabled = locked;
+  if ($('btnGuardarReporte')) $('btnGuardarReporte').disabled = locked;
+  if ($('btnEnviarReporte')) $('btnEnviarReporte').disabled = locked;
 
   let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th><th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
   let thead2 = '<tr>';
@@ -419,8 +456,10 @@ function renderCargaDiaria() {
 
   let body = '';
   const columnTotals = {};
+
   INITIAL_STOCK_COLUMNS.forEach((c) => (columnTotals[`stock_${c.key}`] = 0));
   DAY_GROUPS.forEach((g) => g.columns.forEach((c) => (columnTotals[`${g.key}_${c.key}`] = 0)));
+
   let grandTotal = 0;
 
   rows.forEach((row, rowIndex) => {
@@ -429,7 +468,11 @@ function renderCargaDiaria() {
     INITIAL_STOCK_COLUMNS.forEach((col) => {
       const value = num(row.stockInicial?.[col.key]);
       const canEdit = state.perfil?.rol === 'gerencia';
-      rowHtml += `<td><input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+
+      rowHtml += `<td>
+        <input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}>
+      </td>`;
+
       columnTotals[`stock_${col.key}`] += value;
     });
 
@@ -442,26 +485,40 @@ function renderCargaDiaria() {
         } else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
-          rowHtml += `<td><input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+
+          rowHtml += `<td>
+            <input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}>
+          </td>`;
+
           columnTotals[`${group.key}_${col.key}`] += value;
         }
       });
     });
 
-    const rowTotal = computeStockInitialTotal(row.stockInicial) + DAY_GROUPS.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
+    const rowTotal = computeStockInitialTotal(row.stockInicial) +
+      DAY_GROUPS.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
+
     grandTotal += rowTotal;
     rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
     body += rowHtml;
   });
 
   let tfoot = `<tr><th class="sticky-col">TOTAL</th>`;
-  INITIAL_STOCK_COLUMNS.forEach((col) => { tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`; });
+  INITIAL_STOCK_COLUMNS.forEach((col) => {
+    tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`;
+  });
   DAY_GROUPS.forEach((group) => {
-    group.columns.forEach((col) => { tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`; });
+    group.columns.forEach((col) => {
+      tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`;
+    });
   });
   tfoot += `<th>${grandTotal}</th></tr>`;
 
-  table.innerHTML = `<thead>${thead1}${thead2}${thead3}</thead><tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody><tfoot>${tfoot}</tfoot>`;
+  table.innerHTML = `
+    <thead>${thead1}${thead2}${thead3}</thead>
+    <tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody>
+    <tfoot>${tfoot}</tfoot>
+  `;
 
   bindCargaInputs();
 }
@@ -473,12 +530,11 @@ function bindCargaInputs() {
 
       if (!state.reporteActual) {
         state.reporteActual = {
-          id: getReporteId($('cargaFecha').value, $('cargaFabrica').value),
-          fecha: $('cargaFecha').value,
-          fabrica: $('cargaFabrica').value,
+          id: getReporteId($('cargaFecha')?.value, $('cargaFabrica')?.value),
+          fecha: $('cargaFecha')?.value,
+          fabrica: $('cargaFabrica')?.value,
           estado: 'borrador',
-          creadoPor: state.currentUser?.email || '',
-          rows: buildDefaultRows($('cargaFabrica').value)
+          rows: buildDefaultRows($('cargaFabrica')?.value)
         };
       }
 
@@ -496,8 +552,8 @@ function bindCargaInputs() {
 }
 
 async function cargarReporteDiario() {
-  const fecha = $('cargaFecha').value;
-  const fabrica = $('cargaFabrica').value;
+  const fecha = $('cargaFecha')?.value;
+  const fabrica = $('cargaFabrica')?.value;
 
   if (!fecha || !fabrica) {
     toast('Seleccioná fecha y fábrica.');
@@ -527,8 +583,8 @@ async function cargarReporteDiario() {
 }
 
 async function guardarReporte(estado = 'borrador') {
-  const fecha = $('cargaFecha').value;
-  const fabrica = $('cargaFabrica').value;
+  const fecha = $('cargaFecha')?.value;
+  const fabrica = $('cargaFabrica')?.value;
 
   if (!fecha || !fabrica) {
     toast('Seleccioná fecha y fábrica.');
@@ -560,7 +616,10 @@ async function guardarReporte(estado = 'borrador') {
   };
 
   if (!snap.exists()) {
-    await setDoc(ref, { ...payload, creadoEn: serverTimestamp() });
+    await setDoc(ref, {
+      ...payload,
+      creadoEn: serverTimestamp()
+    });
   } else {
     await updateDoc(ref, payload);
   }
@@ -571,13 +630,16 @@ async function guardarReporte(estado = 'borrador') {
   await cargarReporteDiario();
 }
 
-function findRowInReport(report, productName) {
-  return report?.rows?.find((row) => row.productoNombre === productName) || null;
+function getReportForDateFactory(fecha, fabrica) {
+  const id = getReporteId(fecha, fabrica);
+  return state.reportes.find((r) => r.id === id) || null;
 }
 
 function renderGerenciaExcel() {
   const table = $('tablaGerenciaExcel');
-  const monthValue = $('mesGerencia').value;
+  if (!table) return;
+
+  const monthValue = $('mesGerencia')?.value;
 
   if (!monthValue) {
     table.innerHTML = '<tbody><tr><td>Seleccioná un mes.</td></tr></tbody>';
@@ -598,6 +660,7 @@ function renderGerenciaExcel() {
   for (let day = 1; day <= daysInMonth; day++) {
     const dayColspan = DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
     header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
+
     DAY_GROUPS.forEach((group) => {
       header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
       group.columns.forEach((col) => {
@@ -610,14 +673,18 @@ function renderGerenciaExcel() {
   header2 += '</tr>';
   header3 += '</tr>';
 
-  const productos = [...state.productos].sort((a, b) => num(a.order) - num(b.order));
+  const productos = state.productos.filter((p) => p.activo !== false);
   let body = '';
 
   productos.forEach((producto) => {
-    let row = `<tr><td class="sticky-col product-name-cell">${producto.name}</td>`;
+    let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;
 
-    const firstReportForMonth = state.reportes.find((r) => r.fecha?.startsWith(monthValue) && findRowInReport(r, producto.name));
-    const firstRow = findRowInReport(firstReportForMonth, producto.name);
+    const firstReportForMonth = state.reportes.find((r) =>
+      r.fecha?.startsWith(monthValue) &&
+      (r.rows || []).some((x) => x.productoId === producto.id)
+    );
+
+    const firstRow = firstReportForMonth?.rows?.find((x) => x.productoId === producto.id);
 
     INITIAL_STOCK_COLUMNS.forEach((col) => {
       row += `<td>${num(firstRow?.stockInicial?.[col.key])}</td>`;
@@ -628,10 +695,12 @@ function renderGerenciaExcel() {
 
       DAY_GROUPS.forEach((group) => {
         let rowData = null;
+
         Object.keys(FABRICAS).forEach((fabricaKey) => {
-          const report = state.reportes.find((r) => r.id === getReporteId(dayStr, fabricaKey));
-          const foundRow = findRowInReport(report, producto.name);
-          if (foundRow?.groups?.[group.key]) {
+          const rep = getReportForDateFactory(dayStr, fabricaKey);
+          const foundRow = rep?.rows?.find((x) => x.productoId === producto.id);
+
+          if (foundRow && foundRow.groups && foundRow.groups[group.key]) {
             rowData = foundRow.groups[group.key];
           }
         });
@@ -650,30 +719,48 @@ function renderGerenciaExcel() {
     body += row;
   });
 
-  table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
+  table.innerHTML = `
+    <thead>${header1}${header2}${header3}</thead>
+    <tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>
+  `;
 }
 
-async function seedProductsFromMaster() {
-  const current = await getDocs(collection(db, 'productos'));
-  if (!current.empty) return;
+async function seedBaseData() {
+  const productosSnap = await getDocs(collection(db, 'productos'));
 
-  for (const item of PRODUCT_MASTER) {
-    await addDoc(collection(db, 'productos'), {
-      name: item.name,
-      code: item.code,
-      category: item.category,
-      visibleFor: item.visibleFor,
-      active: item.active,
-      order: item.order,
-      createdAt: serverTimestamp()
-    });
+  if (productosSnap.empty) {
+    const defaults = [
+      ['PALO SANTO', 'Aromas'],
+      ['P.S - INCIENSO', 'Aromas'],
+      ['P.S - COPAL', 'Aromas'],
+      ['P.S - MIRRA', 'Aromas'],
+      ['P.S - JAZMIN', 'Aromas'],
+      ['P.S - VAINILLA', 'Aromas'],
+      ['P.S - ROMERO', 'Aromas'],
+      ['P.S - CHAMPA', 'Aromas'],
+      ['P.S - ROSA', 'Aromas'],
+      ['P.S - YAGRA', 'Aromas'],
+      ['P.S - LAVANDA', 'Aromas']
+    ];
+
+    for (const [nombre, categoria] of defaults) {
+      await addDoc(collection(db, 'productos'), {
+        nombre,
+        codigo: '',
+        categoria,
+        visiblePara: ['caja_chica', 'caja_grande', 'neutro', 'banado'],
+        activo: true,
+        creadoEn: serverTimestamp()
+      });
+    }
   }
 }
 
 async function refreshAll() {
   state.productos = await loadCollection('productos', {
-    queryBuilder: (ref) => query(ref, orderBy('order'))
+    queryBuilder: (ref) => query(ref, orderBy('categoria'), orderBy('nombre'))
   });
+
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios', {
     queryBuilder: (ref) => query(ref, orderBy('fecha', 'desc'))
@@ -687,29 +774,46 @@ async function refreshAll() {
 }
 
 function bindEvents() {
-  els.loginForm.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    try {
-      await signInWithEmailAndPassword(auth, $('email').value, $('password').value);
-      toast('Sesión iniciada correctamente.');
-    } catch (error) {
-      console.error(error);
-      toast('No se pudo iniciar sesión.');
-    }
-  });
+  if (els.loginForm) {
+    els.loginForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
 
-  els.logoutBtn.addEventListener('click', async () => {
-    await signOut(auth);
-  });
+      try {
+        const cred = await signInWithEmailAndPassword(auth, $('email')?.value, $('password')?.value);
+        console.log('LOGIN OK:', cred.user?.email);
+        toast('Sesión iniciada correctamente.');
+      } catch (error) {
+        console.error('ERROR LOGIN:', error);
+        toast(`Error login: ${error.code || error.message}`);
+      }
+    });
+  }
+
+  if (els.logoutBtn) {
+    els.logoutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+    });
+  }
 
   $('formProducto')?.addEventListener('submit', registrarProducto);
   $('btnCargarReporte')?.addEventListener('click', cargarReporteDiario);
   $('btnGuardarReporte')?.addEventListener('click', () => guardarReporte('borrador'));
   $('btnEnviarReporte')?.addEventListener('click', () => guardarReporte('enviada'));
   $('btnRefrescarGerencia')?.addEventListener('click', renderGerenciaExcel);
-  $('cargaFecha')?.addEventListener('change', () => { state.reporteActual = null; renderCargaDiaria(); });
-  $('cargaFabrica')?.addEventListener('change', () => { state.reporteActual = null; renderCargaDiaria(); });
-  els.menuBtn?.addEventListener('click', () => { els.sidebar.classList.toggle('open'); });
+
+  $('cargaFecha')?.addEventListener('change', () => {
+    state.reporteActual = null;
+    renderCargaDiaria();
+  });
+
+  $('cargaFabrica')?.addEventListener('change', () => {
+    state.reporteActual = null;
+    renderCargaDiaria();
+  });
+
+  els.menuBtn?.addEventListener('click', () => {
+    els.sidebar?.classList.toggle('open');
+  });
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -724,8 +828,27 @@ onAuthStateChanged(auth, async (user) => {
   state.currentUser = user;
 
   try {
-    await seedProductsFromMaster();
+    console.log('AUTH OK:', user.email);
+
+    await seedBaseData();
+
     state.perfil = await fetchPerfil(user.email);
+    console.log('PERFIL EN FIRESTORE:', state.perfil);
+
+    if (!state.perfil) {
+      toast('El login funcionó, pero falta tu usuario en Firestore/usuarios.');
+      await signOut(auth);
+      setLoggedUI(false);
+      return;
+    }
+
+    if (state.perfil.activo === false) {
+      toast('Tu usuario está inactivo en Firestore.');
+      await signOut(auth);
+      setLoggedUI(false);
+      return;
+    }
+
     setLoggedUI(true);
     fillUserCard();
     applyRoleUI();
@@ -733,8 +856,8 @@ onAuthStateChanged(auth, async (user) => {
     await refreshAll();
     setSection('dashboard');
   } catch (error) {
-    console.error(error);
-    toast('Error al cargar el sistema.');
+    console.error('ERROR CARGANDO SISTEMA:', error);
+    toast(`Error sistema: ${error.code || error.message || error}`);
   }
 });
 
