@@ -1,7 +1,4 @@
 import { auth, db } from './firebase-config.js';
-async function seedBaseData() {
-  return;
-}
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -306,14 +303,18 @@ function renderDashboard() {
   if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
 
   if ($('tablaDashboardReportes')) {
-    $('tablaDashboardReportes').innerHTML = state.reportes.slice().reverse().slice(0, 12).map((r) => `
-      <tr>
-        <td>${r.fecha || '-'}</td>
-        <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
-        <td>${r.estado || '-'}</td>
-        <td>${r.creadoPor || '-'}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
+    $('tablaDashboardReportes').innerHTML = state.reportes
+      .slice()
+      .reverse()
+      .slice(0, 12)
+      .map((r) => `
+        <tr>
+          <td>${r.fecha || '-'}</td>
+          <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
+          <td>${r.estado || '-'}</td>
+          <td>${r.creadoPor || '-'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
   }
 }
 
@@ -323,7 +324,14 @@ function renderProductos() {
 
   if (!$('productosList')) return;
 
-  $('productosList').innerHTML = state.productos.map((p) => `
+  const productosOrdenados = [...state.productos].sort((a, b) => {
+    const oa = Number(a.orden || 0);
+    const ob = Number(b.orden || 0);
+    if (oa !== ob) return oa - ob;
+    return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+  });
+
+  $('productosList').innerHTML = productosOrdenados.map((p) => `
     <div class="product-row">
       <div class="product-main">
         <div class="product-title">${p.nombre || '-'}</div>
@@ -387,7 +395,8 @@ async function registrarProducto(ev) {
     categoria,
     visiblePara,
     activo: true,
-    creadoEn: serverTimestamp()
+    creadoEn: serverTimestamp(),
+    orden: state.productos.length + 1
   });
 
   ev.target.reset();
@@ -700,60 +709,15 @@ function renderGerenciaExcel() {
 
   table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
+
 async function seedBaseData() {
-  const snap = await getDocs(collection(db, 'productos'));
-
-  if (!snap.empty) return;
-
-  console.log('Cargando PRODUCT_MASTER...');
-
-  for (const p of PRODUCT_MASTER) {
-    await addDoc(collection(db, 'productos'), {
-      nombre: p.name,
-      codigo: p.code,
-      categoria: p.category,
-      visiblePara: p.visibleFor,
-      activo: p.active,
-      orden: p.order,
-      creadoEn: serverTimestamp()
-    });
-  }
-
-  console.log('Productos cargados correctamente');
-}
-  const productosSnap = await getDocs(collection(db, 'productos'));
-
-  if (productosSnap.empty) {
-    const defaults = [
-      ['PALO SANTO', 'Aromas'],
-      ['P.S - INCIENSO', 'Aromas'],
-      ['P.S - COPAL', 'Aromas'],
-      ['P.S - MIRRA', 'Aromas'],
-      ['P.S - JAZMIN', 'Aromas'],
-      ['P.S - VAINILLA', 'Aromas'],
-      ['P.S - ROMERO', 'Aromas'],
-      ['P.S - CHAMPA', 'Aromas'],
-      ['P.S - ROSA', 'Aromas'],
-      ['P.S - YAGRA', 'Aromas'],
-      ['P.S - LAVANDA', 'Aromas']
-    ];
-
-    for (const [nombre, categoria] of defaults) {
-      await addDoc(collection(db, 'productos'), {
-        nombre,
-        codigo: '',
-        categoria,
-        visiblePara: ['caja_chica', 'caja_grande', 'neutro', 'banado'],
-        activo: true,
-        creadoEn: serverTimestamp()
-      });
-    }
-  }
+  return;
 }
 
 async function refreshAll() {
   state.productos = (await loadCollection('productos'))
-  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios');
 
