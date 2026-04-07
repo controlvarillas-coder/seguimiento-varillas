@@ -23,12 +23,9 @@ const state = {
   currentUser: null,
   perfil: null,
   productos: [],
-  depositos: [],
-  movimientos: [],
-  stock: [],
-  alertas: [],
   usuarios: [],
-  filtroFecha: ''
+  planillas: [],
+  planillaActual: null
 };
 
 const els = {
@@ -44,52 +41,14 @@ const els = {
 };
 
 function toast(message) {
-  if (!els.toast) return;
   els.toast.textContent = message;
   els.toast.classList.add('show');
   setTimeout(() => els.toast.classList.remove('show'), 2500);
 }
 
-function formatDate(value) {
-  if (!value) return '-';
-  const date = value?.seconds ? new Date(value.seconds * 1000) : new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('es-AR');
-}
-
-function formatDateTime(value) {
-  if (!value) return '-';
-  const date = value?.seconds ? new Date(value.seconds * 1000) : new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('es-AR');
-}
-
-function badge(status) {
-  const map = {
-    pendiente: ['pending', 'Pendiente'],
-    recibido_correcto: ['ok', 'Correcto'],
-    recibido_con_diferencia: ['diff', 'Con diferencia']
-  };
-  const [cls, label] = map[status] || ['pending', status || 'Pendiente'];
-  return `<span class="badge ${cls}">${label}</span>`;
-}
-
 function setLoggedUI(logged) {
   els.loginScreen.classList.toggle('active', !logged);
   els.appScreen.classList.toggle('active', logged);
-  if (els.logoutBtn) els.logoutBtn.classList.toggle('hidden', !logged);
-  if (els.connectionPill) {
-    els.connectionPill.textContent = logged ? 'Conectado a Firebase' : 'Modo demo';
-  }
-}
-
-function fillUserCard() {
-  const name = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
-  const role = state.perfil?.rol || 'gerencia';
-
-  $('miniName').textContent = name;
-  $('miniRole').textContent = role;
-  $('avatarMini').textContent = name.trim().charAt(0).toUpperCase();
 }
 
 function setSection(sectionId) {
@@ -104,10 +63,8 @@ function setSection(sectionId) {
   const titles = {
     dashboard: 'Dashboard general',
     productos: 'Gestión de productos',
-    movimientos: 'Movimientos por fecha',
-    stock: 'Stock por depósito',
-    alertas: 'Alertas y diferencias',
-    usuarios: 'Usuarios del sistema'
+    movimientos: 'Planilla diaria',
+    usuarios: 'Usuarios'
   };
 
   els.pageTitle.textContent = titles[sectionId] || 'Varillas Control';
@@ -120,6 +77,15 @@ function mountNavigation() {
       els.sidebar.classList.remove('open');
     });
   });
+}
+
+function fillUserCard() {
+  const name = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
+  const role = state.perfil?.rol || 'usuario';
+
+  $('miniName').textContent = name;
+  $('miniRole').textContent = role;
+  $('avatarMini').textContent = name.charAt(0).toUpperCase();
 }
 
 async function fetchPerfil(email) {
@@ -136,129 +102,64 @@ async function loadCollection(name, options = {}) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function byId(arr, id) {
-  return arr.find((x) => x.id === id);
+function renderDashboard() {
+  $('statProductos').textContent = state.productos.length;
+  $('statPlanillas').textContent = state.planillas.length;
+  $('statPendientes').textContent = state.planillas.filter((p) => p.estado === 'borrador').length;
+  $('statEnviadas').textContent = state.planillas.filter((p) => p.estado === 'enviada').length;
+
+  $('dashboardPlanillas').innerHTML = state.planillas.slice(0, 10).map((p) => `
+    <tr>
+      <td>${p.fecha || '-'}</td>
+      <td>${labelFabrica(p.fabrica)}</td>
+      <td>${p.estado || '-'}</td>
+      <td>${p.creadoPor || '-'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4">Sin planillas cargadas.</td></tr>';
 }
 
-function getVisibleParaText(item) {
+function labelFabrica(value) {
   const map = {
-    gerencia: 'Gerencia',
     caja_chica: 'Caja chica',
     caja_grande: 'Caja grande',
     neutro: 'Neutro',
     banado: 'Bañado'
   };
-  const values = Array.isArray(item.visiblePara) ? item.visiblePara : [];
-  return values.length ? values.map((v) => map[v] || v).join(' · ') : 'Sin sectores';
+  return map[value] || value || '-';
 }
 
-function normalizeName(text) {
-  return (text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
-
-function populateSelects() {
-  const productosActivos = state.productos.filter((p) => p.activo !== false);
-  const depositosActivos = state.depositos.filter((d) => d.activo !== false);
-
-  $('movProducto').innerHTML = productosActivos.length
-    ? productosActivos.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join('')
-    : '<option value="">Sin productos</option>';
-
-  $('movOrigen').innerHTML = depositosActivos.length
-    ? depositosActivos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('')
-    : '<option value="">Sin depósitos</option>';
-
-  $('movDestino').innerHTML = depositosActivos.length
-    ? depositosActivos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('')
-    : '<option value="">Sin depósitos</option>';
-
-  const pendientes = state.movimientos.filter((m) => m.estado === 'pendiente');
-
-  $('recepcionMovimiento').innerHTML = pendientes.length
-    ? pendientes.map((m) => {
-        const producto = byId(state.productos, m.productoId)?.nombre || 'Producto';
-        const origen = byId(state.depositos, m.origenId)?.nombre || 'Origen';
-        const destino = byId(state.depositos, m.destinoId)?.nombre || 'Destino';
-        return `<option value="${m.id}">${formatDate(m.fechaEnvio)} · ${producto} · ${origen} → ${destino} · ${m.cantidadEnviada}</option>`;
-      }).join('')
-    : '<option value="">No hay pendientes</option>';
-}
-
-function renderDashboard() {
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  const movimientosHoy = state.movimientos.filter((m) => {
-    const f = m.fechaSimple || (m.fechaEnvio ? new Date(m.fechaEnvio).toISOString().slice(0, 10) : '');
-    return f === hoy;
-  });
-
-  const pendientes = state.movimientos.filter((m) => m.estado === 'pendiente');
-  const alertasAbiertas = state.alertas.filter((a) => !a.resuelta);
-  const totalStock = state.stock.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
-
-  $('statMovimientos').textContent = movimientosHoy.length;
-  $('statPendientes').textContent = pendientes.length;
-  $('statAlertas').textContent = alertasAbiertas.length;
-  $('statStock').textContent = totalStock;
-
-  $('dashboardMovimientos').innerHTML = state.movimientos.slice(0, 8).map((m) => {
-    const producto = byId(state.productos, m.productoId)?.nombre || '-';
-    const origen = byId(state.depositos, m.origenId)?.nombre || '-';
-    const destino = byId(state.depositos, m.destinoId)?.nombre || '-';
-
-    return `
-      <tr>
-        <td>${formatDate(m.fechaEnvio)}</td>
-        <td>${producto}</td>
-        <td>${origen}</td>
-        <td>${destino}</td>
-        <td>${badge(m.estado)}</td>
-      </tr>
-    `;
-  }).join('') || '<tr><td colspan="5">Sin movimientos cargados.</td></tr>';
-
-  $('alertasList').innerHTML = alertasAbiertas.slice(0, 6).map((a) => `
-    <div class="alert-item">
-      <strong>${a.titulo || 'Diferencia detectada'}</strong>
-      <p>${a.mensaje || ''}</p>
-    </div>
-  `).join('') || '<div class="alert-item"><strong>Sin alertas activas</strong><p>Todo viene correcto por ahora.</p></div>';
+function visibleParaTexto(arr = []) {
+  return arr.map(labelFabrica).join(' · ');
 }
 
 function renderProductos() {
   $('productosCount').textContent = state.productos.length;
   $('productosActivos').textContent = state.productos.filter((p) => p.activo !== false).length;
 
-  $('productosList').innerHTML = state.productos.length
-    ? state.productos.map((p) => `
-      <div class="product-row">
-        <div class="product-main">
-          <div class="product-title">${p.nombre || '-'}</div>
-          <div class="product-sub">
-            Código: ${p.codigo || '-'} · Visible para: ${getVisibleParaText(p)}
-          </div>
-        </div>
-        <div class="product-actions">
-          <button class="btn btn-outline btn-sm" data-action="toggle-producto" data-id="${p.id}">
-            ${p.activo === false ? 'Activar' : 'Desactivar'}
-          </button>
+  $('productosList').innerHTML = state.productos.map((p) => `
+    <div class="product-row">
+      <div class="product-main">
+        <div class="product-title">${p.nombre || '-'}</div>
+        <div class="product-sub">
+          Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'} · Visible para: ${visibleParaTexto(p.visiblePara || [])}
         </div>
       </div>
-    `).join('')
-    : '<div class="empty-state">Todavía no hay productos cargados.</div>';
+      <div class="product-actions">
+        <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
+          ${p.activo === false ? 'Activar' : 'Desactivar'}
+        </button>
+      </div>
+    </div>
+  `).join('') || '<div class="empty-state">Sin productos.</div>';
 
-  document.querySelectorAll('[data-action="toggle-producto"]').forEach((btn) => {
+  document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const item = byId(state.productos, id);
-      if (!item) return;
+      const id = btn.dataset.toggleProducto;
+      const producto = state.productos.find((p) => p.id === id);
+      if (!producto) return;
 
       await updateDoc(doc(db, 'productos', id), {
-        activo: item.activo === false ? true : false
+        activo: producto.activo === false ? true : false
       });
 
       toast('Producto actualizado.');
@@ -267,170 +168,198 @@ function renderProductos() {
   });
 }
 
-function getMovimientosFiltrados() {
-  if (!state.filtroFecha) return [];
-  return state.movimientos.filter((m) => (m.fechaSimple || '') === state.filtroFecha);
+function renderUsuarios() {
+  $('tablaUsuarios').innerHTML = state.usuarios.map((u) => `
+    <tr>
+      <td>${u.nombre || '-'}</td>
+      <td>${u.email || '-'}</td>
+      <td>${u.rol || '-'}</td>
+      <td>${labelFabrica(u.fabrica || '')}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4">Sin usuarios.</td></tr>';
 }
 
-function renderMovimientos() {
-  const rows = getMovimientosFiltrados();
-  const agrupado = {};
+function getProductosVisiblesParaFabrica(fabrica) {
+  if (state.perfil?.rol === 'gerencia') return state.productos.filter((p) => p.activo !== false);
+  return state.productos.filter((p) => (p.activo !== false) && (p.visiblePara || []).includes(fabrica));
+}
 
-  rows.forEach((m) => {
-    const producto = byId(state.productos, m.productoId)?.nombre || 'Sin nombre';
+function buildDefaultRows(fabrica) {
+  const productos = getProductosVisiblesParaFabrica(fabrica);
 
-    if (!agrupado[producto]) {
-      agrupado[producto] = {
-        cajaChica: 0,
-        cajaGrande: 0,
-        neutro: 0,
-        banado: 0
-      };
-    }
+  return productos.map((p) => ({
+    productoId: p.id,
+    productoNombre: p.nombre,
+    stockInicial: 0,
+    cajaChica: 0,
+    cajaGrande: 0,
+    neutro: 0,
+    banado: 0
+  }));
+}
 
-    const destinoNombre = normalizeName(byId(state.depositos, m.destinoId)?.nombre || '');
-    const cantidad = Number(m.cantidadEnviada || 0);
+function renderPlanilla() {
+  const fabrica = $('planillaFabrica').value;
+  const rows = state.planillaActual?.rows || buildDefaultRows(fabrica);
+  const isGerencia = state.perfil?.rol === 'gerencia';
+  const isBloqueada = state.planillaActual?.estado === 'enviada' && !isGerencia;
 
-    if (destinoNombre.includes('caja chica')) {
-      agrupado[producto].cajaChica += cantidad;
-    } else if (destinoNombre.includes('caja grande')) {
-      agrupado[producto].cajaGrande += cantidad;
-    } else if (destinoNombre.includes('neutro')) {
-      agrupado[producto].neutro += cantidad;
-    } else if (destinoNombre.includes('banado') || destinoNombre.includes('bañado')) {
-      agrupado[producto].banado += cantidad;
-    }
-  });
+  $('planillaEstado').textContent = state.planillaActual
+    ? `Estado: ${state.planillaActual.estado || 'borrador'}`
+    : 'Sin cargar';
 
-  let totalCajaChica = 0;
-  let totalCajaGrande = 0;
-  let totalNeutro = 0;
-  let totalBanado = 0;
+  $('btnGuardarPlanilla').disabled = isBloqueada;
+  $('btnEnviarPlanilla').disabled = isBloqueada;
 
-  const productosOrdenados = Object.keys(agrupado).sort((a, b) => a.localeCompare(b, 'es'));
-
-  const html = productosOrdenados.map((producto) => {
-    const p = agrupado[producto];
-    const totalFila = p.cajaChica + p.cajaGrande + p.neutro + p.banado;
-
-    totalCajaChica += p.cajaChica;
-    totalCajaGrande += p.cajaGrande;
-    totalNeutro += p.neutro;
-    totalBanado += p.banado;
+  $('excelBody').innerHTML = rows.map((row, index) => {
+    const total = Number(row.stockInicial || 0) + Number(row.cajaChica || 0) + Number(row.cajaGrande || 0) + Number(row.neutro || 0) + Number(row.banado || 0);
 
     return `
       <tr>
-        <td>${producto}</td>
-        <td>${p.cajaChica}</td>
-        <td>${p.cajaGrande}</td>
-        <td>${p.neutro}</td>
-        <td>${p.banado}</td>
-        <td><strong>${totalFila}</strong></td>
+        <td class="sticky-col product-name-cell">${row.productoNombre}</td>
+        <td><input class="excel-input" data-row="${index}" data-field="stockInicial" type="number" value="${row.stockInicial || 0}" ${isBloqueada ? 'disabled' : ''}></td>
+        <td><input class="excel-input cc" data-row="${index}" data-field="cajaChica" type="number" value="${row.cajaChica || 0}" ${isBloqueada ? 'disabled' : ''}></td>
+        <td><input class="excel-input cg" data-row="${index}" data-field="cajaGrande" type="number" value="${row.cajaGrande || 0}" ${isBloqueada ? 'disabled' : ''}></td>
+        <td><input class="excel-input ne" data-row="${index}" data-field="neutro" type="number" value="${row.neutro || 0}" ${isBloqueada ? 'disabled' : ''}></td>
+        <td><input class="excel-input ba" data-row="${index}" data-field="banado" type="number" value="${row.banado || 0}" ${isBloqueada ? 'disabled' : ''}></td>
+        <td class="total-cell">${total}</td>
       </tr>
     `;
   }).join('');
 
-  $('tablaMovimientos').innerHTML = html || '<tr><td colspan="6">Sin datos para esa fecha.</td></tr>';
+  document.querySelectorAll('.excel-input').forEach((input) => {
+    input.addEventListener('input', (e) => {
+      const rowIndex = Number(e.target.dataset.row);
+      const field = e.target.dataset.field;
+      const value = Number(e.target.value || 0);
 
-  const totalGeneral = totalCajaChica + totalCajaGrande + totalNeutro + totalBanado;
+      if (!state.planillaActual) {
+        state.planillaActual = {
+          fecha: $('planillaFecha').value,
+          fabrica: $('planillaFabrica').value,
+          estado: 'borrador',
+          rows: buildDefaultRows($('planillaFabrica').value)
+        };
+      }
 
-  $('totalCajaChica').textContent = totalCajaChica;
-  $('totalCajaGrande').textContent = totalCajaGrande;
-  $('totalNeutro').textContent = totalNeutro;
-  $('totalBanado').textContent = totalBanado;
-  $('totalGeneral').textContent = totalGeneral;
-
-  $('movimientosFechaCount').textContent = productosOrdenados.length;
-  $('movimientosFechaTotal').textContent = totalGeneral;
-}
-
-function renderStock() {
-  $('tablaStock').innerHTML = state.stock.map((s) => {
-    const producto = byId(state.productos, s.productoId)?.nombre || '-';
-    const deposito = byId(state.depositos, s.depositoId)?.nombre || '-';
-
-    return `
-      <tr>
-        <td>${producto}</td>
-        <td>${deposito}</td>
-        <td>${s.cantidad ?? 0}</td>
-        <td>${formatDateTime(s.actualizadoEn)}</td>
-      </tr>
-    `;
-  }).join('') || '<tr><td colspan="4">Sin stock cargado todavía.</td></tr>';
-}
-
-function renderAlertas() {
-  $('tablaAlertas').innerHTML = state.alertas.map((a) => `
-    <tr>
-      <td>${formatDate(a.fecha || a.creadoEn)}</td>
-      <td>${a.movimientoId || '-'}</td>
-      <td>${a.mensaje || '-'}</td>
-      <td>${a.resuelta ? badge('recibido_correcto') : badge('recibido_con_diferencia')}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="4">Sin alertas registradas.</td></tr>';
-}
-
-function renderUsuarios() {
-  $('tablaUsuarios').innerHTML = state.usuarios.map((u) => {
-    const deposito = byId(state.depositos, u.depositoId)?.nombre || '-';
-    return `
-      <tr>
-        <td>${u.nombre || '-'}</td>
-        <td>${u.email || '-'}</td>
-        <td>${u.rol || '-'}</td>
-        <td>${deposito}</td>
-      </tr>
-    `;
-  }).join('') || '<tr><td colspan="4">Sin usuarios cargados.</td></tr>';
-}
-
-async function refreshAll() {
-  state.productos = await loadCollection('productos', {
-    queryBuilder: (ref) => query(ref, orderBy('nombre'))
+      state.planillaActual.rows[rowIndex][field] = value;
+      renderPlanilla();
+    });
   });
 
-  state.depositos = await loadCollection('depositos', {
-    queryBuilder: (ref) => query(ref, orderBy('nombre'))
-  });
-
-  state.movimientos = await loadCollection('movimientos', {
-    queryBuilder: (ref) => query(ref, orderBy('creadoEn', 'desc'))
-  });
-
-  state.stock = await loadCollection('stock');
-  state.alertas = await loadCollection('alertas', {
-    queryBuilder: (ref) => query(ref, orderBy('creadoEn', 'desc'))
-  });
-
-  state.usuarios = await loadCollection('usuarios');
-
-  populateSelects();
-  renderDashboard();
-  renderProductos();
-  renderMovimientos();
-  renderStock();
-  renderAlertas();
-  renderUsuarios();
+  renderPlanillaTotales();
 }
 
-async function updateStock(productoId, depositoId, delta) {
-  const existing = state.stock.find((s) => s.productoId === productoId && s.depositoId === depositoId);
+function renderPlanillaTotales() {
+  const rows = state.planillaActual?.rows || [];
+  let stockInicial = 0;
+  let cajaChica = 0;
+  let cajaGrande = 0;
+  let neutro = 0;
+  let banado = 0;
 
-  if (existing) {
-    const nuevaCantidad = Number(existing.cantidad || 0) + Number(delta || 0);
-    await updateDoc(doc(db, 'stock', existing.id), {
-      cantidad: nuevaCantidad,
-      actualizadoEn: serverTimestamp()
+  rows.forEach((r) => {
+    stockInicial += Number(r.stockInicial || 0);
+    cajaChica += Number(r.cajaChica || 0);
+    cajaGrande += Number(r.cajaGrande || 0);
+    neutro += Number(r.neutro || 0);
+    banado += Number(r.banado || 0);
+  });
+
+  $('ftStockInicial').textContent = stockInicial;
+  $('ftCajaChica').textContent = cajaChica;
+  $('ftCajaGrande').textContent = cajaGrande;
+  $('ftNeutro').textContent = neutro;
+  $('ftBanado').textContent = banado;
+  $('ftGeneral').textContent = stockInicial + cajaChica + cajaGrande + neutro + banado;
+}
+
+async function cargarPlanilla() {
+  const fecha = $('planillaFecha').value;
+  const fabrica = $('planillaFabrica').value;
+
+  if (!fecha || !fabrica) {
+    toast('Seleccioná fecha y fábrica.');
+    return;
+  }
+
+  const q = query(
+    collection(db, 'planillas'),
+    where('fecha', '==', fecha),
+    where('fabrica', '==', fabrica)
+  );
+
+  const snap = await getDocs(q);
+
+  if (!snap.empty) {
+    const d = snap.docs[0];
+    state.planillaActual = { id: d.id, ...d.data() };
+    toast('Planilla cargada.');
+  } else {
+    state.planillaActual = {
+      fecha,
+      fabrica,
+      estado: 'borrador',
+      rows: buildDefaultRows(fabrica)
+    };
+    toast('Nueva planilla creada en memoria.');
+  }
+
+  renderPlanilla();
+}
+
+async function guardarPlanilla(estadoFinal = 'borrador') {
+  const fecha = $('planillaFecha').value;
+  const fabrica = $('planillaFabrica').value;
+
+  if (!fecha || !fabrica) {
+    toast('Seleccioná fecha y fábrica.');
+    return;
+  }
+
+  if (!state.planillaActual) {
+    toast('Primero cargá la planilla.');
+    return;
+  }
+
+  const esGerencia = state.perfil?.rol === 'gerencia';
+
+  if (state.planillaActual.estado === 'enviada' && !esGerencia) {
+    toast('La planilla ya fue enviada y no puede modificarse.');
+    return;
+  }
+
+  const q = query(
+    collection(db, 'planillas'),
+    where('fecha', '==', fecha),
+    where('fabrica', '==', fabrica)
+  );
+
+  const snap = await getDocs(q);
+
+  const payload = {
+    fecha,
+    fabrica,
+    estado: estadoFinal,
+    rows: state.planillaActual.rows || [],
+    creadoPor: state.currentUser?.email || '',
+    actualizadoEn: new Date().toISOString(),
+    creadoEn: state.planillaActual.creadoEn || new Date().toISOString()
+  };
+
+  if (snap.empty) {
+    await addDoc(collection(db, 'planillas'), {
+      ...payload,
+      creadoTimestamp: serverTimestamp()
     });
   } else {
-    await addDoc(collection(db, 'stock'), {
-      productoId,
-      depositoId,
-      cantidad: Number(delta || 0),
-      actualizadoEn: serverTimestamp()
-    });
+    const docId = snap.docs[0].id;
+    await updateDoc(doc(db, 'planillas', docId), payload);
   }
+
+  toast(estadoFinal === 'enviada' ? 'Planilla enviada correctamente.' : 'Borrador guardado.');
+  await refreshAll();
+  await cargarPlanilla();
 }
 
 async function registrarProducto(ev) {
@@ -438,7 +367,8 @@ async function registrarProducto(ev) {
 
   const nombre = $('prodNombre').value.trim();
   const codigo = $('prodCodigo').value.trim();
-  const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((el) => el.value);
+  const categoria = $('prodCategoria').value.trim();
+  const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((i) => i.value);
 
   if (!nombre) {
     toast('Ingresá el nombre del producto.');
@@ -448,128 +378,56 @@ async function registrarProducto(ev) {
   await addDoc(collection(db, 'productos'), {
     nombre,
     codigo,
+    categoria,
     visiblePara,
     activo: true,
-    creadoEn: serverTimestamp(),
-    creadoPor: state.currentUser?.email || ''
-  });
-
-  ev.target.reset();
-  document.querySelector('input[name="visiblePara"][value="gerencia"]').checked = true;
-
-  toast('Producto creado correctamente.');
-  await refreshAll();
-}
-
-async function registrarMovimiento(ev) {
-  ev.preventDefault();
-
-  const fecha = $('movFecha').value;
-  const productoId = $('movProducto').value;
-  const origenId = $('movOrigen').value;
-  const destinoId = $('movDestino').value;
-  const cantidadEnviada = Number($('movCantidad').value || 0);
-  const observaciones = $('movObs').value.trim();
-
-  if (!fecha || !productoId || !origenId || !destinoId || cantidadEnviada <= 0) {
-    toast('Completá todos los datos del movimiento.');
-    return;
-  }
-
-  if (origenId === destinoId) {
-    toast('El origen y destino no pueden ser iguales.');
-    return;
-  }
-
-  await addDoc(collection(db, 'movimientos'), {
-    fechaEnvio: fecha,
-    fechaSimple: fecha,
-    productoId,
-    origenId,
-    destinoId,
-    cantidadEnviada,
-    cantidadRecibida: null,
-    estado: 'pendiente',
-    observaciones,
-    enviadoPor: state.currentUser?.email || '',
     creadoEn: serverTimestamp()
   });
 
-  await updateStock(productoId, origenId, -cantidadEnviada);
-
   ev.target.reset();
-  $('movFecha').value = new Date().toISOString().slice(0, 10);
+  document.querySelectorAll('input[name="visiblePara"]').forEach((i) => i.checked = true);
 
-  toast('Movimiento guardado correctamente.');
-  await refreshAll();
-}
-
-async function confirmarRecepcion(ev) {
-  ev.preventDefault();
-
-  const movimientoId = $('recepcionMovimiento').value;
-  const cantidadRecibida = Number($('recepcionCantidad').value || 0);
-  const observacionesRecepcion = $('recepcionObs').value.trim();
-
-  if (!movimientoId || cantidadRecibida <= 0) {
-    toast('Seleccioná un movimiento y la cantidad recibida.');
-    return;
-  }
-
-  const movimiento = state.movimientos.find((m) => m.id === movimientoId);
-  if (!movimiento) {
-    toast('No encontré ese movimiento.');
-    return;
-  }
-
-  const hayDiferencia = Number(movimiento.cantidadEnviada) !== cantidadRecibida;
-  const nuevoEstado = hayDiferencia ? 'recibido_con_diferencia' : 'recibido_correcto';
-
-  await updateDoc(doc(db, 'movimientos', movimientoId), {
-    cantidadRecibida,
-    estado: nuevoEstado,
-    recibidoPor: state.currentUser?.email || '',
-    fechaRecepcion: new Date().toISOString().slice(0, 10),
-    observacionesRecepcion
-  });
-
-  await updateStock(movimiento.productoId, movimiento.destinoId, cantidadRecibida);
-
-  if (hayDiferencia) {
-    await addDoc(collection(db, 'alertas'), {
-      titulo: 'Diferencia entre envío y recepción',
-      movimientoId,
-      mensaje: `Se enviaron ${movimiento.cantidadEnviada} y se recibieron ${cantidadRecibida}.`,
-      resuelta: false,
-      fecha: new Date().toISOString().slice(0, 10),
-      creadoEn: serverTimestamp()
-    });
-  }
-
-  ev.target.reset();
-  toast(hayDiferencia ? 'Recepción guardada con diferencia.' : 'Recepción confirmada correctamente.');
+  toast('Producto guardado.');
   await refreshAll();
 }
 
 async function seedBaseData() {
-  const deposits = await getDocs(collection(db, 'depositos'));
-  if (deposits.empty) {
+  const productosSnap = await getDocs(collection(db, 'productos'));
+  if (productosSnap.empty) {
     const defaults = [
-      'Caja chica',
-      'Caja grande',
-      'Neutro',
-      'Bañado',
-      'Gerencia'
+      { nombre: 'P.S. Incienso', categoria: 'Aromas' },
+      { nombre: 'P.S. Copal', categoria: 'Aromas' },
+      { nombre: 'P.S. Mirra', categoria: 'Aromas' },
+      { nombre: 'P.S. Jazmín', categoria: 'Aromas' },
+      { nombre: 'P.S. Vainilla', categoria: 'Aromas' }
     ];
 
-    for (const nombre of defaults) {
-      await addDoc(collection(db, 'depositos'), {
-        nombre,
+    for (const item of defaults) {
+      await addDoc(collection(db, 'productos'), {
+        ...item,
+        codigo: '',
+        visiblePara: ['caja_chica', 'caja_grande', 'neutro', 'banado'],
         activo: true,
         creadoEn: serverTimestamp()
       });
     }
   }
+}
+
+async function refreshAll() {
+  state.productos = await loadCollection('productos', {
+    queryBuilder: (ref) => query(ref, orderBy('nombre'))
+  });
+
+  state.usuarios = await loadCollection('usuarios');
+  state.planillas = await loadCollection('planillas', {
+    queryBuilder: (ref) => query(ref, orderBy('creadoTimestamp', 'desc'))
+  });
+
+  renderDashboard();
+  renderProductos();
+  renderUsuarios();
+  renderPlanilla();
 }
 
 function bindEvents() {
@@ -581,29 +439,27 @@ function bindEvents() {
       toast('Sesión iniciada correctamente.');
     } catch (error) {
       console.error(error);
-      toast('No se pudo iniciar sesión. Revisá email y contraseña.');
+      toast('No se pudo iniciar sesión.');
     }
   });
 
   els.logoutBtn.addEventListener('click', async () => {
     await signOut(auth);
-    toast('Sesión cerrada.');
   });
 
   $('formProducto').addEventListener('submit', registrarProducto);
-  $('formMovimiento').addEventListener('submit', registrarMovimiento);
-  $('formRecepcion').addEventListener('submit', confirmarRecepcion);
+  $('btnCargarPlanilla').addEventListener('click', cargarPlanilla);
+  $('btnGuardarPlanilla').addEventListener('click', () => guardarPlanilla('borrador'));
+  $('btnEnviarPlanilla').addEventListener('click', () => guardarPlanilla('enviada'));
 
-  $('formFiltroFecha').addEventListener('submit', (ev) => {
-    ev.preventDefault();
-    state.filtroFecha = $('filtroFecha').value || '';
-    renderMovimientos();
+  $('planillaFecha').addEventListener('change', () => {
+    state.planillaActual = null;
+    renderPlanilla();
   });
 
-  $('btnLimpiarFiltro').addEventListener('click', () => {
-    state.filtroFecha = '';
-    $('filtroFecha').value = '';
-    renderMovimientos();
+  $('planillaFabrica').addEventListener('change', () => {
+    state.planillaActual = null;
+    renderPlanilla();
   });
 
   els.menuBtn.addEventListener('click', () => {
@@ -615,6 +471,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) {
     state.currentUser = null;
     state.perfil = null;
+    state.planillaActual = null;
     setLoggedUI(false);
     return;
   }
@@ -630,10 +487,10 @@ onAuthStateChanged(auth, async (user) => {
     setSection('dashboard');
   } catch (error) {
     console.error(error);
-    toast('Error al cargar los datos del sistema.');
+    toast('Error al cargar el sistema.');
   }
 });
 
 mountNavigation();
 bindEvents();
-$('movFecha').value = new Date().toISOString().slice(0, 10);
+$('planillaFecha').value = new Date().toISOString().slice(0, 10);
