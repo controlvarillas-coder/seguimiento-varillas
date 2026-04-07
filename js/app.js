@@ -15,8 +15,7 @@ import {
   updateDoc,
   serverTimestamp,
   query,
-  where,
-  orderBy
+  where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const $ = (id) => document.getElementById(id);
@@ -136,7 +135,7 @@ function toast(message) {
   if (!els.toast) return;
   els.toast.textContent = message;
   els.toast.classList.add('show');
-  setTimeout(() => els.toast.classList.remove('show'), 3200);
+  setTimeout(() => els.toast.classList.remove('show'), 3500);
 }
 
 function setLoggedUI(logged) {
@@ -210,12 +209,8 @@ async function fetchPerfil(email) {
   return { id: d.id, ...d.data() };
 }
 
-async function loadCollection(name, options = {}) {
-  const ref = collection(db, name);
-  const snap = options.queryBuilder
-    ? await getDocs(options.queryBuilder(ref))
-    : await getDocs(ref);
-
+async function loadCollection(name) {
+  const snap = await getDocs(collection(db, name));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -226,11 +221,9 @@ function formatVisiblePara(arr = []) {
 function createEmptyGroupData(groupKey) {
   const group = DAY_GROUPS.find((g) => g.key === groupKey);
   const base = {};
-
   group.columns.forEach((col) => {
     if (!col.readonly) base[col.key] = 0;
   });
-
   return base;
 }
 
@@ -257,9 +250,7 @@ function createEmptyRow(producto) {
 
 function getProductosParaFabrica(fabrica) {
   const activos = state.productos.filter((p) => p.activo !== false);
-
   if (state.perfil?.rol === 'gerencia') return activos;
-
   return activos.filter((p) => (p.visiblePara || []).includes(fabrica));
 }
 
@@ -301,7 +292,6 @@ function computeStockInitialTotal(stock = {}) {
 function setMonthlyDefault() {
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
 }
@@ -313,7 +303,7 @@ function renderDashboard() {
   if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
 
   if ($('tablaDashboardReportes')) {
-    $('tablaDashboardReportes').innerHTML = state.reportes.slice(0, 12).map((r) => `
+    $('tablaDashboardReportes').innerHTML = state.reportes.slice().reverse().slice(0, 12).map((r) => `
       <tr>
         <td>${r.fecha || '-'}</td>
         <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
@@ -456,10 +446,8 @@ function renderCargaDiaria() {
 
   let body = '';
   const columnTotals = {};
-
   INITIAL_STOCK_COLUMNS.forEach((c) => (columnTotals[`stock_${c.key}`] = 0));
   DAY_GROUPS.forEach((g) => g.columns.forEach((c) => (columnTotals[`${g.key}_${c.key}`] = 0)));
-
   let grandTotal = 0;
 
   rows.forEach((row, rowIndex) => {
@@ -469,10 +457,7 @@ function renderCargaDiaria() {
       const value = num(row.stockInicial?.[col.key]);
       const canEdit = state.perfil?.rol === 'gerencia';
 
-      rowHtml += `<td>
-        <input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}>
-      </td>`;
-
+      rowHtml += `<td><input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
       columnTotals[`stock_${col.key}`] += value;
     });
 
@@ -485,11 +470,7 @@ function renderCargaDiaria() {
         } else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
-
-          rowHtml += `<td>
-            <input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}>
-          </td>`;
-
+          rowHtml += `<td><input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
           columnTotals[`${group.key}_${col.key}`] += value;
         }
       });
@@ -514,11 +495,7 @@ function renderCargaDiaria() {
   });
   tfoot += `<th>${grandTotal}</th></tr>`;
 
-  table.innerHTML = `
-    <thead>${thead1}${thead2}${thead3}</thead>
-    <tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody>
-    <tfoot>${tfoot}</tfoot>
-  `;
+  table.innerHTML = `<thead>${thead1}${thead2}${thead3}</thead><tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody><tfoot>${tfoot}</tfoot>`;
 
   bindCargaInputs();
 }
@@ -640,7 +617,6 @@ function renderGerenciaExcel() {
   if (!table) return;
 
   const monthValue = $('mesGerencia')?.value;
-
   if (!monthValue) {
     table.innerHTML = '<tbody><tr><td>Seleccioná un mes.</td></tr></tbody>';
     return;
@@ -719,10 +695,7 @@ function renderGerenciaExcel() {
     body += row;
   });
 
-  table.innerHTML = `
-    <thead>${header1}${header2}${header3}</thead>
-    <tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>
-  `;
+  table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
 
 async function seedBaseData() {
@@ -757,12 +730,9 @@ async function seedBaseData() {
 }
 
 async function refreshAll() {
- state.productos = await loadCollection('productos');
-
+  state.productos = await loadCollection('productos');
   state.usuarios = await loadCollection('usuarios');
-  state.reportes = await loadCollection('reportes_diarios', {
-    queryBuilder: (ref) => query(ref, orderBy('fecha', 'desc'))
-  });
+  state.reportes = await loadCollection('reportes_diarios');
 
   renderDashboard();
   renderProductos();
