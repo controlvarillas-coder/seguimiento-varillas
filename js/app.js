@@ -1,5 +1,7 @@
 import { auth, db } from './firebase-config.js';
-import { PRODUCT_MASTER } from './product-master.js';
+async function seedBaseData() {
+  return;
+}
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
