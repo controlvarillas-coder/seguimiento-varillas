@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -14,19 +14,17 @@
       <div class="login-card">
         <div class="brand-pill">VARILLAS CONTROL</div>
         <h1>Ingreso al sistema</h1>
-        <p class="login-subtitle">Panel operativo y gerencial</p>
+        <p class="login-subtitle">Panel interno de producción, carga diaria y vista gerencial tipo Excel.</p>
 
         <form id="loginForm" class="login-form">
           <div class="field">
             <label for="email">Email</label>
             <input id="email" type="email" required />
           </div>
-
           <div class="field">
             <label for="password">Contraseña</label>
             <input id="password" type="password" required />
           </div>
-
           <button type="submit" class="btn btn-primary btn-lg">Ingresar</button>
         </form>
       </div>
@@ -41,7 +39,7 @@
             <div class="logo-circle">V</div>
             <div>
               <div class="logo-title">Varillas Control</div>
-              <div class="logo-sub">Sistema interno</div>
+              <div class="logo-sub">Operación + Gerencia</div>
             </div>
           </div>
 
@@ -57,8 +55,8 @@
         <nav class="sidebar-nav">
           <button class="nav-link active" data-section="dashboard">Dashboard</button>
           <button class="nav-link gerencia-only" data-section="productos">Productos</button>
-          <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
           <button class="nav-link" data-section="carga">Carga diaria</button>
+          <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
           <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
         </nav>
 
@@ -73,12 +71,11 @@
             <button id="menuBtn" class="menu-btn" type="button">☰</button>
             <div>
               <h2 id="pageTitle">Dashboard</h2>
-              <div id="connectionPill" class="connection-pill">Conectado</div>
+              <div id="connectionPill" class="connection-pill">Conectado a Firebase</div>
             </div>
           </div>
         </header>
 
-        <!-- DASHBOARD -->
         <section id="section-dashboard" class="section active">
           <div class="cards-grid">
             <div class="stat-card">
@@ -119,40 +116,25 @@
           </div>
         </section>
 
-        <!-- PRODUCTOS -->
         <section id="section-productos" class="section">
           <div class="content-grid two-col">
             <div class="panel-card">
               <div class="panel-header">
                 <h3>Agregar producto</h3>
               </div>
-
               <form id="formProducto" class="stack-form">
                 <div class="field">
                   <label for="prodNombre">Nombre</label>
                   <input id="prodNombre" type="text" required />
                 </div>
-
                 <div class="field">
                   <label for="prodCodigo">Código</label>
                   <input id="prodCodigo" type="text" />
                 </div>
-
                 <div class="field">
                   <label for="prodCategoria">Categoría</label>
-                  <input id="prodCategoria" type="text" placeholder="Ej: PALO SANTO" />
+                  <input id="prodCategoria" type="text" />
                 </div>
-
-                <div class="field">
-                  <label for="prodSubcategoria">Subcategoría</label>
-                  <input id="prodSubcategoria" type="text" placeholder="Opcional" />
-                </div>
-
-                <div class="field">
-                  <label for="prodOrden">Orden</label>
-                  <input id="prodOrden" type="number" min="0" step="1" placeholder="Ej: 1" />
-                </div>
-
                 <div class="field">
                   <label>Visible para</label>
                   <div class="checks-grid">
@@ -162,7 +144,6 @@
                     <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" checked /> Bañado</label>
                   </div>
                 </div>
-
                 <button type="submit" class="btn btn-primary">Guardar producto</button>
               </form>
             </div>
@@ -186,49 +167,17 @@
 
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Listado de productos</h3>
+              <h3>Listado maestro respetando orden del Excel</h3>
             </div>
             <div id="productosList" class="products-list"></div>
           </div>
         </section>
 
-        <!-- GERENCIA EXCEL -->
-        <section id="section-gerencia" class="section">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Vista gerencial mensual</h3>
-            </div>
-
-            <div class="toolbar-grid">
-              <div class="field">
-                <label for="mesGerencia">Mes</label>
-                <input id="mesGerencia" type="month" />
-              </div>
-              <div class="field">
-                <label>&nbsp;</label>
-                <button id="btnRefrescarGerencia" class="btn btn-primary" type="button">Actualizar vista</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel-card mt-20">
-            <div class="panel-header">
-              <h3>Planilla tipo Excel</h3>
-            </div>
-
-            <div class="excel-wrap">
-              <table id="tablaGerenciaExcel" class="excel-table"></table>
-            </div>
-          </div>
-        </section>
-
-        <!-- CARGA DIARIA -->
         <section id="section-carga" class="section">
           <div class="panel-card">
             <div class="panel-header">
               <h3>Carga diaria por fábrica</h3>
             </div>
-
             <div class="toolbar-grid">
               <div class="field">
                 <label for="cargaFecha">Fecha</label>
@@ -256,20 +205,49 @@
                 <button id="btnEnviarReporte" class="btn btn-primary" type="button">Enviar</button>
               </div>
             </div>
+
+            <div class="hint-box">
+              Los usuarios operativos solo pueden cargar una planilla por fecha y por fábrica. Una vez enviada, queda bloqueada para ellos. Gerencia sí puede editarla.
+            </div>
           </div>
 
           <div class="panel-card mt-20">
             <div class="panel-header">
               <h3>Planilla operativa</h3>
             </div>
-
             <div class="excel-wrap">
               <table id="tablaCargaDiaria" class="excel-table"></table>
             </div>
           </div>
         </section>
 
-        <!-- USUARIOS -->
+        <section id="section-gerencia" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Vista gerencial mensual tipo Excel</h3>
+            </div>
+            <div class="toolbar-grid">
+              <div class="field">
+                <label for="mesGerencia">Mes</label>
+                <input id="mesGerencia" type="month" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button id="btnRefrescarGerencia" class="btn btn-primary" type="button">Actualizar vista</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Planilla mensual consolidada</h3>
+            </div>
+            <div class="excel-wrap">
+              <table id="tablaGerenciaExcel" class="excel-table"></table>
+            </div>
+          </div>
+        </section>
+
         <section id="section-usuarios" class="section">
           <div class="panel-card">
             <div class="panel-header">
