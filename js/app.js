@@ -18,6 +18,9 @@ import {
   where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
+import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
+
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -26,14 +29,17 @@ const state = {
   productos: [],
   usuarios: [],
   reportes: [],
-  reporteActual: null
+  reporteActual: null,
+  alertas: []
 };
 
 const FABRICAS = {
   caja_chica: 'Caja chica',
   caja_grande: 'Caja grande',
   neutro: 'Neutro',
-  banado: 'Bañado'
+  banado: 'Bañado',
+  alvear: 'Alvear',
+  moron: 'Morón'
 };
 
 const DAY_GROUPS = [
@@ -714,6 +720,12 @@ async function seedBaseData() {
   return;
 }
 
+function refreshAlertas() {
+  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+  renderGerenciaMenuBadge(state.alertas);
+  renderGerenciaAlertsPanel(state.alertas);
+}
+
 async function refreshAll() {
   state.productos = (await loadCollection('productos'))
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
@@ -726,6 +738,7 @@ async function refreshAll() {
   renderUsuarios();
   renderCargaDiaria();
   renderGerenciaExcel();
+  refreshAlertas();
 }
 
 function bindEvents() {
@@ -754,7 +767,10 @@ function bindEvents() {
   $('btnCargarReporte')?.addEventListener('click', cargarReporteDiario);
   $('btnGuardarReporte')?.addEventListener('click', () => guardarReporte('borrador'));
   $('btnEnviarReporte')?.addEventListener('click', () => guardarReporte('enviada'));
-  $('btnRefrescarGerencia')?.addEventListener('click', renderGerenciaExcel);
+  $('btnRefrescarGerencia')?.addEventListener('click', () => {
+    renderGerenciaExcel();
+    refreshAlertas();
+  });
 
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
@@ -776,6 +792,7 @@ onAuthStateChanged(auth, async (user) => {
     state.currentUser = null;
     state.perfil = null;
     state.reporteActual = null;
+    state.alertas = [];
     setLoggedUI(false);
     return;
   }
