@@ -143,13 +143,21 @@ function byId(arr, id) {
 function getVisibleParaText(item) {
   const map = {
     gerencia: 'Gerencia',
-    banado: 'Bañado',
-    alvear: 'Alvear',
-    moron: 'Morón',
-    produccion: 'Producción'
+    caja_chica: 'Caja chica',
+    caja_grande: 'Caja grande',
+    neutro: 'Neutro',
+    banado: 'Bañado'
   };
   const values = Array.isArray(item.visiblePara) ? item.visiblePara : [];
   return values.length ? values.map((v) => map[v] || v).join(' · ') : 'Sin sectores';
+}
+
+function normalizeName(text) {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
 }
 
 function populateSelects() {
@@ -260,61 +268,80 @@ function renderProductos() {
 }
 
 function getMovimientosFiltrados() {
-  if (!state.filtroFecha) return state.movimientos;
+  if (!state.filtroFecha) return [];
   return state.movimientos.filter((m) => (m.fechaSimple || '') === state.filtroFecha);
 }
 
 function renderMovimientos() {
   const rows = getMovimientosFiltrados();
-  const totalEnviado = rows.reduce((acc, m) => acc + Number(m.cantidadEnviada || 0), 0);
+  const agrupado = {};
 
-  $('movimientosFechaCount').textContent = rows.length;
-  $('movimientosFechaTotal').textContent = totalEnviado;
+  rows.forEach((m) => {
+    const producto = byId(state.productos, m.productoId)?.nombre || 'Sin nombre';
 
-  $('tablaMovimientos').innerHTML = rows.map((m) => {
-    const producto = byId(state.productos, m.productoId)?.nombre || '-';
-    const origen = byId(state.depositos, m.origenId)?.nombre || '-';
-    const destino = byId(state.depositos, m.destinoId)?.nombre || '-';
+    if (!agrupado[producto]) {
+      agrupado[producto] = {
+        cajaChica: 0,
+        cajaGrande: 0,
+        neutro: 0,
+        banado: 0
+      };
+    }
+
+    const destinoNombre = normalizeName(byId(state.depositos, m.destinoId)?.nombre || '');
+    const cantidad = Number(m.cantidadEnviada || 0);
+
+    if (destinoNombre.includes('caja chica')) {
+      agrupado[producto].cajaChica += cantidad;
+    } else if (destinoNombre.includes('caja grande')) {
+      agrupado[producto].cajaGrande += cantidad;
+    } else if (destinoNombre.includes('neutro')) {
+      agrupado[producto].neutro += cantidad;
+    } else if (destinoNombre.includes('banado') || destinoNombre.includes('bañado')) {
+      agrupado[producto].banado += cantidad;
+    }
+  });
+
+  let totalCajaChica = 0;
+  let totalCajaGrande = 0;
+  let totalNeutro = 0;
+  let totalBanado = 0;
+
+  const productosOrdenados = Object.keys(agrupado).sort((a, b) => a.localeCompare(b, 'es'));
+
+  const html = productosOrdenados.map((producto) => {
+    const p = agrupado[producto];
+    const totalFila = p.cajaChica + p.cajaGrande + p.neutro + p.banado;
+
+    totalCajaChica += p.cajaChica;
+    totalCajaGrande += p.cajaGrande;
+    totalNeutro += p.neutro;
+    totalBanado += p.banado;
 
     return `
       <tr>
-        <td>${formatDate(m.fechaEnvio)}</td>
         <td>${producto}</td>
-        <td>${m.cantidadEnviada ?? '-'}</td>
-        <td>${m.cantidadRecibida ?? '-'}</td>
-        <td>${origen}</td>
-        <td>${destino}</td>
-        <td>${badge(m.estado)}</td>
-        <td>
-          <input type="date" class="table-date-input" value="${m.fechaSimple || ''}" data-date-id="${m.id}" />
-          <button class="btn btn-outline btn-sm mt-8" data-action="guardar-fecha" data-id="${m.id}">
-            Guardar
-          </button>
-        </td>
+        <td>${p.cajaChica}</td>
+        <td>${p.cajaGrande}</td>
+        <td>${p.neutro}</td>
+        <td>${p.banado}</td>
+        <td><strong>${totalFila}</strong></td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="8">No hay movimientos para mostrar.</td></tr>';
+  }).join('');
 
-  document.querySelectorAll('[data-action="guardar-fecha"]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const input = document.querySelector(`[data-date-id="${id}"]`);
-      const nuevaFecha = input?.value;
+  $('tablaMovimientos').innerHTML = html || '<tr><td colspan="6">Sin datos para esa fecha.</td></tr>';
 
-      if (!nuevaFecha) {
-        toast('Elegí una fecha válida.');
-        return;
-      }
+  const totalGeneral = totalCajaChica + totalCajaGrande + totalNeutro + totalBanado;
 
-      await updateDoc(doc(db, 'movimientos', id), {
-        fechaEnvio: nuevaFecha,
-        fechaSimple: nuevaFecha
-      });
+  $('totalCajaChica').textContent = totalCajaChica;
+  $('totalCajaGrande').textContent = totalCajaGrande;
+  $('totalNeutro').textContent = totalNeutro;
+  $('totalBanado').textContent = totalBanado;
+  $('totalGeneral').textContent = totalGeneral;
 
-      toast('Fecha actualizada correctamente.');
-      await refreshAll();
-    });
-  });
+  $('movimientosFechaCount').textContent = productosOrdenados.length;
+  $('movimientosFechaTotal').textContent = totalGeneral;
 }
 
 function renderStock() {
@@ -527,7 +554,14 @@ async function confirmarRecepcion(ev) {
 async function seedBaseData() {
   const deposits = await getDocs(collection(db, 'depositos'));
   if (deposits.empty) {
-    const defaults = ['Bañado', 'Alvear', 'Morón', 'Producción', 'Gerencia'];
+    const defaults = [
+      'Caja chica',
+      'Caja grande',
+      'Neutro',
+      'Bañado',
+      'Gerencia'
+    ];
+
     for (const nombre of defaults) {
       await addDoc(collection(db, 'depositos'), {
         nombre,
