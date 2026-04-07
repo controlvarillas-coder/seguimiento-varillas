@@ -1,7 +1,6 @@
 :root {
   --bg: #0b1020;
   --panel: rgba(18, 24, 45, 0.92);
-  --panel-2: rgba(25, 32, 58, 0.94);
   --text: #eef2ff;
   --muted: #a5b1d8;
   --line: rgba(255, 255, 255, 0.08);
@@ -37,6 +36,10 @@ body {
 
 .screen.active {
   display: block;
+}
+
+.hidden {
+  display: none !important;
 }
 
 .w-full {
@@ -301,6 +304,10 @@ body {
   gap: 8px;
 }
 
+.field-grow {
+  min-width: 180px;
+}
+
 .field label {
   color: #dbe4ff;
   font-size: 14px;
@@ -312,8 +319,8 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px 14px;
+  border-radius: 12px;
+  padding: 12px 12px;
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
   outline: none;
@@ -322,6 +329,29 @@ textarea {
 .stack-form {
   display: grid;
   gap: 16px;
+}
+
+.toolbar-grid {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-box {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
 }
 
 .checks-grid {
@@ -334,28 +364,26 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--line);
-  color: #e7eeff;
 }
 
 .btn {
   border: none;
-  border-radius: 16px;
-  padding: 13px 18px;
+  border-radius: 14px;
+  padding: 12px 16px;
   cursor: pointer;
   font-weight: 700;
 }
 
 .btn-lg {
-  padding: 15px 20px;
+  padding: 14px 18px;
 }
 
 .btn-sm {
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
   font-size: 12px;
 }
 
@@ -370,21 +398,28 @@ textarea {
   border: 1px solid var(--line);
 }
 
-.table-wrap {
+.table-wrap,
+.excel-wrap {
   overflow: auto;
 }
 
-.data-table {
-  width: 100%;
+.data-table,
+.excel-table {
   border-collapse: collapse;
-  min-width: 600px;
+  width: 100%;
 }
 
 .data-table th,
-.data-table td {
-  padding: 14px 12px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
+.data-table td,
+.excel-table th,
+.excel-table td {
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 8px;
+  text-align: center;
+}
+
+.data-table th {
+  background: rgba(255,255,255,0.06);
 }
 
 .summary-boxes {
@@ -396,10 +431,8 @@ textarea {
 .mini-stat {
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 18px;
-  display: grid;
-  gap: 8px;
 }
 
 .mini-stat span {
@@ -408,6 +441,8 @@ textarea {
 }
 
 .mini-stat strong {
+  display: block;
+  margin-top: 8px;
   font-size: 30px;
 }
 
@@ -446,96 +481,91 @@ textarea {
   color: var(--muted);
 }
 
-.planilla-topbar {
-  display: grid;
-  grid-template-columns: 180px 180px 1fr auto;
-  gap: 14px;
-  align-items: end;
-}
-
-.grow {
-  min-width: 180px;
-}
-
-.status-box {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  padding: 0 14px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--line);
-}
-
-.actions-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.excel-wrap {
-  overflow: auto;
-}
-
 .excel-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1100px;
-}
-
-.excel-table th,
-.excel-table td {
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 8px;
-  text-align: center;
+  min-width: 2200px;
+  font-size: 12px;
 }
 
 .excel-table thead th {
-  background: rgba(255,255,255,0.08);
-  font-size: 13px;
+  white-space: nowrap;
 }
 
 .sticky-col {
   position: sticky;
   left: 0;
+  z-index: 3;
   background: #15203a;
-  z-index: 2;
   text-align: left !important;
+  min-width: 240px;
 }
 
 .product-name-cell {
   font-weight: 700;
-  min-width: 260px;
+}
+
+.stock-head {
+  background: #d6d6d6;
+  color: #000;
+}
+
+.day-block {
+  background: #efefef;
+  color: #000;
+  font-weight: 800;
+}
+
+.group-caja-chica {
+  background: #ead7a4;
+  color: #000;
+}
+
+.group-caja-grande {
+  background: #b94b8d;
+  color: #fff;
+}
+
+.group-caja-chica-2 {
+  background: #e7d4dd;
+  color: #000;
+}
+
+.group-caja-grande-2 {
+  background: #6a42c2;
+  color: #fff;
+}
+
+.group-neutro {
+  background: #67c6df;
+  color: #000;
+}
+
+.group-banado {
+  background: #9bc97d;
+  color: #000;
+}
+
+.readonly-cell {
+  font-weight: 700;
+}
+
+.total-head,
+.total-cell {
+  background: rgba(255,255,255,0.06);
+  font-weight: 800;
+}
+
+.stock-input {
+  background: rgba(255,255,255,0.07);
 }
 
 .excel-input {
   width: 100%;
-  min-width: 80px;
-  padding: 8px;
-  border-radius: 10px;
+  min-width: 58px;
+  padding: 6px 6px;
+  border-radius: 8px;
+  font-size: 12px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.08);
-}
-
-.excel-input.cc {
-  background: rgba(248, 226, 129, 0.15);
-}
-
-.excel-input.cg {
-  background: rgba(244, 137, 177, 0.15);
-}
-
-.excel-input.ne {
-  background: rgba(109, 216, 255, 0.15);
-}
-
-.excel-input.ba {
-  background: rgba(145, 214, 112, 0.15);
-}
-
-.total-cell {
-  font-weight: 800;
-  background: rgba(255,255,255,0.05);
 }
 
 .toast {
@@ -567,10 +597,6 @@ textarea {
   }
 
   .content-grid.two-col {
-    grid-template-columns: 1fr;
-  }
-
-  .planilla-topbar {
     grid-template-columns: 1fr;
   }
 }
