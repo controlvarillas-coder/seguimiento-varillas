@@ -698,6 +698,27 @@ function renderGerenciaExcel() {
 
   table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
+async function seedBaseData() {
+  const snap = await getDocs(collection(db, 'productos'));
+
+  if (!snap.empty) return;
+
+  console.log('Cargando PRODUCT_MASTER...');
+
+  for (const p of PRODUCT_MASTER) {
+    await addDoc(collection(db, 'productos'), {
+      nombre: p.name,
+      codigo: p.code,
+      categoria: p.category,
+      visiblePara: p.visibleFor,
+      activo: p.active,
+      orden: p.order,
+      creadoEn: serverTimestamp()
+    });
+  }
+
+  console.log('Productos cargados correctamente');
+}
   const productosSnap = await getDocs(collection(db, 'productos'));
 
   if (productosSnap.empty) {
