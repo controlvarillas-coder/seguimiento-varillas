@@ -14,7 +14,7 @@
       <div class="login-card">
         <div class="brand-pill">VARILLAS CONTROL</div>
         <h1>Ingreso al sistema</h1>
-        <p class="login-subtitle">Planilla web conectada a Firebase</p>
+        <p class="login-subtitle">Panel operativo y gerencial</p>
 
         <form id="loginForm" class="login-form">
           <div class="field">
@@ -46,7 +46,7 @@
           </div>
 
           <div class="mini-user-card">
-            <div id="avatarMini" class="avatar-mini">F</div>
+            <div id="avatarMini" class="avatar-mini">U</div>
             <div>
               <div id="miniName" class="mini-name">Usuario</div>
               <div id="miniRole" class="mini-role">Rol</div>
@@ -56,9 +56,10 @@
 
         <nav class="sidebar-nav">
           <button class="nav-link active" data-section="dashboard">Dashboard</button>
-          <button class="nav-link" data-section="productos">Productos</button>
-          <button class="nav-link" data-section="movimientos">Planilla diaria</button>
-          <button class="nav-link" data-section="usuarios">Usuarios</button>
+          <button class="nav-link gerencia-only" data-section="productos">Productos</button>
+          <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
+          <button class="nav-link" data-section="carga">Carga diaria</button>
+          <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
         </nav>
 
         <div class="sidebar-bottom">
@@ -71,7 +72,7 @@
           <div class="topbar-left">
             <button id="menuBtn" class="menu-btn" type="button">☰</button>
             <div>
-              <h2 id="pageTitle">Dashboard general</h2>
+              <h2 id="pageTitle">Dashboard</h2>
               <div id="connectionPill" class="connection-pill">Conectado</div>
             </div>
           </div>
@@ -85,22 +86,22 @@
               <div id="statProductos" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Planillas</div>
-              <div id="statPlanillas" class="stat-value">0</div>
+              <div class="stat-label">Reportes</div>
+              <div id="statReportes" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Pendientes</div>
-              <div id="statPendientes" class="stat-value">0</div>
+              <div class="stat-label">Borradores</div>
+              <div id="statBorradores" class="stat-value">0</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Enviadas</div>
-              <div id="statEnviadas" class="stat-value">0</div>
+              <div class="stat-label">Enviados</div>
+              <div id="statEnviados" class="stat-value">0</div>
             </div>
           </div>
 
           <div class="panel-card">
             <div class="panel-header">
-              <h3>Últimas planillas</h3>
+              <h3>Últimos reportes</h3>
             </div>
             <div class="table-wrap">
               <table class="data-table">
@@ -112,7 +113,7 @@
                     <th>Usuario</th>
                   </tr>
                 </thead>
-                <tbody id="dashboardPlanillas"></tbody>
+                <tbody id="tablaDashboardReportes"></tbody>
               </table>
             </div>
           </div>
@@ -128,7 +129,7 @@
 
               <form id="formProducto" class="stack-form">
                 <div class="field">
-                  <label for="prodNombre">Nombre del producto</label>
+                  <label for="prodNombre">Nombre</label>
                   <input id="prodNombre" type="text" required />
                 </div>
 
@@ -138,7 +139,7 @@
                 </div>
 
                 <div class="field">
-                  <label>Categoría</label>
+                  <label for="prodCategoria">Categoría</label>
                   <input id="prodCategoria" type="text" placeholder="Ej: Aromas" />
                 </div>
 
@@ -181,22 +182,52 @@
           </div>
         </section>
 
-        <!-- MOVIMIENTOS / PLANILLA -->
-        <section id="section-movimientos" class="section">
+        <!-- GERENCIA EXCEL -->
+        <section id="section-gerencia" class="section">
           <div class="panel-card">
             <div class="panel-header">
-              <h3>Planilla diaria</h3>
+              <h3>Vista gerencial mensual</h3>
             </div>
 
-            <div class="planilla-topbar">
+            <div class="toolbar-grid">
               <div class="field">
-                <label for="planillaFecha">Fecha</label>
-                <input id="planillaFecha" type="date" />
+                <label for="mesGerencia">Mes</label>
+                <input id="mesGerencia" type="month" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button id="btnRefrescarGerencia" class="btn btn-primary" type="button">Actualizar vista</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Planilla tipo Excel</h3>
+            </div>
+
+            <div class="excel-wrap">
+              <table id="tablaGerenciaExcel" class="excel-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARGA DIARIA -->
+        <section id="section-carga" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Carga diaria por fábrica</h3>
+            </div>
+
+            <div class="toolbar-grid">
+              <div class="field">
+                <label for="cargaFecha">Fecha</label>
+                <input id="cargaFecha" type="date" />
               </div>
 
               <div class="field">
-                <label for="planillaFabrica">Fábrica</label>
-                <select id="planillaFabrica">
+                <label for="cargaFabrica">Fábrica</label>
+                <select id="cargaFabrica">
                   <option value="caja_chica">Caja chica</option>
                   <option value="caja_grande">Caja grande</option>
                   <option value="neutro">Neutro</option>
@@ -204,50 +235,26 @@
                 </select>
               </div>
 
-              <div class="field grow">
+              <div class="field field-grow">
                 <label>Estado</label>
-                <div id="planillaEstado" class="status-box">Sin cargar</div>
+                <div id="estadoCarga" class="status-box">Sin cargar</div>
               </div>
 
               <div class="actions-row">
-                <button id="btnCargarPlanilla" class="btn btn-outline" type="button">Cargar planilla</button>
-                <button id="btnGuardarPlanilla" class="btn btn-primary" type="button">Guardar borrador</button>
-                <button id="btnEnviarPlanilla" class="btn btn-primary" type="button">Enviar planilla</button>
+                <button id="btnCargarReporte" class="btn btn-outline" type="button">Cargar</button>
+                <button id="btnGuardarReporte" class="btn btn-primary" type="button">Guardar borrador</button>
+                <button id="btnEnviarReporte" class="btn btn-primary" type="button">Enviar</button>
               </div>
             </div>
           </div>
 
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Vista tipo Excel</h3>
+              <h3>Planilla operativa</h3>
             </div>
 
             <div class="excel-wrap">
-              <table class="excel-table">
-                <thead>
-                  <tr>
-                    <th class="sticky-col">Producto</th>
-                    <th>Stock Inicial</th>
-                    <th>Caja Chica</th>
-                    <th>Caja Grande</th>
-                    <th>Neutro</th>
-                    <th>Bañado</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody id="excelBody"></tbody>
-                <tfoot>
-                  <tr>
-                    <th class="sticky-col">TOTAL</th>
-                    <th id="ftStockInicial">0</th>
-                    <th id="ftCajaChica">0</th>
-                    <th id="ftCajaGrande">0</th>
-                    <th id="ftNeutro">0</th>
-                    <th id="ftBanado">0</th>
-                    <th id="ftGeneral">0</th>
-                  </tr>
-                </tfoot>
-              </table>
+              <table id="tablaCargaDiaria" class="excel-table"></table>
             </div>
           </div>
         </section>
