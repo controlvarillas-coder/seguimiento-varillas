@@ -3,123 +3,115 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Varillas · Control de Producción</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>Varillas Control | Gerencia</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-mark">V</div>
-        <div>
-          <p class="eyebrow">Sistema interno</p>
-          <h1>Varillas Control</h1>
-        </div>
+  <div id="toast" class="toast"></div>
+
+  <!-- LOGIN -->
+  <section id="screen-login" class="screen active">
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="brand-pill">VARILLAS CONTROL</div>
+        <h1>Ingreso al sistema</h1>
+        <p class="login-subtitle">Panel de gerencia y seguimiento de movimientos.</p>
+
+        <form id="loginForm" class="login-form">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" placeholder="tu@email.com" required />
+          </div>
+
+          <div class="field">
+            <label for="password">Contraseña</label>
+            <input id="password" type="password" placeholder="********" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg">Ingresar</button>
+        </form>
       </div>
+    </div>
+  </section>
 
-      <nav class="nav">
-        <button class="nav-link active" data-section="dashboard">Dashboard</button>
-        <button class="nav-link" data-section="movimientos">Movimientos</button>
-        <button class="nav-link" data-section="stock">Stock</button>
-        <button class="nav-link gerencia-only" data-section="alertas">Alertas</button>
-        <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
-      </nav>
-
-      <div class="sidebar-footer">
-        <div class="user-card" id="userCardMini">
-          <div class="avatar" id="avatarMini">G</div>
-          <div>
-            <strong id="miniName">Invitado</strong>
-            <span id="miniRole">Sin sesión</span>
-          </div>
-        </div>
-        <button class="ghost-btn hidden" id="logoutBtn">Cerrar sesión</button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-        <div class="topbar-left">
-          <button class="menu-btn" id="menuBtn">☰</button>
-          <div>
-            <p class="eyebrow">Seguimiento de producción y stock</p>
-            <h2 id="pageTitle">Dashboard general</h2>
-          </div>
-        </div>
-        <div class="topbar-right">
-          <span class="pill" id="connectionPill">Modo demo</span>
-        </div>
-      </header>
-
-      <section class="screen active" id="screen-login">
-        <div class="login-wrap">
-          <div class="login-card premium-card">
-            <div class="login-copy">
-              <p class="eyebrow">Acceso seguro</p>
-              <h3>Control integral de varillas</h3>
-              <p>Ingresá con tu usuario para ver tu panel, registrar movimientos y controlar diferencias entre depósitos.</p>
-            </div>
-
-            <form id="loginForm" class="form-grid">
-              <label>
-                <span>Email</span>
-                <input type="email" id="email" placeholder="gerencia@empresa.com" required>
-              </label>
-              <label>
-                <span>Contraseña</span>
-                <input type="password" id="password" placeholder="••••••••" required>
-              </label>
-              <button type="submit" class="primary-btn">Ingresar</button>
-              <p class="helper-text">Primero habilitá Authentication en Firebase y creá tus usuarios.</p>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      <section class="screen" id="screen-app">
-        <section class="section active" id="section-dashboard">
-          <div class="hero premium-card">
+  <!-- APP -->
+  <section id="screen-app" class="screen">
+    <div class="app-shell">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-top">
+          <div class="logo-box">
+            <div class="logo-circle">V</div>
             <div>
-              <p class="eyebrow">Visión consolidada</p>
-              <h3>Tablero operativo en tiempo real</h3>
-              <p>Controlá producción, traslados, recepciones pendientes y diferencias desde un solo lugar.</p>
-            </div>
-            <div class="hero-badges">
-              <span class="metric-chip">Producción</span>
-              <span class="metric-chip">Stock</span>
-              <span class="metric-chip">Alertas</span>
+              <div class="logo-title">Varillas Control</div>
+              <div class="logo-sub">Panel profesional</div>
             </div>
           </div>
 
-          <div class="stats-grid" id="statsGrid">
-            <article class="stat-card premium-card">
-              <span>Movimientos hoy</span>
-              <strong id="statMovimientos">0</strong>
-            </article>
-            <article class="stat-card premium-card">
-              <span>Pendientes de recepción</span>
-              <strong id="statPendientes">0</strong>
-            </article>
-            <article class="stat-card premium-card">
-              <span>Alertas por diferencia</span>
-              <strong id="statAlertas">0</strong>
-            </article>
-            <article class="stat-card premium-card gerencia-only">
-              <span>Stock total consolidado</span>
-              <strong id="statStock">0</strong>
-            </article>
+          <div class="mini-user-card">
+            <div id="avatarMini" class="avatar-mini">F</div>
+            <div>
+              <div id="miniName" class="mini-name">Usuario</div>
+              <div id="miniRole" class="mini-role">Gerencia</div>
+            </div>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button class="nav-link active" data-section="dashboard">Dashboard</button>
+          <button class="nav-link" data-section="productos">Productos</button>
+          <button class="nav-link" data-section="movimientos">Movimientos</button>
+          <button class="nav-link" data-section="stock">Stock</button>
+          <button class="nav-link" data-section="alertas">Alertas</button>
+          <button class="nav-link" data-section="usuarios">Usuarios</button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <button id="logoutBtn" class="btn btn-outline w-full">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="menuBtn" class="menu-btn" type="button">☰</button>
+            <div>
+              <h2 id="pageTitle">Dashboard general</h2>
+              <div id="connectionPill" class="connection-pill">Modo demo</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <section id="section-dashboard" class="section active">
+          <div class="cards-grid">
+            <div class="stat-card">
+              <div class="stat-label">Movimientos del día</div>
+              <div id="statMovimientos" class="stat-value">0</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Pendientes</div>
+              <div id="statPendientes" class="stat-value">0</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Alertas abiertas</div>
+              <div id="statAlertas" class="stat-value">0</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Stock total</div>
+              <div id="statStock" class="stat-value">0</div>
+            </div>
           </div>
 
-          <div class="grid-2">
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Últimos movimientos</h4>
+          <div class="content-grid two-col">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Últimos movimientos</h3>
               </div>
               <div class="table-wrap">
-                <table>
+                <table class="data-table">
                   <thead>
                     <tr>
                       <th>Fecha</th>
@@ -134,78 +126,118 @@
               </div>
             </div>
 
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Alertas activas</h4>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Alertas activas</h3>
               </div>
-              <div id="alertasList" class="stack-list"></div>
+              <div id="alertasList" class="alert-list"></div>
             </div>
           </div>
         </section>
 
-        <section class="section" id="section-movimientos">
-          <div class="grid-2">
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Registrar salida</h4>
+        <!-- PRODUCTOS -->
+        <section id="section-productos" class="section">
+          <div class="content-grid two-col">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Agregar producto</h3>
               </div>
-              <form id="formMovimiento" class="form-grid two-cols">
-                <label>
-                  <span>Fecha</span>
-                  <input type="date" id="movFecha" required>
-                </label>
-                <label>
-                  <span>Producto</span>
-                  <select id="movProducto" required></select>
-                </label>
-                <label>
-                  <span>Depósito origen</span>
-                  <select id="movOrigen" required></select>
-                </label>
-                <label>
-                  <span>Depósito destino</span>
-                  <select id="movDestino" required></select>
-                </label>
-                <label>
-                  <span>Cantidad enviada</span>
-                  <input type="number" id="movCantidad" min="1" required>
-                </label>
-                <label>
-                  <span>Observaciones</span>
-                  <input type="text" id="movObs" placeholder="Detalle opcional">
-                </label>
-                <button type="submit" class="primary-btn full">Guardar movimiento</button>
+
+              <form id="formProducto" class="stack-form">
+                <div class="field">
+                  <label for="prodNombre">Nombre del producto</label>
+                  <input id="prodNombre" type="text" placeholder="Ej: Varilla Sándalo 23cm" required />
+                </div>
+
+                <div class="field">
+                  <label for="prodCodigo">Código interno</label>
+                  <input id="prodCodigo" type="text" placeholder="Ej: VAR-SAN-23" />
+                </div>
+
+                <div class="field">
+                  <label>Visible para</label>
+                  <div class="checks-grid">
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="gerencia" checked /> Gerencia</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" /> Bañado</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="alvear" /> Alvear</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="moron" /> Morón</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="produccion" /> Producción</label>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Guardar producto</button>
               </form>
             </div>
 
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Confirmar recepción</h4>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Resumen</h3>
               </div>
-              <form id="formRecepcion" class="form-grid">
-                <label>
-                  <span>Movimiento pendiente</span>
-                  <select id="recepcionMovimiento" required></select>
-                </label>
-                <label>
-                  <span>Cantidad recibida</span>
-                  <input type="number" id="recepcionCantidad" min="1" required>
-                </label>
-                <label>
-                  <span>Observaciones</span>
-                  <input type="text" id="recepcionObs" placeholder="Ej: faltaron 2 bultos">
-                </label>
-                <button type="submit" class="primary-btn">Confirmar recepción</button>
-              </form>
+
+              <div class="summary-boxes">
+                <div class="mini-stat">
+                  <span>Total productos</span>
+                  <strong id="productosCount">0</strong>
+                </div>
+                <div class="mini-stat">
+                  <span>Activos</span>
+                  <strong id="productosActivos">0</strong>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="premium-card mt-24">
-            <div class="card-head">
-              <h4>Historial de movimientos</h4>
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Listado de productos</h3>
             </div>
+
+            <div id="productosList" class="products-list"></div>
+          </div>
+        </section>
+
+        <!-- MOVIMIENTOS -->
+        <section id="section-movimientos" class="section">
+          <div class="content-grid two-col">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Filtrar por fecha</h3>
+              </div>
+
+              <form id="formFiltroFecha" class="inline-form">
+                <div class="field">
+                  <label for="filtroFecha">Fecha</label>
+                  <input id="filtroFecha" type="date" />
+                </div>
+                <button type="submit" class="btn btn-primary">Ver detalle</button>
+                <button type="button" id="btnLimpiarFiltro" class="btn btn-outline">Limpiar</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Total del día</h3>
+              </div>
+              <div class="summary-boxes">
+                <div class="mini-stat">
+                  <span>Movimientos</span>
+                  <strong id="movimientosFechaCount">0</strong>
+                </div>
+                <div class="mini-stat">
+                  <span>Total enviado</span>
+                  <strong id="movimientosFechaTotal">0</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Detalle de movimientos</h3>
+            </div>
+
             <div class="table-wrap">
-              <table>
+              <table class="data-table">
                 <thead>
                   <tr>
                     <th>Fecha</th>
@@ -215,21 +247,91 @@
                     <th>Origen</th>
                     <th>Destino</th>
                     <th>Estado</th>
+                    <th>Editar fecha</th>
                   </tr>
                 </thead>
                 <tbody id="tablaMovimientos"></tbody>
               </table>
             </div>
           </div>
+
+          <div class="content-grid two-col mt-20">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Cargar movimiento manual</h3>
+              </div>
+
+              <form id="formMovimiento" class="stack-form">
+                <div class="field">
+                  <label for="movFecha">Fecha</label>
+                  <input id="movFecha" type="date" required />
+                </div>
+
+                <div class="field">
+                  <label for="movProducto">Producto</label>
+                  <select id="movProducto" required></select>
+                </div>
+
+                <div class="field">
+                  <label for="movOrigen">Origen</label>
+                  <select id="movOrigen" required></select>
+                </div>
+
+                <div class="field">
+                  <label for="movDestino">Destino</label>
+                  <select id="movDestino" required></select>
+                </div>
+
+                <div class="field">
+                  <label for="movCantidad">Cantidad enviada</label>
+                  <input id="movCantidad" type="number" min="1" required />
+                </div>
+
+                <div class="field">
+                  <label for="movObs">Observaciones</label>
+                  <textarea id="movObs" rows="3" placeholder="Opcional"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Guardar movimiento</button>
+              </form>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Confirmar recepción</h3>
+              </div>
+
+              <form id="formRecepcion" class="stack-form">
+                <div class="field">
+                  <label for="recepcionMovimiento">Movimiento pendiente</label>
+                  <select id="recepcionMovimiento" required></select>
+                </div>
+
+                <div class="field">
+                  <label for="recepcionCantidad">Cantidad recibida</label>
+                  <input id="recepcionCantidad" type="number" min="1" required />
+                </div>
+
+                <div class="field">
+                  <label for="recepcionObs">Observaciones</label>
+                  <textarea id="recepcionObs" rows="3" placeholder="Opcional"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Confirmar recepción</button>
+              </form>
+            </div>
+          </div>
         </section>
 
-        <section class="section" id="section-stock">
-          <div class="premium-card">
-            <div class="card-head">
-              <h4>Stock por depósito</h4>
+        <!-- STOCK -->
+        <section id="section-stock" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Stock por depósito</h3>
             </div>
+
             <div class="table-wrap">
-              <table>
+              <table class="data-table">
                 <thead>
                   <tr>
                     <th>Producto</th>
@@ -244,18 +346,20 @@
           </div>
         </section>
 
-        <section class="section" id="section-alertas">
-          <div class="premium-card">
-            <div class="card-head">
-              <h4>Alertas y diferencias</h4>
+        <!-- ALERTAS -->
+        <section id="section-alertas" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Alertas y diferencias</h3>
             </div>
+
             <div class="table-wrap">
-              <table>
+              <table class="data-table">
                 <thead>
                   <tr>
                     <th>Fecha</th>
                     <th>Movimiento</th>
-                    <th>Mensaje</th>
+                    <th>Detalle</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
@@ -265,45 +369,31 @@
           </div>
         </section>
 
-        <section class="section" id="section-usuarios">
-          <div class="grid-2">
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Usuarios del sistema</h4>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Nombre</th>
-                      <th>Email</th>
-                      <th>Rol</th>
-                      <th>Depósito</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tablaUsuarios"></tbody>
-                </table>
-              </div>
+        <!-- USUARIOS -->
+        <section id="section-usuarios" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Usuarios del sistema</h3>
             </div>
 
-            <div class="premium-card">
-              <div class="card-head">
-                <h4>Cómo cargar usuarios</h4>
-              </div>
-              <div class="info-box">
-                <p><strong>1.</strong> Creá el usuario en Firebase Authentication.</p>
-                <p><strong>2.</strong> Luego agregá un documento en la colección <code>usuarios</code> con el mismo email.</p>
-                <p><strong>3.</strong> Campos sugeridos: <code>nombre</code>, <code>email</code>, <code>rol</code>, <code>depositoId</code>, <code>activo</code>.</p>
-                <p><strong>4.</strong> Roles sugeridos: <code>gerencia</code>, <code>deposito</code>, <code>produccion</code>.</p>
-              </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Depósito</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaUsuarios"></tbody>
+              </table>
             </div>
           </div>
         </section>
-      </section>
-    </main>
-  </div>
-
-  <div class="toast" id="toast"></div>
+      </main>
+    </div>
+  </section>
 
   <script type="module" src="js/app.js"></script>
 </body>
