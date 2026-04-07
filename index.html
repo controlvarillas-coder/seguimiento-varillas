@@ -158,10 +158,10 @@
                   <label>Visible para</label>
                   <div class="checks-grid">
                     <label class="check-pill"><input type="checkbox" name="visiblePara" value="gerencia" checked /> Gerencia</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_chica" /> Caja chica</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_grande" /> Caja grande</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="neutro" /> Neutro</label>
                     <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" /> Bañado</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="alvear" /> Alvear</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="moron" /> Morón</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="produccion" /> Producción</label>
                   </div>
                 </div>
 
@@ -191,7 +191,6 @@
             <div class="panel-header">
               <h3>Listado de productos</h3>
             </div>
-
             <div id="productosList" class="products-list"></div>
           </div>
         </section>
@@ -220,11 +219,11 @@
               </div>
               <div class="summary-boxes">
                 <div class="mini-stat">
-                  <span>Movimientos</span>
+                  <span>Productos</span>
                   <strong id="movimientosFechaCount">0</strong>
                 </div>
                 <div class="mini-stat">
-                  <span>Total enviado</span>
+                  <span>Total general</span>
                   <strong id="movimientosFechaTotal">0</strong>
                 </div>
               </div>
@@ -233,24 +232,32 @@
 
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Detalle de movimientos</h3>
+              <h3>Detalle por producto</h3>
             </div>
 
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Fecha</th>
                     <th>Producto</th>
-                    <th>Enviado</th>
-                    <th>Recibido</th>
-                    <th>Origen</th>
-                    <th>Destino</th>
-                    <th>Estado</th>
-                    <th>Editar fecha</th>
+                    <th>Caja chica</th>
+                    <th>Caja grande</th>
+                    <th>Neutro</th>
+                    <th>Bañado</th>
+                    <th>Total</th>
                   </tr>
                 </thead>
                 <tbody id="tablaMovimientos"></tbody>
+                <tfoot>
+                  <tr>
+                    <th>TOTAL</th>
+                    <th id="totalCajaChica">0</th>
+                    <th id="totalCajaGrande">0</th>
+                    <th id="totalNeutro">0</th>
+                    <th id="totalBanado">0</th>
+                    <th id="totalGeneral">0</th>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -258,7 +265,7 @@
           <div class="content-grid two-col mt-20">
             <div class="panel-card">
               <div class="panel-header">
-                <h3>Cargar movimiento manual</h3>
+                <h3>Cargar movimiento</h3>
               </div>
 
               <form id="formMovimiento" class="stack-form">
