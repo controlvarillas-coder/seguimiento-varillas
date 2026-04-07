@@ -18,9 +18,6 @@ import {
   where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
-import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
-
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -720,10 +717,9 @@ async function seedBaseData() {
   return;
 }
 
-function refreshAlertas() {
-  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
-  renderGerenciaMenuBadge(state.alertas);
-  renderGerenciaAlertsPanel(state.alertas);
+function refreshAlertasVisuales() {
+  renderGerenciaMenuBadge([]);
+  renderGerenciaAlertsPanel([]);
 }
 
 async function refreshAll() {
@@ -738,7 +734,7 @@ async function refreshAll() {
   renderUsuarios();
   renderCargaDiaria();
   renderGerenciaExcel();
-  refreshAlertas();
+  refreshAlertasVisuales();
 }
 
 function bindEvents() {
@@ -769,7 +765,7 @@ function bindEvents() {
   $('btnEnviarReporte')?.addEventListener('click', () => guardarReporte('enviada'));
   $('btnRefrescarGerencia')?.addEventListener('click', () => {
     renderGerenciaExcel();
-    refreshAlertas();
+    refreshAlertasVisuales();
   });
 
   $('cargaFecha')?.addEventListener('change', () => {
