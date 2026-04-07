@@ -3,29 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Varillas Control | Gerencia</title>
+  <title>Varillas Control</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
   <div id="toast" class="toast"></div>
 
-  <!-- LOGIN -->
   <section id="screen-login" class="screen active">
     <div class="login-wrap">
       <div class="login-card">
         <div class="brand-pill">VARILLAS CONTROL</div>
         <h1>Ingreso al sistema</h1>
-        <p class="login-subtitle">Panel de gerencia y seguimiento de movimientos.</p>
+        <p class="login-subtitle">Planilla web conectada a Firebase</p>
 
         <form id="loginForm" class="login-form">
           <div class="field">
             <label for="email">Email</label>
-            <input id="email" type="email" placeholder="tu@email.com" required />
+            <input id="email" type="email" required />
           </div>
 
           <div class="field">
             <label for="password">Contraseña</label>
-            <input id="password" type="password" placeholder="********" required />
+            <input id="password" type="password" required />
           </div>
 
           <button type="submit" class="btn btn-primary btn-lg">Ingresar</button>
@@ -34,7 +33,6 @@
     </div>
   </section>
 
-  <!-- APP -->
   <section id="screen-app" class="screen">
     <div class="app-shell">
       <aside id="sidebar" class="sidebar">
@@ -43,7 +41,7 @@
             <div class="logo-circle">V</div>
             <div>
               <div class="logo-title">Varillas Control</div>
-              <div class="logo-sub">Panel profesional</div>
+              <div class="logo-sub">Sistema interno</div>
             </div>
           </div>
 
@@ -51,7 +49,7 @@
             <div id="avatarMini" class="avatar-mini">F</div>
             <div>
               <div id="miniName" class="mini-name">Usuario</div>
-              <div id="miniRole" class="mini-role">Gerencia</div>
+              <div id="miniRole" class="mini-role">Rol</div>
             </div>
           </div>
         </div>
@@ -59,9 +57,7 @@
         <nav class="sidebar-nav">
           <button class="nav-link active" data-section="dashboard">Dashboard</button>
           <button class="nav-link" data-section="productos">Productos</button>
-          <button class="nav-link" data-section="movimientos">Movimientos</button>
-          <button class="nav-link" data-section="stock">Stock</button>
-          <button class="nav-link" data-section="alertas">Alertas</button>
+          <button class="nav-link" data-section="movimientos">Planilla diaria</button>
           <button class="nav-link" data-section="usuarios">Usuarios</button>
         </nav>
 
@@ -76,7 +72,7 @@
             <button id="menuBtn" class="menu-btn" type="button">☰</button>
             <div>
               <h2 id="pageTitle">Dashboard general</h2>
-              <div id="connectionPill" class="connection-pill">Modo demo</div>
+              <div id="connectionPill" class="connection-pill">Conectado</div>
             </div>
           </div>
         </header>
@@ -85,52 +81,39 @@
         <section id="section-dashboard" class="section active">
           <div class="cards-grid">
             <div class="stat-card">
-              <div class="stat-label">Movimientos del día</div>
-              <div id="statMovimientos" class="stat-value">0</div>
+              <div class="stat-label">Productos</div>
+              <div id="statProductos" class="stat-value">0</div>
             </div>
-
+            <div class="stat-card">
+              <div class="stat-label">Planillas</div>
+              <div id="statPlanillas" class="stat-value">0</div>
+            </div>
             <div class="stat-card">
               <div class="stat-label">Pendientes</div>
               <div id="statPendientes" class="stat-value">0</div>
             </div>
-
             <div class="stat-card">
-              <div class="stat-label">Alertas abiertas</div>
-              <div id="statAlertas" class="stat-value">0</div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Stock total</div>
-              <div id="statStock" class="stat-value">0</div>
+              <div class="stat-label">Enviadas</div>
+              <div id="statEnviadas" class="stat-value">0</div>
             </div>
           </div>
 
-          <div class="content-grid two-col">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Últimos movimientos</h3>
-              </div>
-              <div class="table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Producto</th>
-                      <th>Origen</th>
-                      <th>Destino</th>
-                      <th>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dashboardMovimientos"></tbody>
-                </table>
-              </div>
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Últimas planillas</h3>
             </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Alertas activas</h3>
-              </div>
-              <div id="alertasList" class="alert-list"></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Fábrica</th>
+                    <th>Estado</th>
+                    <th>Usuario</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardPlanillas"></tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -146,22 +129,26 @@
               <form id="formProducto" class="stack-form">
                 <div class="field">
                   <label for="prodNombre">Nombre del producto</label>
-                  <input id="prodNombre" type="text" placeholder="Ej: Varilla Sándalo 23cm" required />
+                  <input id="prodNombre" type="text" required />
                 </div>
 
                 <div class="field">
-                  <label for="prodCodigo">Código interno</label>
-                  <input id="prodCodigo" type="text" placeholder="Ej: VAR-SAN-23" />
+                  <label for="prodCodigo">Código</label>
+                  <input id="prodCodigo" type="text" />
+                </div>
+
+                <div class="field">
+                  <label>Categoría</label>
+                  <input id="prodCategoria" type="text" placeholder="Ej: Aromas" />
                 </div>
 
                 <div class="field">
                   <label>Visible para</label>
                   <div class="checks-grid">
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="gerencia" checked /> Gerencia</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_chica" /> Caja chica</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_grande" /> Caja grande</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="neutro" /> Neutro</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" /> Bañado</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_chica" checked /> Caja chica</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_grande" checked /> Caja grande</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="neutro" checked /> Neutro</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" checked /> Bañado</label>
                   </div>
                 </div>
 
@@ -173,7 +160,6 @@
               <div class="panel-header">
                 <h3>Resumen</h3>
               </div>
-
               <div class="summary-boxes">
                 <div class="mini-stat">
                   <span>Total productos</span>
@@ -195,182 +181,72 @@
           </div>
         </section>
 
-        <!-- MOVIMIENTOS -->
+        <!-- MOVIMIENTOS / PLANILLA -->
         <section id="section-movimientos" class="section">
-          <div class="content-grid two-col">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Filtrar por fecha</h3>
-              </div>
-
-              <form id="formFiltroFecha" class="inline-form">
-                <div class="field">
-                  <label for="filtroFecha">Fecha</label>
-                  <input id="filtroFecha" type="date" />
-                </div>
-                <button type="submit" class="btn btn-primary">Ver detalle</button>
-                <button type="button" id="btnLimpiarFiltro" class="btn btn-outline">Limpiar</button>
-              </form>
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Planilla diaria</h3>
             </div>
 
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Total del día</h3>
+            <div class="planilla-topbar">
+              <div class="field">
+                <label for="planillaFecha">Fecha</label>
+                <input id="planillaFecha" type="date" />
               </div>
-              <div class="summary-boxes">
-                <div class="mini-stat">
-                  <span>Productos</span>
-                  <strong id="movimientosFechaCount">0</strong>
-                </div>
-                <div class="mini-stat">
-                  <span>Total general</span>
-                  <strong id="movimientosFechaTotal">0</strong>
-                </div>
+
+              <div class="field">
+                <label for="planillaFabrica">Fábrica</label>
+                <select id="planillaFabrica">
+                  <option value="caja_chica">Caja chica</option>
+                  <option value="caja_grande">Caja grande</option>
+                  <option value="neutro">Neutro</option>
+                  <option value="banado">Bañado</option>
+                </select>
+              </div>
+
+              <div class="field grow">
+                <label>Estado</label>
+                <div id="planillaEstado" class="status-box">Sin cargar</div>
+              </div>
+
+              <div class="actions-row">
+                <button id="btnCargarPlanilla" class="btn btn-outline" type="button">Cargar planilla</button>
+                <button id="btnGuardarPlanilla" class="btn btn-primary" type="button">Guardar borrador</button>
+                <button id="btnEnviarPlanilla" class="btn btn-primary" type="button">Enviar planilla</button>
               </div>
             </div>
           </div>
 
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Detalle por producto</h3>
+              <h3>Vista tipo Excel</h3>
             </div>
 
-            <div class="table-wrap">
-              <table class="data-table">
+            <div class="excel-wrap">
+              <table class="excel-table">
                 <thead>
                   <tr>
-                    <th>Producto</th>
-                    <th>Caja chica</th>
-                    <th>Caja grande</th>
+                    <th class="sticky-col">Producto</th>
+                    <th>Stock Inicial</th>
+                    <th>Caja Chica</th>
+                    <th>Caja Grande</th>
                     <th>Neutro</th>
                     <th>Bañado</th>
                     <th>Total</th>
                   </tr>
                 </thead>
-                <tbody id="tablaMovimientos"></tbody>
+                <tbody id="excelBody"></tbody>
                 <tfoot>
                   <tr>
-                    <th>TOTAL</th>
-                    <th id="totalCajaChica">0</th>
-                    <th id="totalCajaGrande">0</th>
-                    <th id="totalNeutro">0</th>
-                    <th id="totalBanado">0</th>
-                    <th id="totalGeneral">0</th>
+                    <th class="sticky-col">TOTAL</th>
+                    <th id="ftStockInicial">0</th>
+                    <th id="ftCajaChica">0</th>
+                    <th id="ftCajaGrande">0</th>
+                    <th id="ftNeutro">0</th>
+                    <th id="ftBanado">0</th>
+                    <th id="ftGeneral">0</th>
                   </tr>
                 </tfoot>
-              </table>
-            </div>
-          </div>
-
-          <div class="content-grid two-col mt-20">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Cargar movimiento</h3>
-              </div>
-
-              <form id="formMovimiento" class="stack-form">
-                <div class="field">
-                  <label for="movFecha">Fecha</label>
-                  <input id="movFecha" type="date" required />
-                </div>
-
-                <div class="field">
-                  <label for="movProducto">Producto</label>
-                  <select id="movProducto" required></select>
-                </div>
-
-                <div class="field">
-                  <label for="movOrigen">Origen</label>
-                  <select id="movOrigen" required></select>
-                </div>
-
-                <div class="field">
-                  <label for="movDestino">Destino</label>
-                  <select id="movDestino" required></select>
-                </div>
-
-                <div class="field">
-                  <label for="movCantidad">Cantidad enviada</label>
-                  <input id="movCantidad" type="number" min="1" required />
-                </div>
-
-                <div class="field">
-                  <label for="movObs">Observaciones</label>
-                  <textarea id="movObs" rows="3" placeholder="Opcional"></textarea>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Guardar movimiento</button>
-              </form>
-            </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Confirmar recepción</h3>
-              </div>
-
-              <form id="formRecepcion" class="stack-form">
-                <div class="field">
-                  <label for="recepcionMovimiento">Movimiento pendiente</label>
-                  <select id="recepcionMovimiento" required></select>
-                </div>
-
-                <div class="field">
-                  <label for="recepcionCantidad">Cantidad recibida</label>
-                  <input id="recepcionCantidad" type="number" min="1" required />
-                </div>
-
-                <div class="field">
-                  <label for="recepcionObs">Observaciones</label>
-                  <textarea id="recepcionObs" rows="3" placeholder="Opcional"></textarea>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Confirmar recepción</button>
-              </form>
-            </div>
-          </div>
-        </section>
-
-        <!-- STOCK -->
-        <section id="section-stock" class="section">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Stock por depósito</h3>
-            </div>
-
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Depósito</th>
-                    <th>Cantidad</th>
-                    <th>Actualizado</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaStock"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ALERTAS -->
-        <section id="section-alertas" class="section">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Alertas y diferencias</h3>
-            </div>
-
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Movimiento</th>
-                    <th>Detalle</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaAlertas"></tbody>
               </table>
             </div>
           </div>
@@ -380,9 +256,8 @@
         <section id="section-usuarios" class="section">
           <div class="panel-card">
             <div class="panel-header">
-              <h3>Usuarios del sistema</h3>
+              <h3>Usuarios</h3>
             </div>
-
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
@@ -390,7 +265,7 @@
                     <th>Nombre</th>
                     <th>Email</th>
                     <th>Rol</th>
-                    <th>Depósito</th>
+                    <th>Fábrica</th>
                   </tr>
                 </thead>
                 <tbody id="tablaUsuarios"></tbody>
