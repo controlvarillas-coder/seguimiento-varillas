@@ -757,9 +757,7 @@ async function seedBaseData() {
 }
 
 async function refreshAll() {
-  state.productos = await loadCollection('productos', {
-    queryBuilder: (ref) => query(ref, orderBy('categoria'), orderBy('nombre'))
-  });
+ state.productos = await loadCollection('productos');
 
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios', {
