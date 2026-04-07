@@ -1,5 +1,5 @@
 import { auth, db } from './firebase-config.js';
-import { PRODUCT_MASTER } from './product-ma';
+import { PRODUCT_MASTER } from './product-master.js';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
