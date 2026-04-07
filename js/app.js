@@ -698,8 +698,6 @@ function renderGerenciaExcel() {
 
   table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
-
-async function seedBaseData() {
   const productosSnap = await getDocs(collection(db, 'productos'));
 
   if (productosSnap.empty) {
