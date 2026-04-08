@@ -719,26 +719,22 @@ async function seedBaseData() {
   return;
 }
 
-function refreshAlertasVisuales() {
-  renderGerenciaMenuBadge([]);
-  renderGerenciaAlertsPanel([]);
-}
-
 async function refreshAll() {
   state.productos = (await loadCollection('productos'))
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios');
-  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
-  renderGerenciaMenuBadge(state.alertas);
-  renderGerenciaAlertsPanel(state.alertas);
+
   renderDashboard();
   renderProductos();
   renderUsuarios();
   renderCargaDiaria();
   renderGerenciaExcel();
-  refreshAlertasVisuales();
+
+  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+  renderGerenciaMenuBadge(state.alertas);
+  renderGerenciaAlertsPanel(state.alertas);
 }
 
 function bindEvents() {
@@ -769,7 +765,9 @@ function bindEvents() {
   $('btnEnviarReporte')?.addEventListener('click', () => guardarReporte('enviada'));
   $('btnRefrescarGerencia')?.addEventListener('click', () => {
     renderGerenciaExcel();
-    refreshAlertasVisuales();
+    state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+    renderGerenciaMenuBadge(state.alertas);
+    renderGerenciaAlertsPanel(state.alertas);
   });
 
   $('cargaFecha')?.addEventListener('change', () => {
