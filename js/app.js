@@ -507,6 +507,25 @@ async function registrarProducto(ev) {
   toast('Producto guardado.');
   await refreshAll();
 }
+function currentReporteIsLocked() {
+  if (!state.reporteActual) return false;
+  if (state.perfil?.rol === 'gerencia') return false;
+
+  return !!state.reporteActual.idYaExistia;
+}
+
+
+  const groupsByFactory = {
+    alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
+    moron: ['cajaChicaMor', 'cajaGrandeMor'],
+    banado: ['banadoChica', 'banadoGrande'],
+    caja_chica: ['alvear', 'cajaChica'],
+    caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor']
+  };
+
+  const allowedKeys = groupsByFactory[fabrica] || [];
+  return DAY_GROUPS.filter((g) => allowedKeys.includes(g.key));
+}
 
 function getEditableGroupsForCurrentUser() {
   const fabrica = $('cargaFabrica')?.value;
@@ -528,13 +547,97 @@ function renderCargaDiaria() {
   const fabrica = $('cargaFabrica')?.value;
   const rows = state.reporteActual?.rows || buildDefaultRows(fabrica);
   const editableGroups = getEditableGroupsForCurrentUser();
+  const visibleGroups = getVisibleGroupsForCurrentView();
   const locked = currentReporteIsLocked();
 
   if ($('estadoCarga')) {
-    $('estadoCarga').textContent = state.reporteActual
-      ? `Estado: ${state.reporteActual.estado || 'borrador'}`
-      : `Nueva planilla ${fecha || ''}`;
+    if (state.reporteActual?.idYaExistia && state.perfil?.rol !== 'gerencia') {
+      $('estadoCarga').textContent = `Planilla ya cargada para ${fecha || ''} - solo lectura`;
+    } else {
+      $('estadoCarga').textContent = state.reporteActual
+        ? `Estado: ${state.reporteActual.estado || 'borrador'}`
+        : `Nueva planilla ${fecha || ''}`;
+    }
   }
+
+  if ($('btnGuardarReporte')) $('btnGuardarReporte').disabled = locked;
+  if ($('btnEnviarReporte')) $('btnEnviarReporte').disabled = locked;
+
+  let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th><th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
+  let thead2 = '<tr>';
+  let thead3 = '<tr>';
+
+  INITIAL_STOCK_COLUMNS.forEach((col) => {
+    thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`;
+  });
+
+  visibleGroups.forEach((group) => {
+    thead1 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
+    group.columns.forEach((col) => {
+      thead2 += `<th class="${group.colorClass}" rowspan="2">${col.label}</th>`;
+    });
+  });
+
+  thead1 += '<th rowspan="3" class="total-head">TOTAL FILA</th></tr>';
+  thead2 += '</tr>';
+  thead3 += '</tr>';
+
+  let body = '';
+  const columnTotals = {};
+  INITIAL_STOCK_COLUMNS.forEach((c) => (columnTotals[`stock_${c.key}`] = 0));
+  visibleGroups.forEach((g) => g.columns.forEach((c) => (columnTotals[`${g.key}_${c.key}`] = 0)));
+  let grandTotal = 0;
+
+  rows.forEach((row, rowIndex) => {
+    let rowHtml = `<tr><td class="sticky-col product-name-cell">${row.productoNombre}</td>`;
+
+    INITIAL_STOCK_COLUMNS.forEach((col) => {
+      const value = num(row.stockInicial?.[col.key]);
+      const canEdit = state.perfil?.rol === 'gerencia';
+
+      rowHtml += `<td><input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+      columnTotals[`stock_${col.key}`] += value;
+    });
+
+    visibleGroups.forEach((group) => {
+      group.columns.forEach((col) => {
+        if (col.readonly) {
+          const totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+          rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
+          columnTotals[`${group.key}_${col.key}`] += totalValue;
+        } else {
+          const value = num(row.groups?.[group.key]?.[col.key]);
+          const canEdit = editableGroups.includes(group.key) && !locked;
+          rowHtml += `<td><input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+          columnTotals[`${group.key}_${col.key}`] += value;
+        }
+      });
+    });
+
+    const rowTotal =
+      computeStockInitialTotal(row.stockInicial) +
+      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
+
+    grandTotal += rowTotal;
+    rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
+    body += rowHtml;
+  });
+
+  let tfoot = `<tr><th class="sticky-col">TOTAL</th>`;
+  INITIAL_STOCK_COLUMNS.forEach((col) => {
+    tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`;
+  });
+  visibleGroups.forEach((group) => {
+    group.columns.forEach((col) => {
+      tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`;
+    });
+  });
+  tfoot += `<th>${grandTotal}</th></tr>`;
+
+  table.innerHTML = `<thead>${thead1}${thead2}${thead3}</thead><tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody><tfoot>${tfoot}</tfoot>`;
+
+  bindCargaInputs();
+}
 
   if ($('btnGuardarReporte')) $('btnGuardarReporte').disabled = locked;
   if ($('btnEnviarReporte')) $('btnEnviarReporte').disabled = locked;
@@ -659,6 +762,39 @@ async function cargarReporteDiario() {
     const loaded = { id: snap.id, ...snap.data() };
     state.reporteActual = {
       ...loaded,
+      idYaExistia: true,
+      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
+    };
+
+    if (state.perfil?.rol === 'gerencia') {
+      toast('Reporte cargado.');
+    } else {
+      toast('Esta fecha ya fue cargada para esta fábrica. Solo lectura.');
+    }
+  } else {
+    state.reporteActual = {
+      id,
+      fecha,
+      fabrica,
+      estado: 'borrador',
+      creadoPor: state.currentUser?.email || '',
+      idYaExistia: false,
+      rows: buildDefaultRows(fabrica)
+    };
+    toast('Nueva planilla preparada.');
+  }
+
+  renderCargaDiaria();
+}
+
+  const id = getReporteId(fecha, fabrica);
+  const ref = doc(db, 'reportes_diarios', id);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    const loaded = { id: snap.id, ...snap.data() };
+    state.reporteActual = {
+      ...loaded,
       rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
     };
     toast('Reporte cargado.');
@@ -692,13 +828,20 @@ async function guardarReporte(estado = 'borrador') {
   }
 
   if (currentReporteIsLocked()) {
-    toast('La planilla ya fue enviada y no puede editarse.');
+    toast('Esta fábrica ya cargó una planilla para esa fecha.');
     return;
   }
 
   const id = getReporteId(fecha, fabrica);
   const ref = doc(db, 'reportes_diarios', id);
   const snap = await getDoc(ref);
+
+  if (snap.exists() && state.perfil?.rol !== 'gerencia') {
+    toast('Esta fábrica ya cargó una planilla para esa fecha.');
+    state.reporteActual.idYaExistia = true;
+    renderCargaDiaria();
+    return;
+  }
 
   const payload = {
     fecha,
@@ -720,7 +863,9 @@ async function guardarReporte(estado = 'borrador') {
   }
 
   state.reporteActual.estado = estado;
-  toast(estado === 'enviada' ? 'Planilla enviada.' : 'Borrador guardado.');
+  state.reporteActual.idYaExistia = true;
+
+  toast(estado === 'enviada' ? 'Planilla enviada.' : 'Planilla guardada.');
   await refreshAll();
   await cargarReporteDiario();
 }
