@@ -43,12 +43,22 @@ const FABRICAS = {
 
 const DAY_GROUPS = [
   {
+    key: 'alvear',
+    title: 'ALVEAR',
+    colorClass: 'group-alvear',
+    columns: [
+      { key: 'alv', label: 'Alv' },
+      { key: 'total', label: 'Total', readonly: true }
+    ]
+  },
+  {
     key: 'cajaChica',
     title: 'CAJA CHICA',
     colorClass: 'group-caja-chica',
     columns: [
-      { key: 'lin', label: 'Lin' },
-      { key: 'alv', label: 'Alv' },
+      { key: 'alvPlus', label: 'Alve +' },
+      { key: 'alvMinus', label: 'Alve -' },
+      { key: 'dif', label: 'DIF' },
       { key: 'total', label: 'Total', readonly: true }
     ]
   },
@@ -119,10 +129,12 @@ const INITIAL_STOCK_COLUMNS = [
 ];
 
 const INPUT_GROUP_BY_FABRICA = {
-  caja_chica: ['cajaChica'],
+  caja_chica: ['alvear', 'cajaChica'],
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
   neutro: ['neutro'],
-  banado: ['banado']
+  banado: ['banado'],
+  alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
+  moron: ['cajaChicaMor', 'cajaGrandeMor']
 };
 
 const els = {
@@ -232,6 +244,38 @@ function createEmptyGroupData(groupKey) {
   return base;
 }
 
+function normalizeExistingRow(row = {}) {
+  const normalized = {
+    productoId: row.productoId || '',
+    productoNombre: row.productoNombre || '',
+    categoria: row.categoria || '',
+    stockInicial: {
+      alvear: num(row.stockInicial?.alvear),
+      moron: num(row.stockInicial?.moron),
+      secando: num(row.stockInicial?.secando),
+      banado: num(row.stockInicial?.banado)
+    },
+    groups: {}
+  };
+
+  DAY_GROUPS.forEach((group) => {
+    normalized.groups[group.key] = createEmptyGroupData(group.key);
+  });
+
+  if (row.groups && typeof row.groups === 'object') {
+    Object.keys(row.groups).forEach((groupKey) => {
+      if (!normalized.groups[groupKey]) return;
+      Object.keys(row.groups[groupKey] || {}).forEach((fieldKey) => {
+        if (fieldKey in normalized.groups[groupKey]) {
+          normalized.groups[groupKey][fieldKey] = num(row.groups[groupKey][fieldKey]);
+        }
+      });
+    });
+  }
+
+  return normalized;
+}
+
 function createEmptyRow(producto) {
   const row = {
     productoId: producto.id,
@@ -263,6 +307,26 @@ function buildDefaultRows(fabrica) {
   return getProductosParaFabrica(fabrica).map(createEmptyRow);
 }
 
+function normalizeRowsForCurrentProducts(rows = [], fabrica = '') {
+  const allowedProducts = getProductosParaFabrica(fabrica);
+  const byId = new Map();
+
+  rows.forEach((row) => {
+    const normalized = normalizeExistingRow(row);
+    byId.set(normalized.productoId, normalized);
+  });
+
+  return allowedProducts.map((producto) => {
+    const existing = byId.get(producto.id);
+    if (existing) {
+      existing.productoNombre = producto.nombre;
+      existing.categoria = producto.categoria || '';
+      return existing;
+    }
+    return createEmptyRow(producto);
+  });
+}
+
 function getReporteId(fecha, fabrica) {
   return `${fecha}_${fabrica}`;
 }
@@ -273,18 +337,27 @@ function num(v) {
 
 function computeGroupTotal(groupKey, data = {}) {
   switch (groupKey) {
+    case 'alvear':
+      return num(data.alv);
+
     case 'cajaChica':
-      return num(data.lin) + num(data.alv);
+      return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
+
     case 'cajaGrandeAlv':
       return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
+
     case 'cajaChicaMor':
       return num(data.morPlus) - num(data.morMinus) + num(data.dif);
+
     case 'cajaGrandeMor':
       return num(data.morPlus) - num(data.morMinus) + num(data.dif);
+
     case 'neutro':
       return num(data.banaPlus) + num(data.masMenos);
+
     case 'banado':
       return num(data.secando) + num(data.totalSecando) + num(data.cosech) - num(data.salida) + num(data.dif) + num(data.banadoPlus);
+
     default:
       return 0;
   }
@@ -559,7 +632,11 @@ async function cargarReporteDiario() {
   const snap = await getDoc(ref);
 
   if (snap.exists()) {
-    state.reporteActual = { id: snap.id, ...snap.data() };
+    const loaded = { id: snap.id, ...snap.data() };
+    state.reporteActual = {
+      ...loaded,
+      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
+    };
     toast('Reporte cargado.');
   } else {
     state.reporteActual = {
@@ -606,7 +683,7 @@ async function guardarReporte(estado = 'borrador') {
     creadoPor: state.currentUser?.email || '',
     actualizadoEnTexto: new Date().toISOString(),
     actualizadoEn: serverTimestamp(),
-    rows: state.reporteActual.rows
+    rows: state.reporteActual.rows.map(normalizeExistingRow)
   };
 
   if (!snap.exists()) {
@@ -627,6 +704,64 @@ async function guardarReporte(estado = 'borrador') {
 function getReportForDateFactory(fecha, fabrica) {
   const id = getReporteId(fecha, fabrica);
   return state.reportes.find((r) => r.id === id) || null;
+}
+
+function hasAnyNonZeroValue(obj = {}) {
+  return Object.values(obj || {}).some((value) => num(value) !== 0);
+}
+
+function getMergedGroupDataForDay(fecha, productoId, groupKey) {
+  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
+  let fallback = null;
+
+  for (const reporte of reportesDelDia) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (!row?.groups?.[groupKey]) continue;
+
+    const groupData = row.groups[groupKey];
+    if (!fallback) fallback = groupData;
+
+    if (hasAnyNonZeroValue(groupData)) {
+      return groupData;
+    }
+  }
+
+  return fallback || createEmptyGroupData(groupKey);
+}
+
+function getFirstRowForMonth(productoId, monthValue) {
+  const reportesDelMes = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (row) return normalizeExistingRow(row);
+  }
+
+  return null;
+}
+
+function getDateParts(dateStr) {
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  return { year, month, day };
+}
+
+function buildDateStr(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = num(stockInicial?.alvear);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'alvear');
+    total += num(rowData?.alv);
+  }
+
+  return total;
 }
 
 function renderGerenciaExcel() {
@@ -672,35 +807,33 @@ function renderGerenciaExcel() {
   productos.forEach((producto) => {
     let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;
 
-    const firstReportForMonth = state.reportes.find((r) =>
-      r.fecha?.startsWith(monthValue) &&
-      (r.rows || []).some((x) => x.productoId === producto.id)
-    );
-
-    const firstRow = firstReportForMonth?.rows?.find((x) => x.productoId === producto.id);
+    const firstRow = getFirstRowForMonth(producto.id, monthValue);
+    const stockInicial = firstRow?.stockInicial || {
+      alvear: 0,
+      moron: 0,
+      secando: 0,
+      banado: 0
+    };
 
     INITIAL_STOCK_COLUMNS.forEach((col) => {
-      row += `<td>${num(firstRow?.stockInicial?.[col.key])}</td>`;
+      row += `<td>${num(stockInicial?.[col.key])}</td>`;
     });
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
       DAY_GROUPS.forEach((group) => {
-        let rowData = null;
-
-        Object.keys(FABRICAS).forEach((fabricaKey) => {
-          const rep = getReportForDateFactory(dayStr, fabricaKey);
-          const foundRow = rep?.rows?.find((x) => x.productoId === producto.id);
-
-          if (foundRow && foundRow.groups && foundRow.groups[group.key]) {
-            rowData = foundRow.groups[group.key];
-          }
-        });
+        const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
 
         group.columns.forEach((col) => {
           if (col.readonly) {
-            row += `<td class="${group.colorClass}">${computeGroupTotal(group.key, rowData || {})}</td>`;
+            let totalValue = computeGroupTotal(group.key, rowData || {});
+
+            if (group.key === 'alvear') {
+              totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
+            }
+
+            row += `<td class="${group.colorClass}">${totalValue}</td>`;
           } else {
             row += `<td class="${group.colorClass}">${num(rowData?.[col.key])}</td>`;
           }
@@ -724,7 +857,10 @@ async function refreshAll() {
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
   state.usuarios = await loadCollection('usuarios');
-  state.reportes = await loadCollection('reportes_diarios');
+  state.reportes = (await loadCollection('reportes_diarios')).map((reporte) => ({
+    ...reporte,
+    rows: (reporte.rows || []).map(normalizeExistingRow)
+  }));
 
   renderDashboard();
   renderProductos();
