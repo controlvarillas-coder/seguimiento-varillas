@@ -730,7 +730,9 @@ async function refreshAll() {
 
   state.usuarios = await loadCollection('usuarios');
   state.reportes = await loadCollection('reportes_diarios');
-
+  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+  renderGerenciaMenuBadge(state.alertas);
+  renderGerenciaAlertsPanel(state.alertas);
   renderDashboard();
   renderProductos();
   renderUsuarios();
