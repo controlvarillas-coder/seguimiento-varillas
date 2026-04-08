@@ -96,27 +96,33 @@ const DAY_GROUPS = [
     ]
   },
   {
-    key: 'neutro',
-    title: 'NEUTRO',
-    colorClass: 'group-neutro',
+    key: 'banadoChica',
+    title: 'BAÑADO CAJA CHICA',
+    colorClass: 'group-banado-chica',
     columns: [
-      { key: 'banaPlus', label: 'baña+' },
+      { key: 'banadoPlus', label: 'BAÑADO+' },
       { key: 'masMenos', label: '+/-' },
+      { key: 'secando', label: 'SECANDO' },
+      { key: 'totalSecando', label: 'TOTAL SECANDO' },
+      { key: 'cosecha', label: 'COSECHA' },
+      { key: 'salida', label: 'SALIDA' },
+      { key: 'dif', label: 'DIF' },
       { key: 'total', label: 'TOTAL', readonly: true }
     ]
   },
   {
-    key: 'banado',
-    title: 'BAÑADO',
-    colorClass: 'group-banado',
+    key: 'banadoGrande',
+    title: 'BAÑADO CAJA GRANDE',
+    colorClass: 'group-banado-grande',
     columns: [
-      { key: 'secando', label: 'secando' },
-      { key: 'totalSecando', label: 'total secando' },
-      { key: 'cosech', label: 'cosech' },
-      { key: 'salida', label: 'salida' },
-      { key: 'dif', label: 'dif' },
-      { key: 'total', label: 'total', readonly: true },
-      { key: 'banadoPlus', label: 'BAÑADO+' }
+      { key: 'banadoPlus', label: 'BAÑADO+' },
+      { key: 'masMenos', label: '+/-' },
+      { key: 'secando', label: 'SECANDO' },
+      { key: 'totalSecando', label: 'TOTAL SECANDO' },
+      { key: 'cosecha', label: 'COSECHA' },
+      { key: 'salida', label: 'SALIDA' },
+      { key: 'dif', label: 'DIF' },
+      { key: 'total', label: 'TOTAL', readonly: true }
     ]
   }
 ];
@@ -131,10 +137,10 @@ const INITIAL_STOCK_COLUMNS = [
 const INPUT_GROUP_BY_FABRICA = {
   caja_chica: ['alvear', 'cajaChica'],
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
-  neutro: ['neutro'],
-  banado: ['banado'],
+  banado: ['banadoChica', 'banadoGrande'],
   alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-  moron: ['cajaChicaMor', 'cajaGrandeMor']
+  moron: ['cajaChicaMor', 'cajaGrandeMor'],
+  neutro: []
 };
 
 const els = {
@@ -235,13 +241,41 @@ function formatVisiblePara(arr = []) {
   return arr.map((v) => FABRICAS[v] || v).join(' · ');
 }
 
+function num(v) {
+  return Number(v || 0);
+}
+
 function createEmptyGroupData(groupKey) {
   const group = DAY_GROUPS.find((g) => g.key === groupKey);
   const base = {};
+  if (!group) return base;
+
   group.columns.forEach((col) => {
     if (!col.readonly) base[col.key] = 0;
   });
+
   return base;
+}
+
+function createEmptyRow(producto) {
+  const row = {
+    productoId: producto.id,
+    productoNombre: producto.nombre,
+    categoria: producto.categoria || '',
+    stockInicial: {
+      alvear: 0,
+      moron: 0,
+      secando: 0,
+      banado: 0
+    },
+    groups: {}
+  };
+
+  DAY_GROUPS.forEach((group) => {
+    row.groups[group.key] = createEmptyGroupData(group.key);
+  });
+
+  return row;
 }
 
 function normalizeExistingRow(row = {}) {
@@ -265,6 +299,7 @@ function normalizeExistingRow(row = {}) {
   if (row.groups && typeof row.groups === 'object') {
     Object.keys(row.groups).forEach((groupKey) => {
       if (!normalized.groups[groupKey]) return;
+
       Object.keys(row.groups[groupKey] || {}).forEach((fieldKey) => {
         if (fieldKey in normalized.groups[groupKey]) {
           normalized.groups[groupKey][fieldKey] = num(row.groups[groupKey][fieldKey]);
@@ -274,27 +309,6 @@ function normalizeExistingRow(row = {}) {
   }
 
   return normalized;
-}
-
-function createEmptyRow(producto) {
-  const row = {
-    productoId: producto.id,
-    productoNombre: producto.nombre,
-    categoria: producto.categoria || '',
-    stockInicial: {
-      alvear: 0,
-      moron: 0,
-      secando: 0,
-      banado: 0
-    },
-    groups: {}
-  };
-
-  DAY_GROUPS.forEach((group) => {
-    row.groups[group.key] = createEmptyGroupData(group.key);
-  });
-
-  return row;
 }
 
 function getProductosParaFabrica(fabrica) {
@@ -331,10 +345,6 @@ function getReporteId(fecha, fabrica) {
   return `${fecha}_${fabrica}`;
 }
 
-function num(v) {
-  return Number(v || 0);
-}
-
 function computeGroupTotal(groupKey, data = {}) {
   switch (groupKey) {
     case 'alvear':
@@ -352,11 +362,25 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'cajaGrandeMor':
       return num(data.morPlus) - num(data.morMinus) + num(data.dif);
 
-    case 'neutro':
-      return num(data.banaPlus) + num(data.masMenos);
+    case 'banadoChica':
+      return (
+        num(data.banadoPlus) +
+        num(data.masMenos) +
+        num(data.totalSecando) +
+        num(data.cosecha) -
+        num(data.salida) +
+        num(data.dif)
+      );
 
-    case 'banado':
-      return num(data.secando) + num(data.totalSecando) + num(data.cosech) - num(data.salida) + num(data.dif) + num(data.banadoPlus);
+    case 'banadoGrande':
+      return (
+        num(data.banadoPlus) +
+        num(data.masMenos) +
+        num(data.totalSecando) +
+        num(data.cosecha) -
+        num(data.salida) +
+        num(data.dif)
+      );
 
     default:
       return 0;
