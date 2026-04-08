@@ -1,28 +1,15 @@
-/**
- * alertas.ui.js
- * Renderiza las alertas en:
- *   1. Badge/contador en el menú lateral (nav-link[data-section="gerencia"])
- *   2. Panel encima del Excel en la sección gerencia (#gerenciaAlertsPanel)
- *
- * Requisito HTML recomendado (opcional, se autocrea si no existe):
- *   <div id="gerenciaAlertsPanel"></div>  ← antes de #tablaGerenciaExcel
- */
- 
 const TIPO_COLORS = {
+  alvearProduccion: '#d68910',
   cajaChica: '#e67e22',
   cajaGrande: '#c0392b',
   neutro: '#8e44ad',
   banado: '#2980b9'
 };
- 
-/**
- * Badge de cantidad de alertas en el nav-link de gerencia.
- * @param {Array} alertas
- */
+
 export function renderGerenciaMenuBadge(alertas = []) {
   const navLink = document.querySelector('.nav-link[data-section="gerencia"]');
   if (!navLink) return;
- 
+
   let badge = navLink.querySelector('#alertasBadge');
   if (!badge) {
     badge = document.createElement('span');
@@ -44,7 +31,7 @@ export function renderGerenciaMenuBadge(alertas = []) {
     `;
     navLink.appendChild(badge);
   }
- 
+
   const count = alertas.length;
   if (count === 0) {
     badge.style.display = 'none';
@@ -54,15 +41,10 @@ export function renderGerenciaMenuBadge(alertas = []) {
     badge.textContent = count > 99 ? '99+' : String(count);
   }
 }
- 
-/**
- * Panel de alertas encima del Excel en gerencia.
- * Si #gerenciaAlertsPanel no existe en el HTML, se crea automáticamente.
- * @param {Array} alertas
- */
+
 export function renderGerenciaAlertsPanel(alertas = []) {
   let panel = document.getElementById('gerenciaAlertsPanel');
- 
+
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'gerenciaAlertsPanel';
@@ -74,7 +56,7 @@ export function renderGerenciaAlertsPanel(alertas = []) {
       if (seccion) seccion.prepend(panel);
     }
   }
- 
+
   if (alertas.length === 0) {
     panel.innerHTML = `
       <div style="
@@ -90,19 +72,18 @@ export function renderGerenciaAlertsPanel(alertas = []) {
         gap: 8px;
       ">
         <span style="font-size: 18px;">✅</span>
-        <strong>Sin alertas.</strong> Los movimientos Alvear ↔ Morón están en orden.
+        <strong>Sin alertas.</strong> Producción y movimientos Alvear ↔ Morón en orden.
       </div>
     `;
     return;
   }
- 
-  // Agrupar por bloque para resumen
+
   const porBloque = {};
   alertas.forEach((a) => {
     if (!porBloque[a.boxKey]) porBloque[a.boxKey] = [];
     porBloque[a.boxKey].push(a);
   });
- 
+
   panel.innerHTML = `
     <div style="
       margin: 0 0 16px 0;
@@ -112,7 +93,6 @@ export function renderGerenciaAlertsPanel(alertas = []) {
       overflow: hidden;
       font-size: 13px;
     ">
-      <!-- Header -->
       <div style="
         padding: 12px 16px;
         background: #e74c3c;
@@ -123,7 +103,7 @@ export function renderGerenciaAlertsPanel(alertas = []) {
         align-items: center;
         justify-content: space-between;
       ">
-        <span>⚠️ Alertas Alvear ↔ Morón — ${alertas.length} diferencia${alertas.length !== 1 ? 's' : ''}</span>
+        <span>⚠️ Alertas detectadas — ${alertas.length}</span>
         <button
           style="
             background: rgba(255,255,255,0.2);
@@ -144,8 +124,7 @@ export function renderGerenciaAlertsPanel(alertas = []) {
           "
         >Ver detalle</button>
       </div>
- 
-      <!-- Resumen por bloque -->
+
       <div style="
         padding: 12px 16px;
         display: flex;
@@ -162,51 +141,53 @@ export function renderGerenciaAlertsPanel(alertas = []) {
             color: white;
             font-size: 12px;
             font-weight: 600;
-          ">${items[0].bloque} <strong style="
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            padding: 0 6px;
-            margin-left: 4px;
-          ">${items.length}</strong></span>
+          ">${items[0].bloque}
+            <strong style="
+              background: rgba(0,0,0,0.2);
+              border-radius: 10px;
+              padding: 0 6px;
+              margin-left: 4px;
+            ">${items.length}</strong>
+          </span>
         `).join('')}
       </div>
- 
-      <!-- Detalle colapsable -->
-      <div id="alertasDetalle" style="display: none; overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px; min-width: 500px;">
+
+      <div id="alertasDetalle" style="display:none; overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:720px;">
           <thead>
-            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-              <th style="padding: 8px 12px; text-align: left;">Fecha</th>
-              <th style="padding: 8px 12px; text-align: left;">Bloque</th>
-              <th style="padding: 8px 12px; text-align: left;">Producto</th>
-              <th style="padding: 8px 12px; text-align: right;">Sale Alvear</th>
-              <th style="padding: 8px 12px; text-align: right;">Entra Morón</th>
-              <th style="padding: 8px 12px; text-align: right;">Diferencia</th>
+            <tr style="background:#f8f9fa; border-bottom:2px solid #dee2e6;">
+              <th style="padding:8px 12px; text-align:left;">Fecha</th>
+              <th style="padding:8px 12px; text-align:left;">Bloque</th>
+              <th style="padding:8px 12px; text-align:left;">Producto</th>
+              <th style="padding:8px 12px; text-align:left;">Origen</th>
+              <th style="padding:8px 12px; text-align:left;">Destino</th>
+              <th style="padding:8px 12px; text-align:right;">Valor origen</th>
+              <th style="padding:8px 12px; text-align:right;">Valor destino</th>
+              <th style="padding:8px 12px; text-align:right;">Diferencia</th>
             </tr>
           </thead>
           <tbody>
             ${alertas.map((a, i) => `
-              <tr style="border-bottom: 1px solid #f0f0f0; background: ${i % 2 === 0 ? '#fff' : '#fafafa'};">
-                <td style="padding: 7px 12px; white-space: nowrap; color: #555;">${a.fecha}</td>
-                <td style="padding: 7px 12px;">
+              <tr style="border-bottom:1px solid #f0f0f0; background:${i % 2 === 0 ? '#fff' : '#fafafa'};">
+                <td style="padding:7px 12px; white-space:nowrap; color:#555;">${a.fecha}</td>
+                <td style="padding:7px 12px;">
                   <span style="
-                    padding: 2px 8px;
-                    border-radius: 4px;
-                    background: ${TIPO_COLORS[a.boxKey] || '#777'};
-                    color: white;
-                    font-size: 11px;
-                    font-weight: 600;
+                    padding:2px 8px;
+                    border-radius:4px;
+                    background:${TIPO_COLORS[a.boxKey] || '#777'};
+                    color:white;
+                    font-size:11px;
+                    font-weight:600;
                   ">${a.bloque}</span>
                 </td>
-                <td style="padding: 7px 12px; font-weight: 500;">${a.productoNombre}</td>
-                <td style="padding: 7px 12px; text-align: right; color: #c0392b; font-weight: 600;">${a.salidaAlvear}</td>
-                <td style="padding: 7px 12px; text-align: right; color: #27ae60; font-weight: 600;">${a.ingresoMoron}</td>
-                <td style="
-                  padding: 7px 12px;
-                  text-align: right;
-                  font-weight: 700;
-                  color: #e74c3c;
-                ">${a.diferencia > 0 ? '+' : ''}${a.diferencia}</td>
+                <td style="padding:7px 12px; font-weight:500;">${a.productoNombre}</td>
+                <td style="padding:7px 12px;">${a.origenLabel || '-'}</td>
+                <td style="padding:7px 12px;">${a.destinoLabel || '-'}</td>
+                <td style="padding:7px 12px; text-align:right; color:#c0392b; font-weight:600;">${a.origen}</td>
+                <td style="padding:7px 12px; text-align:right; color:#27ae60; font-weight:600;">${a.destino}</td>
+                <td style="padding:7px 12px; text-align:right; font-weight:700; color:#e74c3c;">
+                  ${a.diferencia > 0 ? '+' : ''}${a.diferencia}
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -215,4 +196,3 @@ export function renderGerenciaAlertsPanel(alertas = []) {
     </div>
   `;
 }
- 
