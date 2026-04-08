@@ -1,4 +1,6 @@
 import { auth, db } from './firebase-config.js';
+import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
+import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
