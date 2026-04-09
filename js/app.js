@@ -127,6 +127,41 @@ const DAY_GROUPS = [
   }
 ];
 
+const MORON_INTERNAL_GROUPS = [
+  {
+    key: 'moronChicaInterna',
+    title: 'CAJA CHICA',
+    colorClass: 'group-caja-chica-2',
+    columns: [
+      { key: 'totalBase', label: 'TOTAL' },
+      { key: 'entrada', label: 'ENTRADA' },
+      { key: 'sobrante', label: 'SOBRANTE' },
+      { key: 'pEmpaq', label: 'P/EMPAQ' },
+      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
+      { key: 'diferencia', label: 'DIFERENCIA' },
+      { key: 'fallados', label: 'FALLADOS' },
+      { key: 'devoluciones', label: 'DEVOLUCIONES' },
+      { key: 'total', label: 'TOTAL', readonly: true }
+    ]
+  },
+  {
+    key: 'moronGrandeInterna',
+    title: 'CAJA GRANDE',
+    colorClass: 'group-caja-grande-2',
+    columns: [
+      { key: 'totalBase', label: 'TOTAL' },
+      { key: 'entrada', label: 'ENTRADA' },
+      { key: 'sobrante', label: 'SOBRANTE' },
+      { key: 'pEmpaq', label: 'P/EMPAQ' },
+      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
+      { key: 'diferencia', label: 'DIFERENCIA' },
+      { key: 'fallados', label: 'FALLADOS' },
+      { key: 'devoluciones', label: 'DEVOLUCIONES' },
+      { key: 'total', label: 'TOTAL', readonly: true }
+    ]
+  }
+];
+
 const INITIAL_STOCK_COLUMNS = [
   { key: 'alvear', label: 'ALVEAR' },
   { key: 'moron', label: 'MORON' },
@@ -139,7 +174,7 @@ const INPUT_GROUP_BY_FABRICA = {
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
   banado: ['banadoChica', 'banadoGrande'],
   alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-  moron: ['cajaChicaMor', 'cajaGrandeMor'],
+  moron: ['moronChicaInterna', 'moronGrandeInterna'],
   neutro: []
 };
 
@@ -246,7 +281,8 @@ function num(v) {
 }
 
 function createEmptyGroupData(groupKey) {
-  const group = DAY_GROUPS.find((g) => g.key === groupKey);
+  const allGroups = [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
+  const group = allGroups.find((g) => g.key === groupKey);
   const base = {};
   if (!group) return base;
 
@@ -271,7 +307,7 @@ function createEmptyRow(producto) {
     groups: {}
   };
 
-  DAY_GROUPS.forEach((group) => {
+  [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
     row.groups[group.key] = createEmptyGroupData(group.key);
   });
 
@@ -292,7 +328,7 @@ function normalizeExistingRow(row = {}) {
     groups: {}
   };
 
-  DAY_GROUPS.forEach((group) => {
+  [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
     normalized.groups[group.key] = createEmptyGroupData(group.key);
   });
 
@@ -382,9 +418,39 @@ function computeGroupTotal(groupKey, data = {}) {
         num(data.dif)
       );
 
+    case 'moronChicaInterna':
+      return (
+        num(data.totalBase) +
+        num(data.entrada) +
+        num(data.sobrante) -
+        num(data.pEmpaq) +
+        num(data.diferencia)
+      );
+
+    case 'moronGrandeInterna':
+      return (
+        num(data.totalBase) +
+        num(data.entrada) +
+        num(data.sobrante) -
+        num(data.pEmpaq) +
+        num(data.diferencia)
+      );
+
     default:
       return 0;
   }
+}
+
+function computeMoronInternalReadonly(groupKey, colKey, data = {}) {
+  if (colKey === 'salidaTotal') {
+    return num(data.pEmpaq) - num(data.sobrante);
+  }
+
+  if (colKey === 'total') {
+    return computeGroupTotal(groupKey, data);
+  }
+
+  return 0;
 }
 
 function computeStockInitialTotal(stock = {}) {
@@ -476,7 +542,6 @@ function renderProductos() {
     `;
   }).join('') || '<div class="empty-state">Sin productos.</div>';
 
-  // Activar / desactivar producto
   document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.toggleProducto;
@@ -492,7 +557,6 @@ function renderProductos() {
     });
   });
 
-  // Guardar visibilidad
   document.querySelectorAll('[data-save]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.save;
@@ -501,7 +565,7 @@ function renderProductos() {
         document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`)
       );
 
-      const visiblePara = checks.map(c => c.value);
+      const visiblePara = checks.map((c) => c.value);
 
       await updateDoc(doc(db, 'productos', id), {
         visiblePara
@@ -550,7 +614,9 @@ async function registrarProducto(ev) {
   });
 
   ev.target.reset();
-  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => (el.checked = true));
+  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => {
+    el.checked = true;
+  });
 
   toast('Producto guardado.');
   await refreshAll();
@@ -567,9 +633,12 @@ function getVisibleGroupsForCurrentView() {
     return DAY_GROUPS;
   }
 
+  if (fabrica === 'moron') {
+    return MORON_INTERNAL_GROUPS;
+  }
+
   const groupsByFactory = {
     alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-    moron: ['cajaChicaMor', 'cajaGrandeMor'],
     banado: ['banadoChica', 'banadoGrande']
   };
 
@@ -585,14 +654,42 @@ function getEditableGroupsForCurrentUser() {
   }
 
   if (state.perfil?.rol === 'gerencia') return DAY_GROUPS.map((g) => g.key);
+
+  if (fabrica === 'moron') {
+    return MORON_INTERNAL_GROUPS.map((g) => g.key);
+  }
+
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
 
 function currentReporteIsLocked() {
   if (!state.reporteActual) return false;
   if (state.perfil?.rol === 'gerencia') return false;
-
   return !!state.reporteActual.idYaExistia;
+}
+
+function renderCellInput({
+  rowIndex,
+  groupKey = '',
+  area = '',
+  key,
+  value,
+  canEdit,
+  extraClass = ''
+}) {
+  const attrs = [
+    'class="excel-input ' + extraClass + '"',
+    `data-row="${rowIndex}"`,
+    key ? `data-key="${key}"` : '',
+    groupKey ? `data-group="${groupKey}"` : '',
+    area ? `data-area="${area}"` : '',
+    'type="text"',
+    'inputmode="numeric"',
+    'autocomplete="off"',
+    `value="${value}"`
+  ].filter(Boolean).join(' ');
+
+  return `<input ${attrs} ${canEdit ? '' : 'disabled'}>`;
 }
 
 function renderCargaDiaria() {
@@ -611,19 +708,20 @@ function renderCargaDiaria() {
   const editableGroups = getEditableGroupsForCurrentUser();
   const visibleGroups = getVisibleGroupsForCurrentView();
   const locked = currentReporteIsLocked();
-  const fechaInput = $('cargaFecha');
-const fabricaSelect = $('cargaFabrica');
-const btnCargarReporte = $('btnCargarReporte');
 
-if (state.perfil?.rol === 'gerencia') {
-  if (fechaInput) fechaInput.disabled = false;
-  if (fabricaSelect) fabricaSelect.disabled = false;
-  if (btnCargarReporte) btnCargarReporte.disabled = false;
-} else {
-  if (fechaInput) fechaInput.disabled = locked;
-  if (fabricaSelect) fabricaSelect.disabled = true; // la fábrica del operativo siempre fija
-  if (btnCargarReporte) btnCargarReporte.disabled = locked;
-}
+  const fechaInput = $('cargaFecha');
+  const fabricaSelect = $('cargaFabrica');
+  const btnCargarReporte = $('btnCargarReporte');
+
+  if (state.perfil?.rol === 'gerencia') {
+    if (fechaInput) fechaInput.disabled = false;
+    if (fabricaSelect) fabricaSelect.disabled = false;
+    if (btnCargarReporte) btnCargarReporte.disabled = false;
+  } else {
+    if (fechaInput) fechaInput.disabled = locked;
+    if (fabricaSelect) fabricaSelect.disabled = true;
+    if (btnCargarReporte) btnCargarReporte.disabled = locked;
+  }
 
   if ($('estadoCarga')) {
     if (state.reporteActual?.idYaExistia && state.perfil?.rol !== 'gerencia') {
@@ -659,8 +757,12 @@ if (state.perfil?.rol === 'gerencia') {
 
   let body = '';
   const columnTotals = {};
-  INITIAL_STOCK_COLUMNS.forEach((c) => (columnTotals[`stock_${c.key}`] = 0));
-  visibleGroups.forEach((g) => g.columns.forEach((c) => (columnTotals[`${g.key}_${c.key}`] = 0)));
+  INITIAL_STOCK_COLUMNS.forEach((c) => {
+    columnTotals[`stock_${c.key}`] = 0;
+  });
+  visibleGroups.forEach((g) => g.columns.forEach((c) => {
+    columnTotals[`${g.key}_${c.key}`] = 0;
+  }));
   let grandTotal = 0;
 
   rows.forEach((row, rowIndex) => {
@@ -670,20 +772,44 @@ if (state.perfil?.rol === 'gerencia') {
       const value = num(row.stockInicial?.[col.key]);
       const canEdit = state.perfil?.rol === 'gerencia';
 
-      rowHtml += `<td><input class="excel-input stock-input" data-row="${rowIndex}" data-area="stockInicial" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+      rowHtml += `<td>${renderCellInput({
+        rowIndex,
+        area: 'stockInicial',
+        key: col.key,
+        value,
+        canEdit,
+        extraClass: 'stock-input'
+      })}</td>`;
+
       columnTotals[`stock_${col.key}`] += value;
     });
 
     visibleGroups.forEach((group) => {
       group.columns.forEach((col) => {
         if (col.readonly) {
-          const totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+          let totalValue = 0;
+
+          if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+            totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+          } else {
+            totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+          }
+
           rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
           columnTotals[`${group.key}_${col.key}`] += totalValue;
         } else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
-          rowHtml += `<td><input class="excel-input ${group.colorClass}" data-row="${rowIndex}" data-group="${group.key}" data-key="${col.key}" type="number" value="${value}" ${canEdit ? '' : 'disabled'}></td>`;
+
+          rowHtml += `<td>${renderCellInput({
+            rowIndex,
+            groupKey: group.key,
+            key: col.key,
+            value,
+            canEdit,
+            extraClass: group.colorClass
+          })}</td>`;
+
           columnTotals[`${group.key}_${col.key}`] += value;
         }
       });
@@ -691,7 +817,9 @@ if (state.perfil?.rol === 'gerencia') {
 
     const rowTotal =
       computeStockInitialTotal(row.stockInicial) +
-      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
+      visibleGroups.reduce((acc, g) => {
+        return acc + computeGroupTotal(g.key, row.groups[g.key]);
+      }, 0);
 
     grandTotal += rowTotal;
     rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
@@ -716,8 +844,31 @@ if (state.perfil?.rol === 'gerencia') {
 
 function bindCargaInputs() {
   document.querySelectorAll('#tablaCargaDiaria input').forEach((input) => {
-    input.addEventListener('input', (e) => {
+    input.addEventListener('keydown', (e) => {
+      const allowed = [
+        'Backspace', 'Delete', 'Tab', 'Enter',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'
+      ];
+
+      if (allowed.includes(e.key)) return;
+      if (/^[0-9]$/.test(e.key)) return;
+
+      e.preventDefault();
+    });
+
+    input.addEventListener('paste', (e) => {
+      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      if (!/^\d*$/.test(pasted)) {
+        e.preventDefault();
+      }
+    });
+
+    input.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
+      const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
+      const numericValue = cleanValue === '' ? 0 : Number(cleanValue);
+
+      e.target.value = numericValue;
 
       if (!state.reporteActual) {
         let fabrica = $('cargaFabrica')?.value;
@@ -736,14 +887,19 @@ function bindCargaInputs() {
       }
 
       if (e.target.dataset.area === 'stockInicial') {
-        state.reporteActual.rows[rowIndex].stockInicial[e.target.dataset.key] = num(e.target.value);
+        state.reporteActual.rows[rowIndex].stockInicial[e.target.dataset.key] = numericValue;
       } else {
         const group = e.target.dataset.group;
         const key = e.target.dataset.key;
-        state.reporteActual.rows[rowIndex].groups[group][key] = num(e.target.value);
+        state.reporteActual.rows[rowIndex].groups[group][key] = numericValue;
       }
 
       renderCargaDiaria();
+    });
+
+    input.addEventListener('blur', (e) => {
+      const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
+      e.target.value = cleanValue === '' ? 0 : Number(cleanValue);
     });
   });
 }
@@ -961,7 +1117,7 @@ function renderGerenciaExcel() {
   let body = '';
 
   productos.forEach((producto) => {
-  let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;  
+    let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;
 
     const firstRow = getFirstRowForMonth(producto.id, monthValue);
     const stockInicial = firstRow?.stockInicial || {
