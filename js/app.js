@@ -961,25 +961,7 @@ function renderGerenciaExcel() {
   let body = '';
 
   productos.forEach((producto) => {
-    function getCategoriaClass(cat = '') {
-  const c = cat.toLowerCase();
-
-  if (c.includes('aroma')) return 'cat-aromas';
-  if (c.includes('citronella')) return 'cat-citronella';
-  if (c.includes('sahumerio')) return 'cat-sahumerios';
-  if (c.includes('tarot')) return 'cat-tarot';
-
-  // NUEVAS
-  if (c.includes('botanica') || c.includes('botánica')) return 'cat-botanica';
-  if (c.includes('5 elementos') || c.includes('elementos')) return 'cat-elementos';
-
-  return 'cat-default';
-}
-
-const catClass = getCategoriaClass(producto.categoria);
-
-let row = `<tr class="${catClass}">
-  <td class="sticky-col product-name-cell">${producto.nombre}</td>`;
+  let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;  
 
     const firstRow = getFirstRowForMonth(producto.id, monthValue);
     const stockInicial = firstRow?.stockInicial || {
