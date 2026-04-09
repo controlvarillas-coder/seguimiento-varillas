@@ -100,6 +100,10 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
 #tablaGerenciaExcel thead .sticky-col{
   z-index: 45;
 }
+.excel-wrap{
+  overflow: auto;
+  position: relative;
+}
 .product-name-cell{font-weight:700}
 .stock-head{background:#d6d6d6;color:#000}
 .day-block{background:#efefef;color:#000;font-weight:800}
