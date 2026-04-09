@@ -591,6 +591,7 @@ function getEditableGroupsForCurrentUser() {
 function currentReporteIsLocked() {
   if (!state.reporteActual) return false;
   if (state.perfil?.rol === 'gerencia') return false;
+
   return !!state.reporteActual.idYaExistia;
 }
 
@@ -610,6 +611,19 @@ function renderCargaDiaria() {
   const editableGroups = getEditableGroupsForCurrentUser();
   const visibleGroups = getVisibleGroupsForCurrentView();
   const locked = currentReporteIsLocked();
+  const fechaInput = $('cargaFecha');
+const fabricaSelect = $('cargaFabrica');
+const btnCargarReporte = $('btnCargarReporte');
+
+if (state.perfil?.rol === 'gerencia') {
+  if (fechaInput) fechaInput.disabled = false;
+  if (fabricaSelect) fabricaSelect.disabled = false;
+  if (btnCargarReporte) btnCargarReporte.disabled = false;
+} else {
+  if (fechaInput) fechaInput.disabled = locked;
+  if (fabricaSelect) fabricaSelect.disabled = true; // la fábrica del operativo siempre fija
+  if (btnCargarReporte) btnCargarReporte.disabled = locked;
+}
 
   if ($('estadoCarga')) {
     if (state.reporteActual?.idYaExistia && state.perfil?.rol !== 'gerencia') {
