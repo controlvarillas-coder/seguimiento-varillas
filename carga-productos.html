@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carga masiva de productos</title>
+  <style>
+    body{
+      margin:0;
+      font-family:Arial,sans-serif;
+      background:#0b1020;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+    }
+    .card{
+      width:100%;
+      max-width:720px;
+      background:rgba(18,24,45,.95);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:20px;
+      padding:28px;
+      box-shadow:0 20px 50px rgba(0,0,0,.35);
+    }
+    h1{margin:0 0 10px;font-size:28px}
+    p{color:#b9c4ea;line-height:1.5}
+    .btn{
+      border:none;
+      border-radius:14px;
+      padding:14px 18px;
+      font-weight:700;
+      cursor:pointer;
+      background:linear-gradient(135deg,#6ea8ff,#8f7bff);
+      color:#fff;
+      margin-top:16px;
+    }
+    .btn:disabled{
+      opacity:.6;
+      cursor:not-allowed;
+    }
+    .log{
+      margin-top:18px;
+      background:#09101e;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:14px;
+      min-height:180px;
+      max-height:320px;
+      overflow:auto;
+      font-family:Consolas, monospace;
+      font-size:13px;
+      white-space:pre-wrap;
+    }
+    .ok{color:#8ff7b2}
+    .err{color:#ff8e8e}
+    .warn{color:#ffd37a}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Carga masiva de productos</h1>
+    <p>
+      Esta pantalla carga todos los productos desde <strong>product-master.js</strong>
+      a la colección <strong>productos</strong> con la configuración correcta:
+      <strong>visiblePara = ["alvear","moron","banado"]</strong>.
+    </p>
+    <button id="btnCargar" class="btn">Cargar productos</button>
+    <div id="log" class="log">Esperando acción...</div>
+  </div>
+
+  <script type="module">
+    import { db } from './js/firebase-config.js';
+    import { PRODUCT_MASTER } from './js/product-master.js';
+    import {
+      collection,
+      getDocs,
+      addDoc,
+      serverTimestamp
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const btn = document.getElementById('btnCargar');
+    const log = document.getElementById('log');
+
+    function write(text, cls = '') {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = text;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function cargarProductos() {
+      btn.disabled = true;
+      log.innerHTML = '';
+      write('Verificando colección productos...', 'warn');
+
+      try {
+        const snap = await getDocs(collection(db, 'productos'));
+
+        if (!snap.empty) {
+          write('La colección productos no está vacía. Vaciala antes de correr la carga.', 'err');
+          btn.disabled = false;
+          return;
+        }
+
+        write(`Se encontraron ${PRODUCT_MASTER.length} productos en product-master.js`, 'warn');
+
+        let ok = 0;
+
+        for (const item of PRODUCT_MASTER) {
+          const payload = {
+            nombre: String(item.name || '').trim(),
+            codigo: String(item.code || '').trim(),
+            categoria: String(item.category || '').trim(),
+            visiblePara: ['alvear', 'moron', 'banado'],
+            activo: item.active !== false,
+            orden: Number(item.order || 0),
+            creadoEn: serverTimestamp()
+          };
+
+          await addDoc(collection(db, 'productos'), payload);
+          ok++;
+          write(`✅ ${ok} - ${payload.nombre}`, 'ok');
+        }
+
+        write(`Carga finalizada. Total creados: ${ok}`, 'ok');
+      } catch (error) {
+        console.error(error);
+        write(`Error: ${error.code || error.message || error}`, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener('click', cargarProductos);
+  </script>
+</body>
+</html>
