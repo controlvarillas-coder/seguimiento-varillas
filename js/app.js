@@ -1,5 +1,4 @@
 import { auth, db } from './firebase-config.js';
-import { PRODUCT_MASTER } from './productos_master.js';
 import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
 import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
 import {
@@ -399,74 +398,6 @@ function setMonthlyDefault() {
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
 }
 
-function ensureBotonCargaMasivaProductos() {
-  if (state.perfil?.rol !== 'gerencia') return;
-
-  const section = $('section-productos');
-  if (!section) return;
-
-  let host = section.querySelector('.panel-header');
-  if (!host) {
-    host = section.querySelector('.panel-card');
-  }
-  if (!host) {
-    host = section;
-  }
-
-  let btn = $('btnCargaMasivaProductos');
-  if (btn) return;
-
-  btn = document.createElement('button');
-  btn.id = 'btnCargaMasivaProductos';
-  btn.type = 'button';
-  btn.className = 'btn btn-primary gerencia-only';
-  btn.textContent = 'Cargar productos iniciales';
-
-  btn.addEventListener('click', cargarProductosMasivos);
-
-  if (host.classList?.contains('panel-header')) {
-    host.appendChild(btn);
-  } else {
-    const wrap = document.createElement('div');
-    wrap.style.marginBottom = '14px';
-    wrap.appendChild(btn);
-    host.prepend(wrap);
-  }
-}
-
-async function cargarProductosMasivos() {
-  try {
-    if (state.perfil?.rol !== 'gerencia') {
-      toast('Solo gerencia puede cargar productos.');
-      return;
-    }
-
-    const existentes = await getDocs(collection(db, 'productos'));
-    if (!existentes.empty) {
-      toast('La colección productos no está vacía.');
-      return;
-    }
-
-    for (const item of PRODUCT_MASTER) {
-      await addDoc(collection(db, 'productos'), {
-        nombre: String(item.name || '').trim(),
-        codigo: String(item.code || '').trim(),
-        categoria: String(item.category || '').trim(),
-        visiblePara: ['alvear', 'moron', 'banado'],
-        activo: item.active !== false,
-        orden: Number(item.order || 0),
-        creadoEn: serverTimestamp()
-      });
-    }
-
-    toast('Productos cargados correctamente.');
-    await refreshAll();
-  } catch (error) {
-    console.error('ERROR CARGANDO PRODUCTOS:', error);
-    toast(`Error carga productos: ${error.code || error.message || error}`);
-  }
-}
-
 function renderDashboard() {
   if ($('statProductos')) $('statProductos').textContent = state.productos.length;
   if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
@@ -532,8 +463,6 @@ function renderProductos() {
       await refreshAll();
     });
   });
-
-  ensureBotonCargaMasivaProductos();
 }
 
 function renderUsuarios() {
