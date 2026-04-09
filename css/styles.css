@@ -161,45 +161,41 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
   .main-content{padding:18px}
   .toolbar-grid{display:grid;grid-template-columns:1fr}
 }
-/* === COLORES POR CATEGORIA EN EXCEL GERENCIA === */
+/* === COLORES POR CATEGORIA FUERTES === */
 
 #tablaGerenciaExcel tr.cat-aromas td{
-  background: rgba(155, 89, 182, 0.15) !important;
+  background: rgba(155, 89, 182, 0.35) !important;
 }
 
 #tablaGerenciaExcel tr.cat-citronella td{
-  background: rgba(46, 204, 113, 0.15) !important;
+  background: rgba(46, 204, 113, 0.35) !important;
 }
 
 #tablaGerenciaExcel tr.cat-sahumerios td{
-  background: rgba(52, 152, 219, 0.15) !important;
+  background: rgba(52, 152, 219, 0.35) !important;
 }
 
 #tablaGerenciaExcel tr.cat-tarot td{
-  background: rgba(241, 196, 15, 0.15) !important;
+  background: rgba(241, 196, 15, 0.35) !important;
+}
+
+/* NUEVAS */
+
+#tablaGerenciaExcel tr.cat-botanica td{
+  background: rgba(39, 174, 96, 0.45) !important;
+}
+
+#tablaGerenciaExcel tr.cat-elementos td{
+  background: rgba(231, 76, 60, 0.40) !important;
 }
 
 #tablaGerenciaExcel tr.cat-default td{
-  background: rgba(255, 255, 255, 0.04) !important;
-}
-
-/* mantener la primera columna fija por categoría también */
-#tablaGerenciaExcel tr.cat-aromas td.sticky-col{
-  background: rgba(155, 89, 182, 0.28) !important;
-}
-
-#tablaGerenciaExcel tr.cat-citronella td.sticky-col{
-  background: rgba(46, 204, 113, 0.28) !important;
-}
-
-#tablaGerenciaExcel tr.cat-sahumerios td.sticky-col{
-  background: rgba(52, 152, 219, 0.28) !important;
-}
-
-#tablaGerenciaExcel tr.cat-tarot td.sticky-col{
-  background: rgba(241, 196, 15, 0.28) !important;
-}
-
-#tablaGerenciaExcel tr.cat-default td.sticky-col{
   background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* COLUMNA FIJA MÁS INTENSA */
+
+#tablaGerenciaExcel tr[class*="cat-"] td.sticky-col{
+  filter: brightness(1.2);
+  font-weight: 800;
 }
