@@ -117,7 +117,11 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
   min-width:260px;
   max-width:260px;
   width:260px;
-  white-space:nowrap;
+  white-space:normal;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  line-height:1.2;
+  vertical-align:top;
   text-align:left !important;
   background:#15203a !important;
   box-shadow:10px 0 16px rgba(0,0,0,.22);
@@ -140,6 +144,22 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
 
 .product-name-cell{
   font-weight:700;
+  white-space:normal;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  line-height:1.2;
+  vertical-align:top;
+}
+#tablaGerenciaExcel td.product-name-cell,
+#tablaGerenciaExcel td.sticky-col.product-name-cell{
+  min-width:220px;
+  max-width:220px;
+}
+
+#tablaCargaDiaria td.product-name-cell,
+#tablaCargaDiaria td.sticky-col.product-name-cell{
+  min-width:220px;
+  max-width:220px;
 }
 
 .stock-head{
