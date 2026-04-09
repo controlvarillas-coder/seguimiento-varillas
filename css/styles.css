@@ -78,7 +78,28 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
 /* EXCEL */
 .excel-table{min-width:2800px;font-size:12px}
 .excel-table thead th{white-space:nowrap}
-.sticky-col{position:sticky;left:0;z-index:3;background:#15203a;text-align:left!important;min-width:260px}
+.sticky-col{
+  position: sticky;
+  left: 0;
+  z-index: 30;
+  background: #15203a !important;
+  text-align: left !important;
+  min-width: 260px;
+  max-width: 260px;
+  white-space: nowrap;
+  box-shadow: 8px 0 14px rgba(0,0,0,.18);
+}
+
+#tablaGerenciaExcel .sticky-col{
+  position: sticky;
+  left: 0;
+  z-index: 35;
+  background: #15203a !important;
+}
+
+#tablaGerenciaExcel thead .sticky-col{
+  z-index: 45;
+}
 .product-name-cell{font-weight:700}
 .stock-head{background:#d6d6d6;color:#000}
 .day-block{background:#efefef;color:#000;font-weight:800}
