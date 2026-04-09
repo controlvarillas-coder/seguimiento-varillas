@@ -161,3 +161,24 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
   .main-content{padding:18px}
   .toolbar-grid{display:grid;grid-template-columns:1fr}
 }
+/* === COLORES POR CATEGORIA === */
+
+.cat-aromas {
+  background: rgba(155, 89, 182, 0.15);
+}
+
+.cat-citronella {
+  background: rgba(46, 204, 113, 0.15);
+}
+
+.cat-sahumerios {
+  background: rgba(52, 152, 219, 0.15);
+}
+
+.cat-tarot {
+  background: rgba(241, 196, 15, 0.15);
+}
+
+.cat-default {
+  background: rgba(255, 255, 255, 0.04);
+}
