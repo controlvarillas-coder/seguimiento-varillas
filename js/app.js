@@ -969,6 +969,10 @@ function renderGerenciaExcel() {
   if (c.includes('sahumerio')) return 'cat-sahumerios';
   if (c.includes('tarot')) return 'cat-tarot';
 
+  // NUEVAS
+  if (c.includes('botanica') || c.includes('botánica')) return 'cat-botanica';
+  if (c.includes('5 elementos') || c.includes('elementos')) return 'cat-elementos';
+
   return 'cat-default';
 }
 
