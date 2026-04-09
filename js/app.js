@@ -433,22 +433,50 @@ function renderProductos() {
     return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
   });
 
-  $('productosList').innerHTML = productosOrdenados.map((p) => `
-    <div class="product-row">
-      <div class="product-main">
-        <div class="product-title">${p.nombre || '-'}</div>
-        <div class="product-sub">
-          Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'} · Visible para: ${formatVisiblePara(p.visiblePara || [])}
+  $('productosList').innerHTML = productosOrdenados.map((p) => {
+    const visibles = p.visiblePara || [];
+
+    return `
+      <div class="product-row">
+        <div class="product-main">
+          <div class="product-title">${p.nombre || '-'}</div>
+
+          <div class="product-sub">
+            Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'}
+          </div>
+
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <label>
+              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="alvear" ${visibles.includes('alvear') ? 'checked' : ''}>
+              Alvear
+            </label>
+
+            <label>
+              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="moron" ${visibles.includes('moron') ? 'checked' : ''}>
+              Morón
+            </label>
+
+            <label>
+              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="banado" ${visibles.includes('banado') ? 'checked' : ''}>
+              Bañado
+            </label>
+          </div>
+        </div>
+
+        <div class="product-actions" style="display:flex; flex-direction:column; gap:8px;">
+          <button class="btn btn-primary btn-sm" data-save="${p.id}">
+            Guardar
+          </button>
+
+          <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
+            ${p.activo === false ? 'Activar' : 'Desactivar'}
+          </button>
         </div>
       </div>
-      <div class="product-actions">
-        <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
-          ${p.activo === false ? 'Activar' : 'Desactivar'}
-        </button>
-      </div>
-    </div>
-  `).join('') || '<div class="empty-state">Sin productos.</div>';
+    `;
+  }).join('') || '<div class="empty-state">Sin productos.</div>';
 
+  // Activar / desactivar producto
   document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.toggleProducto;
@@ -460,6 +488,26 @@ function renderProductos() {
       });
 
       toast('Producto actualizado.');
+      await refreshAll();
+    });
+  });
+
+  // Guardar visibilidad
+  document.querySelectorAll('[data-save]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.save;
+
+      const checks = Array.from(
+        document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`)
+      );
+
+      const visiblePara = checks.map(c => c.value);
+
+      await updateDoc(doc(db, 'productos', id), {
+        visiblePara
+      });
+
+      toast('Visibilidad guardada.');
       await refreshAll();
     });
   });
