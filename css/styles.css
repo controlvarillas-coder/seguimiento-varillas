@@ -251,4 +251,17 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
   .main-content{padding:18px}
   .toolbar-grid{display:grid;grid-template-columns:1fr}
 }
+input[type="text"].excel-input{
+  appearance: textfield;
+}
 
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"]{
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
