@@ -509,7 +509,11 @@ async function registrarProducto(ev) {
 }
 
 function getVisibleGroupsForCurrentView() {
-  const fabrica = $('cargaFabrica')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (!fabrica && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+  }
 
   if (state.perfil?.rol === 'gerencia') {
     return DAY_GROUPS;
@@ -518,9 +522,7 @@ function getVisibleGroupsForCurrentView() {
   const groupsByFactory = {
     alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
     moron: ['cajaChicaMor', 'cajaGrandeMor'],
-    banado: ['banadoChica', 'banadoGrande'],
-    caja_chica: ['alvear', 'cajaChica'],
-    caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor']
+    banado: ['banadoChica', 'banadoGrande']
   };
 
   const allowedKeys = groupsByFactory[fabrica] || [];
@@ -528,7 +530,12 @@ function getVisibleGroupsForCurrentView() {
 }
 
 function getEditableGroupsForCurrentUser() {
-  const fabrica = $('cargaFabrica')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (!fabrica && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+  }
+
   if (state.perfil?.rol === 'gerencia') return DAY_GROUPS.map((g) => g.key);
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
@@ -543,8 +550,14 @@ function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
   if (!table) return;
 
-  const fecha = $('cargaFecha')?.value;
-  const fabrica = $('cargaFabrica')?.value;
+  let fecha = $('cargaFecha')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (state.perfil?.rol !== 'gerencia' && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+    if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
+  }
+
   const rows = state.reporteActual?.rows || buildDefaultRows(fabrica);
   const editableGroups = getEditableGroupsForCurrentUser();
   const visibleGroups = getVisibleGroupsForCurrentView();
@@ -645,13 +658,18 @@ function bindCargaInputs() {
       const rowIndex = Number(e.target.dataset.row);
 
       if (!state.reporteActual) {
+        let fabrica = $('cargaFabrica')?.value;
+        if (!fabrica && state.perfil?.fabrica) {
+          fabrica = state.perfil.fabrica;
+        }
+
         state.reporteActual = {
-          id: getReporteId($('cargaFecha')?.value, $('cargaFabrica')?.value),
+          id: getReporteId($('cargaFecha')?.value, fabrica),
           fecha: $('cargaFecha')?.value,
-          fabrica: $('cargaFabrica')?.value,
+          fabrica,
           estado: 'borrador',
           idYaExistia: false,
-          rows: buildDefaultRows($('cargaFabrica')?.value)
+          rows: buildDefaultRows(fabrica)
         };
       }
 
@@ -670,7 +688,12 @@ function bindCargaInputs() {
 
 async function cargarReporteDiario() {
   const fecha = $('cargaFecha')?.value;
-  const fabrica = $('cargaFabrica')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (!fabrica && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+    if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
+  }
 
   if (!fecha || !fabrica) {
     toast('Seleccioná fecha y fábrica.');
@@ -712,7 +735,12 @@ async function cargarReporteDiario() {
 
 async function guardarReporte(estado = 'borrador') {
   const fecha = $('cargaFecha')?.value;
-  const fabrica = $('cargaFabrica')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (!fabrica && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+    if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
+  }
 
   if (!fecha || !fabrica) {
     toast('Seleccioná fecha y fábrica.');
@@ -1024,6 +1052,11 @@ onAuthStateChanged(auth, async (user) => {
     setLoggedUI(true);
     fillUserCard();
     applyRoleUI();
+
+    if ($('cargaFabrica') && state.perfil?.rol !== 'gerencia' && state.perfil?.fabrica) {
+      $('cargaFabrica').value = state.perfil.fabrica;
+    }
+
     setMonthlyDefault();
     await refreshAll();
     setSection('dashboard');
