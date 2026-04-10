@@ -463,6 +463,51 @@ function setMonthlyDefault() {
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
 }
+function getTodayLocalISO() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function computeDashboardLogisticsSummary(reportes = [], productos = [], fecha = '') {
+  const productosActivos = (productos || []).filter((p) => p.activo !== false);
+
+  let esperadoChica = 0;
+  let ingresadoChica = 0;
+  let esperadoGrande = 0;
+  let ingresadoGrande = 0;
+
+  productosActivos.forEach((producto) => {
+    const reporteAlvear = reportes.find((r) => r.fecha === fecha && r.fabrica === 'alvear');
+    const reporteBanado = reportes.find((r) => r.fecha === fecha && r.fabrica === 'banado');
+    const reporteMoron = reportes.find((r) => r.fecha === fecha && r.fabrica === 'moron');
+
+    const rowAlvear = reporteAlvear?.rows?.find((x) => x.productoId === producto.id);
+    const rowBanado = reporteBanado?.rows?.find((x) => x.productoId === producto.id);
+    const rowMoron = reporteMoron?.rows?.find((x) => x.productoId === producto.id);
+
+    esperadoChica +=
+      num(rowAlvear?.groups?.cajaChica?.alvMinus) +
+      num(rowBanado?.groups?.banadoChica?.salida);
+
+    ingresadoChica += num(rowMoron?.groups?.moronChicaInterna?.entrada);
+
+    esperadoGrande +=
+      num(rowAlvear?.groups?.cajaGrandeAlv?.alvMinus) +
+      num(rowBanado?.groups?.banadoGrande?.salida);
+
+    ingresadoGrande += num(rowMoron?.groups?.moronGrandeInterna?.entrada);
+  });
+
+  return {
+    esperadoChica,
+    ingresadoChica,
+    esperadoGrande,
+    ingresadoGrande
+  };
+}
 
 function getTodayLocalISO() {
   const now = new Date();
@@ -474,26 +519,33 @@ function getTodayLocalISO() {
 
 function renderDashboard() {
   const hoy = getTodayLocalISO();
-  const usuariosOperativos = state.usuarios.filter((u) => u.activo !== false && u.rol !== 'gerencia' && u.fabrica);
+
+  const productosActivos = state.productos.filter((p) => p.activo !== false);
+  const usuariosActivos = state.usuarios.filter((u) => u.activo !== false);
+  const usuariosOperativos = usuariosActivos.filter((u) => u.rol !== 'gerencia' && u.fabrica);
+
   const fabricasOperativas = [...new Set(usuariosOperativos.map((u) => u.fabrica))];
   const reportesHoy = state.reportes.filter((r) => r.fecha === hoy);
   const fabricasHoy = new Set(reportesHoy.map((r) => r.fabrica));
   const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
 
-  if ($('statProductos')) $('statProductos').textContent = state.productos.length;
+  if ($('statProductos')) $('statProductos').textContent = productosActivos.length;
   if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
   if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
   if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
-
   if ($('statAlertas')) $('statAlertas').textContent = state.alertas.length;
   if ($('statHoyCargadas')) $('statHoyCargadas').textContent = reportesHoy.length;
   if ($('statPendientesHoy')) $('statPendientesHoy').textContent = pendientesHoy.length;
-  if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = state.usuarios.filter((u) => u.activo !== false).length;
+  if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = usuariosActivos.length;
 
   if ($('tablaDashboardReportes')) {
     $('tablaDashboardReportes').innerHTML = state.reportes
       .slice()
-      .reverse()
+      .sort((a, b) => {
+        const fa = `${a.fecha || ''}_${a.fabrica || ''}`;
+        const fb = `${b.fecha || ''}_${b.fabrica || ''}`;
+        return fa < fb ? 1 : -1;
+      })
       .slice(0, 12)
       .map((r) => `
         <tr>
@@ -512,6 +564,7 @@ function renderDashboard() {
         .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
 
       const estadoHoy = fabricasHoy.has(f) ? 'Cargó' : 'Pendiente';
+
       return `
         <tr>
           <td>${FABRICAS[f] || f}</td>
@@ -519,7 +572,29 @@ function renderDashboard() {
           <td>${ultimo?.fecha || '-'}</td>
         </tr>
       `;
-    }).join('') || '<tr><td colspan="3">Sin fábricas.</td></tr>';
+    }).join('') || '<tr><td colspan="3">Sin datos.</td></tr>';
+  }
+
+  const resumen = computeDashboardLogisticsSummary(state.reportes, state.productos, hoy);
+
+  if ($('statEsperadoChica')) $('statEsperadoChica').textContent = resumen.esperadoChica;
+  if ($('statIngresadoChica')) $('statIngresadoChica').textContent = resumen.ingresadoChica;
+  if ($('statEsperadoGrande')) $('statEsperadoGrande').textContent = resumen.esperadoGrande;
+  if ($('statIngresadoGrande')) $('statIngresadoGrande').textContent = resumen.ingresadoGrande;
+
+  if ($('tablaDashboardAlertas')) {
+    $('tablaDashboardAlertas').innerHTML = state.alertas
+      .slice()
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+      .slice(0, 10)
+      .map((a) => `
+        <tr>
+          <td>${a.fecha || '-'}</td>
+          <td>${a.productoNombre || '-'}</td>
+          <td>${a.bloque || '-'}</td>
+          <td>${a.diferencia || 0}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">Sin alertas.</td></tr>';
   }
 }
 
