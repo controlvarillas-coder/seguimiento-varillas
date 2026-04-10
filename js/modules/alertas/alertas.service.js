@@ -1,15 +1,18 @@
 /**
  * alertas.service.js
  *
- * Reglas:
+ * Reglas vigentes:
+ *
  * 1) Producción Alvear:
  *    alvear.alv del día D debe ingresar en cajaChica.alvPlus o cajaGrandeAlv.alvPlus
  *    entre el día D y el día D+1.
  *
- * 2) Transferencia Alvear -> Morón:
- *    cajaChica.alvMinus debe coincidir con cajaChicaMor.morPlus
- *    cajaGrandeAlv.alvMinus debe coincidir con cajaGrandeMor.morPlus
- *    en la misma fecha.
+ * 2) Transferencia hacia Morón:
+ *    La ENTRADA interna de Morón debe coincidir con lo que sale desde:
+ *    - Alvear caja chica + Bañado caja chica
+ *    - Alvear caja grande + Bañado caja grande
+ *
+ *    Se controla por producto y por fecha.
  */
 
 function num(v) {
@@ -189,39 +192,45 @@ function computeTransferAlerts(reportes = [], productos = []) {
       const fallbackRow = getFallbackRow(reportesDelDia, productoId);
       const productoNombre = getProductName(productos, productoId, fallbackRow);
 
-      const salidaChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaChica')?.alvMinus);
-      const ingresoMoronChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaChicaMor')?.morPlus);
+      const salidaAlvearChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaChica')?.alvMinus);
+      const salidaBanadoChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'banadoChica')?.salida);
+      const entradaMoronChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'moronChicaInterna')?.entrada);
 
-      if (!(salidaChica === 0 && ingresoMoronChica === 0) && salidaChica !== ingresoMoronChica) {
+      const esperadoMoronChica = salidaAlvearChica + salidaBanadoChica;
+
+      if (!(esperadoMoronChica === 0 && entradaMoronChica === 0) && esperadoMoronChica !== entradaMoronChica) {
         alerts.push(createAlert({
           id: `transf_chica_${fecha}_${productoId}`,
           fecha,
           productoId,
           productoNombre,
           boxKey: 'cajaChica',
-          origen: salidaChica,
-          destino: ingresoMoronChica,
-          origenLabel: 'Sale de Alvear',
+          origen: esperadoMoronChica,
+          destino: entradaMoronChica,
+          origenLabel: 'Sale de Alvear + Bañado',
           destinoLabel: 'Entra a Morón',
-          tipo: 'alvear_vs_moron'
+          tipo: 'origenes_vs_moron'
         }));
       }
 
-      const salidaGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaGrandeAlv')?.alvMinus);
-      const ingresoMoronGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaGrandeMor')?.morPlus);
+      const salidaAlvearGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaGrandeAlv')?.alvMinus);
+      const salidaBanadoGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'banadoGrande')?.salida);
+      const entradaMoronGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'moronGrandeInterna')?.entrada);
 
-      if (!(salidaGrande === 0 && ingresoMoronGrande === 0) && salidaGrande !== ingresoMoronGrande) {
+      const esperadoMoronGrande = salidaAlvearGrande + salidaBanadoGrande;
+
+      if (!(esperadoMoronGrande === 0 && entradaMoronGrande === 0) && esperadoMoronGrande !== entradaMoronGrande) {
         alerts.push(createAlert({
           id: `transf_grande_${fecha}_${productoId}`,
           fecha,
           productoId,
           productoNombre,
           boxKey: 'cajaGrande',
-          origen: salidaGrande,
-          destino: ingresoMoronGrande,
-          origenLabel: 'Sale de Alvear',
+          origen: esperadoMoronGrande,
+          destino: entradaMoronGrande,
+          origenLabel: 'Sale de Alvear + Bañado',
           destinoLabel: 'Entra a Morón',
-          tipo: 'alvear_vs_moron'
+          tipo: 'origenes_vs_moron'
         }));
       }
     });
