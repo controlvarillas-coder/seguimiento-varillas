@@ -72,7 +72,7 @@ export function renderGerenciaAlertsPanel(alertas = []) {
         gap: 8px;
       ">
         <span style="font-size: 18px;">✅</span>
-        <strong>Sin alertas.</strong> Producción y movimientos Alvear ↔ Morón en orden.
+        <strong>Sin alertas.</strong> Producción y movimientos Alvear + Bañado ↔ Morón en orden.
       </div>
     `;
     return;
