@@ -35,7 +35,7 @@ const state = {
 const FABRICAS = {
   caja_chica: 'Caja chica',
   caja_grande: 'Caja grande',
-  neutro: 'Neutro',
+  neutro: 'Bañado',
   banado: 'Bañado',
   alvear: 'Alvear',
   moron: 'Morón'
@@ -464,11 +464,31 @@ function setMonthlyDefault() {
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
 }
 
+function getTodayLocalISO() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function renderDashboard() {
+  const hoy = getTodayLocalISO();
+  const usuariosOperativos = state.usuarios.filter((u) => u.activo !== false && u.rol !== 'gerencia' && u.fabrica);
+  const fabricasOperativas = [...new Set(usuariosOperativos.map((u) => u.fabrica))];
+  const reportesHoy = state.reportes.filter((r) => r.fecha === hoy);
+  const fabricasHoy = new Set(reportesHoy.map((r) => r.fabrica));
+  const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
+
   if ($('statProductos')) $('statProductos').textContent = state.productos.length;
   if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
   if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
   if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
+
+  if ($('statAlertas')) $('statAlertas').textContent = state.alertas.length;
+  if ($('statHoyCargadas')) $('statHoyCargadas').textContent = reportesHoy.length;
+  if ($('statPendientesHoy')) $('statPendientesHoy').textContent = pendientesHoy.length;
+  if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = state.usuarios.filter((u) => u.activo !== false).length;
 
   if ($('tablaDashboardReportes')) {
     $('tablaDashboardReportes').innerHTML = state.reportes
@@ -483,6 +503,23 @@ function renderDashboard() {
           <td>${r.creadoPor || '-'}</td>
         </tr>
       `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
+  }
+
+  if ($('tablaDashboardFabricas')) {
+    $('tablaDashboardFabricas').innerHTML = fabricasOperativas.map((f) => {
+      const ultimo = state.reportes
+        .filter((r) => r.fabrica === f)
+        .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
+
+      const estadoHoy = fabricasHoy.has(f) ? 'Cargó' : 'Pendiente';
+      return `
+        <tr>
+          <td>${FABRICAS[f] || f}</td>
+          <td>${estadoHoy}</td>
+          <td>${ultimo?.fecha || '-'}</td>
+        </tr>
+      `;
+    }).join('') || '<tr><td colspan="3">Sin fábricas.</td></tr>';
   }
 }
 
@@ -678,7 +715,7 @@ function renderCellInput({
   extraClass = ''
 }) {
   const attrs = [
-    'class="excel-input ' + extraClass + '"',
+    `class="excel-input ${extraClass}"`,
     `data-row="${rowIndex}"`,
     key ? `data-key="${key}"` : '',
     groupKey ? `data-group="${groupKey}"` : '',
@@ -817,9 +854,7 @@ function renderCargaDiaria() {
 
     const rowTotal =
       computeStockInitialTotal(row.stockInicial) +
-      visibleGroups.reduce((acc, g) => {
-        return acc + computeGroupTotal(g.key, row.groups[g.key]);
-      }, 0);
+      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
 
     grandTotal += rowTotal;
     rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
@@ -1098,8 +1133,10 @@ function renderGerenciaExcel() {
   });
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const dayColspan = DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
+    const dayColspan = 1 + DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
     header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
+
+    header2 += `<th class="stock-head" rowspan="2">AROMA</th>`;
 
     DAY_GROUPS.forEach((group) => {
       header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
@@ -1133,6 +1170,8 @@ function renderGerenciaExcel() {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      row += `<td class="product-name-cell">${producto.nombre}</td>`;
 
       DAY_GROUPS.forEach((group) => {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
