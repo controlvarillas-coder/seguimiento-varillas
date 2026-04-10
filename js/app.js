@@ -463,6 +463,7 @@ function setMonthlyDefault() {
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
 }
+
 function getTodayLocalISO() {
   const now = new Date();
   const year = now.getFullYear();
@@ -507,14 +508,6 @@ function computeDashboardLogisticsSummary(reportes = [], productos = [], fecha =
     esperadoGrande,
     ingresadoGrande
   };
-}
-
-function getTodayLocalISO() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 function renderDashboard() {
@@ -1288,13 +1281,14 @@ async function refreshAll() {
     rows: (reporte.rows || []).map(normalizeExistingRow)
   }));
 
+  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+
   renderDashboard();
   renderProductos();
   renderUsuarios();
   renderCargaDiaria();
   renderGerenciaExcel();
 
-  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
   renderGerenciaMenuBadge(state.alertas);
   renderGerenciaAlertsPanel(state.alertas);
 }
@@ -1330,6 +1324,7 @@ function bindEvents() {
     state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
     renderGerenciaMenuBadge(state.alertas);
     renderGerenciaAlertsPanel(state.alertas);
+    renderDashboard();
   });
 
   $('cargaFecha')?.addEventListener('change', () => {
