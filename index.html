@@ -77,44 +77,142 @@
         </header>
 
         <section id="section-dashboard" class="section active">
-          <div class="cards-grid">
-            <div class="stat-card">
-              <div class="stat-label">Productos</div>
-              <div id="statProductos" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Reportes</div>
-              <div id="statReportes" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Borradores</div>
-              <div id="statBorradores" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Enviados</div>
-              <div id="statEnviados" class="stat-value">0</div>
-            </div>
-          </div>
+  <div class="cards-grid">
+    <div class="stat-card">
+      <div class="stat-label">Productos activos</div>
+      <div class="stat-value" id="statProductos">0</div>
+    </div>
 
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Últimos reportes</h3>
-            </div>
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Fábrica</th>
-                    <th>Estado</th>
-                    <th>Usuario</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaDashboardReportes"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+    <div class="stat-card">
+      <div class="stat-label">Reportes cargados</div>
+      <div class="stat-value" id="statReportes">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Alertas activas</div>
+      <div class="stat-value" id="statAlertas">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Fábricas pendientes hoy</div>
+      <div class="stat-value" id="statPendientesHoy">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Planillas cargadas hoy</div>
+      <div class="stat-value" id="statHoyCargadas">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Reportes enviados</div>
+      <div class="stat-value" id="statEnviados">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Reportes en borrador</div>
+      <div class="stat-value" id="statBorradores">0</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Usuarios activos</div>
+      <div class="stat-value" id="statUsuariosActivos">0</div>
+    </div>
+  </div>
+
+  <div class="content-grid two-col">
+    <div class="panel-card">
+      <div class="panel-header">
+        <h3>Últimos reportes</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Fábrica</th>
+              <th>Estado</th>
+              <th>Usuario</th>
+            </tr>
+          </thead>
+          <tbody id="tablaDashboardReportes">
+            <tr><td colspan="4">Sin reportes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-header">
+        <h3>Estado por fábrica</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fábrica</th>
+              <th>Estado hoy</th>
+              <th>Última carga</th>
+            </tr>
+          </thead>
+          <tbody id="tablaDashboardFabricas">
+            <tr><td colspan="3">Sin datos.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-grid two-col mt-20">
+    <div class="panel-card">
+      <div class="panel-header">
+        <h3>Resumen logístico</h3>
+      </div>
+
+      <div class="summary-boxes">
+        <div class="mini-stat">
+          <span>Esperado Morón caja chica</span>
+          <strong id="statEsperadoChica">0</strong>
+        </div>
+
+        <div class="mini-stat">
+          <span>Ingresó Morón caja chica</span>
+          <strong id="statIngresadoChica">0</strong>
+        </div>
+
+        <div class="mini-stat">
+          <span>Esperado Morón caja grande</span>
+          <strong id="statEsperadoGrande">0</strong>
+        </div>
+
+        <div class="mini-stat">
+          <span>Ingresó Morón caja grande</span>
+          <strong id="statIngresadoGrande">0</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-header">
+        <h3>Últimas alertas</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Producto</th>
+              <th>Bloque</th>
+              <th>Diferencia</th>
+            </tr>
+          </thead>
+          <tbody id="tablaDashboardAlertas">
+            <tr><td colspan="4">Sin alertas.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+ </section>
 
         <section id="section-productos" class="section">
           <div class="content-grid two-col">
