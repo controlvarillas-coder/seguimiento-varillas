@@ -2,6 +2,19 @@ import { auth, db } from './firebase-config.js';
 import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
 import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
 import {
+  buildWeeksForMonth,
+  getWeekDocId,
+  buildDefaultWeeklyRows,
+  normalizeWeeklyRows,
+  pushWeeklyHistory
+} from './modules/pedido-semanal/pedido-semanal.service.js';
+import {
+  renderWeekOptions,
+  renderPedidoSemanalTable,
+  renderPedidoSemanalHistory
+} from './modules/pedido-semanal/pedido-semanal.ui.js';
+
+import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut
@@ -29,7 +42,10 @@ const state = {
   usuarios: [],
   reportes: [],
   reporteActual: null,
-  alertas: []
+  alertas: [],
+  pedidoSemanas: [],
+  pedidoSemanalActual: null,
+  pedidoSemanalSelectedRow: null
 };
 
 const FABRICAS = {
@@ -163,10 +179,12 @@ const MORON_INTERNAL_GROUPS = [
 ];
 
 const INITIAL_STOCK_COLUMNS = [
-  { key: 'alvear', label: 'ALVEAR' },
-  { key: 'moron', label: 'MORON' },
-  { key: 'secando', label: 'SECANDO' },
-  { key: 'banado', label: 'BAÑADO' }
+  { key: 'alvearChica', label: 'ALV CH' },
+  { key: 'alvearGrande', label: 'ALV GR' },
+  { key: 'moronChica', label: 'MOR CH' },
+  { key: 'moronGrande', label: 'MOR GR' },
+  { key: 'banadoChica', label: 'BAÑ CH' },
+  { key: 'banadoGrande', label: 'BAÑ GR' }
 ];
 
 const INPUT_GROUP_BY_FABRICA = {
@@ -176,6 +194,15 @@ const INPUT_GROUP_BY_FABRICA = {
   alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
   moron: ['moronChicaInterna', 'moronGrandeInterna'],
   neutro: []
+};
+
+const PEDIDO_FIELDS = {
+  MORON_CHICA: 'moronPedidoChica',
+  MORON_GRANDE: 'moronPedidoGrande',
+  MORON_OBS: 'moronObservacion',
+  ALVEAR_DIA: 'alvearDiaProduccion',
+  ALVEAR_OBS: 'alvearObservacion',
+  GERENCIA_OBS: 'gerenciaObservacion'
 };
 
 const els = {
@@ -220,6 +247,10 @@ function setSection(sectionId) {
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
+
+  if (sectionId === 'pedido-semanal') {
+    renderPedidoSemanal();
+  }
 }
 
 function mountNavigation() {
@@ -239,13 +270,13 @@ function applyRoleUI() {
   });
 
   const fabricaSelect = $('cargaFabrica');
-  if (!fabricaSelect) return;
-
-  if (!isGerencia && state.perfil?.fabrica) {
-    fabricaSelect.value = state.perfil.fabrica;
-    fabricaSelect.disabled = true;
-  } else {
-    fabricaSelect.disabled = false;
+  if (fabricaSelect) {
+    if (!isGerencia && state.perfil?.fabrica) {
+      fabricaSelect.value = state.perfil.fabrica;
+      fabricaSelect.disabled = true;
+    } else {
+      fabricaSelect.disabled = false;
+    }
   }
 }
 
@@ -273,10 +304,6 @@ async function loadCollection(name) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function formatVisiblePara(arr = []) {
-  return arr.map((v) => FABRICAS[v] || v).join(' · ');
-}
-
 function num(v) {
   return Number(v || 0);
 }
@@ -300,10 +327,12 @@ function createEmptyRow(producto) {
     productoNombre: producto.nombre,
     categoria: producto.categoria || '',
     stockInicial: {
-      alvear: 0,
-      moron: 0,
-      secando: 0,
-      banado: 0
+      alvearChica: 0,
+      alvearGrande: 0,
+      moronChica: 0,
+      moronGrande: 0,
+      banadoChica: 0,
+      banadoGrande: 0
     },
     groups: {}
   };
@@ -321,10 +350,12 @@ function normalizeExistingRow(row = {}) {
     productoNombre: row.productoNombre || '',
     categoria: row.categoria || '',
     stockInicial: {
-      alvear: num(row.stockInicial?.alvear),
-      moron: num(row.stockInicial?.moron),
-      secando: num(row.stockInicial?.secando),
-      banado: num(row.stockInicial?.banado)
+      alvearChica: num(row.stockInicial?.alvearChica ?? row.stockInicial?.alvear ?? 0),
+      alvearGrande: num(row.stockInicial?.alvearGrande),
+      moronChica: num(row.stockInicial?.moronChica ?? row.stockInicial?.moron ?? 0),
+      moronGrande: num(row.stockInicial?.moronGrande),
+      banadoChica: num(row.stockInicial?.banadoChica ?? row.stockInicial?.banado ?? 0),
+      banadoGrande: num(row.stockInicial?.banadoGrande)
     },
     groups: {}
   };
@@ -352,6 +383,12 @@ function getProductosParaFabrica(fabrica) {
   const activos = state.productos.filter((p) => p.activo !== false);
   if (state.perfil?.rol === 'gerencia') return activos;
   return activos.filter((p) => (p.visiblePara || []).includes(fabrica));
+}
+
+function getWeeklyProducts() {
+  return state.productos.filter((p) => p.activo !== false && (
+    (p.visiblePara || []).includes('moron') || (p.visiblePara || []).includes('alvear')
+  ));
 }
 
 function buildDefaultRows(fabrica) {
@@ -455,7 +492,14 @@ function computeMoronInternalReadonly(groupKey, colKey, data = {}) {
 }
 
 function computeStockInitialTotal(stock = {}) {
-  return num(stock.alvear) + num(stock.moron) + num(stock.secando) + num(stock.banado);
+  return (
+    num(stock.alvearChica) +
+    num(stock.alvearGrande) +
+    num(stock.moronChica) +
+    num(stock.moronGrande) +
+    num(stock.banadoChica) +
+    num(stock.banadoGrande)
+  );
 }
 
 function setMonthlyDefault() {
@@ -463,6 +507,9 @@ function setMonthlyDefault() {
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
+  if ($('pedidoMes')) $('pedidoMes').value = ym;
+  state.pedidoSemanas = buildWeeksForMonth(ym);
+  renderWeekOptions($('pedidoSemana'), state.pedidoSemanas);
 }
 
 function getTodayLocalISO() {
@@ -612,22 +659,18 @@ function renderProductos() {
       <div class="product-row">
         <div class="product-main">
           <div class="product-title">${p.nombre || '-'}</div>
-
           <div class="product-sub">
             Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'}
           </div>
-
           <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
             <label>
               <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="alvear" ${visibles.includes('alvear') ? 'checked' : ''}>
               Alvear
             </label>
-
             <label>
               <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="moron" ${visibles.includes('moron') ? 'checked' : ''}>
               Morón
             </label>
-
             <label>
               <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="banado" ${visibles.includes('banado') ? 'checked' : ''}>
               Bañado
@@ -639,7 +682,6 @@ function renderProductos() {
           <button class="btn btn-primary btn-sm" data-save="${p.id}">
             Guardar
           </button>
-
           <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
             ${p.activo === false ? 'Activar' : 'Desactivar'}
           </button>
@@ -666,11 +708,9 @@ function renderProductos() {
   document.querySelectorAll('[data-save]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.save;
-
       const checks = Array.from(
         document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`)
       );
-
       const visiblePara = checks.map((c) => c.value);
 
       await updateDoc(doc(db, 'productos', id), {
@@ -1117,11 +1157,6 @@ async function guardarReporte(estado = 'borrador') {
   await cargarReporteDiario();
 }
 
-function getReportForDateFactory(fecha, fabrica) {
-  const id = getReporteId(fecha, fabrica);
-  return state.reportes.find((r) => r.id === id) || null;
-}
-
 function hasAnyNonZeroValue(obj = {}) {
   return Object.values(obj || {}).some((value) => num(value) !== 0);
 }
@@ -1169,7 +1204,7 @@ function buildDateStr(year, month, day) {
 
 function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
-  let total = num(stockInicial?.alvear);
+  let total = num(stockInicial?.alvearChica) + num(stockInicial?.alvearGrande);
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
@@ -1227,10 +1262,12 @@ function renderGerenciaExcel() {
 
     const firstRow = getFirstRowForMonth(producto.id, monthValue);
     const stockInicial = firstRow?.stockInicial || {
-      alvear: 0,
-      moron: 0,
-      secando: 0,
-      banado: 0
+      alvearChica: 0,
+      alvearGrande: 0,
+      moronChica: 0,
+      moronGrande: 0,
+      banadoChica: 0,
+      banadoGrande: 0
     };
 
     INITIAL_STOCK_COLUMNS.forEach((col) => {
@@ -1268,6 +1305,231 @@ function renderGerenciaExcel() {
   table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
 
+/* ========= PEDIDO SEMANAL ========= */
+
+function refreshPedidoWeeks() {
+  const monthValue = $('pedidoMes')?.value;
+  state.pedidoSemanas = buildWeeksForMonth(monthValue);
+  renderWeekOptions($('pedidoSemana'), state.pedidoSemanas);
+}
+
+function getSelectedWeekMeta() {
+  const weekKey = $('pedidoSemana')?.value;
+  return state.pedidoSemanas.find((w) => w.key === weekKey) || null;
+}
+
+function getPedidoDocId() {
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+  if (!monthValue || !weekMeta) return null;
+  return getWeekDocId(monthValue, weekMeta.key);
+}
+
+function canEditPedidoField(fieldKey) {
+  const isGerencia = state.perfil?.rol === 'gerencia';
+  const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
+  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
+  const moronLocked = !!state.pedidoSemanalActual?.moronLocked;
+
+  if (isGerencia) return true;
+
+  if (isMoron) {
+    if (moronLocked) return false;
+    return [PEDIDO_FIELDS.MORON_CHICA, PEDIDO_FIELDS.MORON_GRANDE, PEDIDO_FIELDS.MORON_OBS].includes(fieldKey);
+  }
+
+  if (isAlvear) {
+    return [PEDIDO_FIELDS.ALVEAR_DIA, PEDIDO_FIELDS.ALVEAR_OBS].includes(fieldKey);
+  }
+
+  return false;
+}
+
+function getPedidoEstadoText() {
+  if (!state.pedidoSemanalActual) return 'Sin cargar';
+  const moronLocked = !!state.pedidoSemanalActual.moronLocked;
+
+  if (moronLocked) {
+    return 'Morón ya guardó su pedido. Morón bloqueado.';
+  }
+
+  return 'Borrador editable';
+}
+
+function ensurePedidoDraft() {
+  if (state.pedidoSemanalActual) return;
+
+  const weekMeta = getSelectedWeekMeta();
+  const monthValue = $('pedidoMes')?.value;
+  if (!weekMeta || !monthValue) return;
+
+  state.pedidoSemanalActual = {
+    id: getWeekDocId(monthValue, weekMeta.key),
+    monthValue,
+    weekKey: weekMeta.key,
+    weekLabel: weekMeta.label,
+    weekStart: weekMeta.start,
+    weekEnd: weekMeta.end,
+    moronLocked: false,
+    rows: buildDefaultWeeklyRows(getWeeklyProducts())
+  };
+}
+
+async function cargarPedidoSemanal() {
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+
+  if (!monthValue || !weekMeta) {
+    toast('Seleccioná mes y semana.');
+    return;
+  }
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    const data = snap.data() || {};
+    state.pedidoSemanalActual = {
+      id,
+      ...data,
+      rows: normalizeWeeklyRows(data.rows || [], getWeeklyProducts())
+    };
+    toast('Pedido semanal cargado.');
+  } else {
+    state.pedidoSemanalActual = {
+      id,
+      monthValue,
+      weekKey: weekMeta.key,
+      weekLabel: weekMeta.label,
+      weekStart: weekMeta.start,
+      weekEnd: weekMeta.end,
+      moronLocked: false,
+      rows: buildDefaultWeeklyRows(getWeeklyProducts())
+    };
+    toast('Nueva semana preparada.');
+  }
+
+  state.pedidoSemanalSelectedRow = null;
+  renderPedidoSemanal();
+}
+
+async function guardarPedidoSemanal() {
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+
+  if (!monthValue || !weekMeta) {
+    toast('Seleccioná mes y semana.');
+    return;
+  }
+
+  ensurePedidoDraft();
+  if (!state.pedidoSemanalActual) {
+    toast('Primero cargá la semana.');
+    return;
+  }
+
+  const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
+  const isGerencia = state.perfil?.rol === 'gerencia';
+
+  if (isMoron && state.pedidoSemanalActual.moronLocked) {
+    toast('Morón ya guardó esta semana y no puede modificarla.');
+    return;
+  }
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+
+  const payload = {
+    monthValue,
+    weekKey: weekMeta.key,
+    weekLabel: weekMeta.label,
+    weekStart: weekMeta.start,
+    weekEnd: weekMeta.end,
+    moronLocked: isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
+    updatedBy: state.currentUser?.email || '',
+    updatedAtText: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+    rows: currentRows
+  };
+
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, payload);
+  } else {
+    await setDoc(ref, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      createdBy: state.currentUser?.email || ''
+    });
+  }
+
+  state.pedidoSemanalActual = {
+    id,
+    ...payload
+  };
+
+  toast('Pedido semanal guardado.');
+  renderPedidoSemanal();
+}
+
+function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
+  ensurePedidoDraft();
+  if (!state.pedidoSemanalActual) return;
+
+  const row = state.pedidoSemanalActual.rows[rowIndex];
+  if (!row) return;
+
+  const oldValue = row[fieldKey] ?? '';
+  const normalizedNewValue = typeof oldValue === 'number' || fieldKey === PEDIDO_FIELDS.MORON_CHICA || fieldKey === PEDIDO_FIELDS.MORON_GRANDE
+    ? num(newValue)
+    : String(newValue || '');
+
+  row[fieldKey] = normalizedNewValue;
+
+  const actor = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
+  pushWeeklyHistory(row, fieldKey, oldValue, normalizedNewValue, actor);
+
+  state.pedidoSemanalSelectedRow = rowIndex;
+  renderPedidoSemanal();
+}
+
+function renderPedidoSemanal() {
+  const table = $('tablaPedidoSemanal');
+  const historyBox = $('pedidoSemanalHistorial');
+  const statusBox = $('pedidoEstado');
+
+  if (!table) return;
+
+  if (!state.pedidoSemanas.length) {
+    refreshPedidoWeeks();
+  }
+
+  if (statusBox) {
+    statusBox.textContent = getPedidoEstadoText();
+  }
+
+  const rows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
+
+  renderPedidoSemanalTable(table, {
+    rows,
+    canEditField,
+    selectedRowIndex: state.pedidoSemanalSelectedRow,
+    onFieldChange: handlePedidoFieldChange,
+    onSelectHistory: (rowIndex) => {
+      state.pedidoSemanalSelectedRow = rowIndex;
+      renderPedidoSemanal();
+    }
+  });
+
+  const selectedRow = typeof state.pedidoSemanalSelectedRow === 'number'
+    ? rows[state.pedidoSemanalSelectedRow]
+    : null;
+
+  renderPedidoSemanalHistory(historyBox, selectedRow);
+}
+
 async function seedBaseData() {
   return;
 }
@@ -1289,6 +1551,7 @@ async function refreshAll() {
   renderUsuarios();
   renderCargaDiaria();
   renderGerenciaExcel();
+  renderPedidoSemanal();
 
   renderGerenciaMenuBadge(state.alertas);
   renderGerenciaAlertsPanel(state.alertas);
@@ -1320,6 +1583,7 @@ function bindEvents() {
   $('btnCargarReporte')?.addEventListener('click', cargarReporteDiario);
   $('btnGuardarReporte')?.addEventListener('click', () => guardarReporte('borrador'));
   $('btnEnviarReporte')?.addEventListener('click', () => guardarReporte('enviada'));
+
   $('btnRefrescarGerencia')?.addEventListener('click', () => {
     renderGerenciaExcel();
     state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
@@ -1338,6 +1602,22 @@ function bindEvents() {
     renderCargaDiaria();
   });
 
+  $('pedidoMes')?.addEventListener('change', () => {
+    state.pedidoSemanalActual = null;
+    state.pedidoSemanalSelectedRow = null;
+    refreshPedidoWeeks();
+    renderPedidoSemanal();
+  });
+
+  $('pedidoSemana')?.addEventListener('change', () => {
+    state.pedidoSemanalActual = null;
+    state.pedidoSemanalSelectedRow = null;
+    renderPedidoSemanal();
+  });
+
+  $('btnCargarPedidoSemanal')?.addEventListener('click', cargarPedidoSemanal);
+  $('btnGuardarPedidoSemanal')?.addEventListener('click', guardarPedidoSemanal);
+
   els.menuBtn?.addEventListener('click', () => {
     els.sidebar?.classList.toggle('open');
   });
@@ -1349,6 +1629,9 @@ onAuthStateChanged(auth, async (user) => {
     state.perfil = null;
     state.reporteActual = null;
     state.alertas = [];
+    state.pedidoSemanas = [];
+    state.pedidoSemanalActual = null;
+    state.pedidoSemanalSelectedRow = null;
     setLoggedUI(false);
     return;
   }
@@ -1356,12 +1639,9 @@ onAuthStateChanged(auth, async (user) => {
   state.currentUser = user;
 
   try {
-    console.log('AUTH OK:', user.email);
-
     await seedBaseData();
 
     state.perfil = await fetchPerfil(user.email);
-    console.log('PERFIL EN FIRESTORE:', state.perfil);
 
     if (!state.perfil) {
       toast('El login funcionó, pero falta tu usuario en Firestore/usuarios.');
