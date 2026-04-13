@@ -215,7 +215,8 @@ function setSection(sectionId) {
     productos: 'Productos',
     gerencia: 'Excel gerencia',
     carga: 'Carga diaria',
-    usuarios: 'Usuarios'
+    usuarios: 'Usuarios',
+    'pedido-semanal': 'Pedido semanal'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
