@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Varillas Control</title>
-  <link rel="stylesheet" href="css/styles.css?v=4" />
+  <link rel="stylesheet" href="css/styles.css?v=5" />
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -56,6 +56,7 @@
           <button class="nav-link active" data-section="dashboard">Dashboard</button>
           <button class="nav-link gerencia-only" data-section="productos">Productos</button>
           <button class="nav-link" data-section="carga">Carga diaria</button>
+          <button class="nav-link" data-section="pedido-semanal">Pedido semanal</button>
           <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
           <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
         </nav>
@@ -77,142 +78,142 @@
         </header>
 
         <section id="section-dashboard" class="section active">
-  <div class="cards-grid">
-    <div class="stat-card">
-      <div class="stat-label">Productos activos</div>
-      <div class="stat-value" id="statProductos">0</div>
-    </div>
+          <div class="cards-grid">
+            <div class="stat-card">
+              <div class="stat-label">Productos activos</div>
+              <div class="stat-value" id="statProductos">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Reportes cargados</div>
-      <div class="stat-value" id="statReportes">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Reportes cargados</div>
+              <div class="stat-value" id="statReportes">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Alertas activas</div>
-      <div class="stat-value" id="statAlertas">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Alertas activas</div>
+              <div class="stat-value" id="statAlertas">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Fábricas pendientes hoy</div>
-      <div class="stat-value" id="statPendientesHoy">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Fábricas pendientes hoy</div>
+              <div class="stat-value" id="statPendientesHoy">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Planillas cargadas hoy</div>
-      <div class="stat-value" id="statHoyCargadas">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Planillas cargadas hoy</div>
+              <div class="stat-value" id="statHoyCargadas">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Reportes enviados</div>
-      <div class="stat-value" id="statEnviados">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Reportes enviados</div>
+              <div class="stat-value" id="statEnviados">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Reportes en borrador</div>
-      <div class="stat-value" id="statBorradores">0</div>
-    </div>
+            <div class="stat-card">
+              <div class="stat-label">Reportes en borrador</div>
+              <div class="stat-value" id="statBorradores">0</div>
+            </div>
 
-    <div class="stat-card">
-      <div class="stat-label">Usuarios activos</div>
-      <div class="stat-value" id="statUsuariosActivos">0</div>
-    </div>
-  </div>
+            <div class="stat-card">
+              <div class="stat-label">Usuarios activos</div>
+              <div class="stat-value" id="statUsuariosActivos">0</div>
+            </div>
+          </div>
 
-  <div class="content-grid two-col">
-    <div class="panel-card">
-      <div class="panel-header">
-        <h3>Últimos reportes</h3>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Fábrica</th>
-              <th>Estado</th>
-              <th>Usuario</th>
-            </tr>
-          </thead>
-          <tbody id="tablaDashboardReportes">
-            <tr><td colspan="4">Sin reportes.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+          <div class="content-grid two-col">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Últimos reportes</h3>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Fábrica</th>
+                      <th>Estado</th>
+                      <th>Usuario</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tablaDashboardReportes">
+                    <tr><td colspan="4">Sin reportes.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-    <div class="panel-card">
-      <div class="panel-header">
-        <h3>Estado por fábrica</h3>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Fábrica</th>
-              <th>Estado hoy</th>
-              <th>Última carga</th>
-            </tr>
-          </thead>
-          <tbody id="tablaDashboardFabricas">
-            <tr><td colspan="3">Sin datos.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Estado por fábrica</h3>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Fábrica</th>
+                      <th>Estado hoy</th>
+                      <th>Última carga</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tablaDashboardFabricas">
+                    <tr><td colspan="3">Sin datos.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
-  <div class="content-grid two-col mt-20">
-    <div class="panel-card">
-      <div class="panel-header">
-        <h3>Resumen logístico</h3>
-      </div>
+          <div class="content-grid two-col mt-20">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Resumen logístico</h3>
+              </div>
 
-      <div class="summary-boxes">
-        <div class="mini-stat">
-          <span>Esperado Morón caja chica</span>
-          <strong id="statEsperadoChica">0</strong>
-        </div>
+              <div class="summary-boxes">
+                <div class="mini-stat">
+                  <span>Esperado Morón caja chica</span>
+                  <strong id="statEsperadoChica">0</strong>
+                </div>
 
-        <div class="mini-stat">
-          <span>Ingresó Morón caja chica</span>
-          <strong id="statIngresadoChica">0</strong>
-        </div>
+                <div class="mini-stat">
+                  <span>Ingresó Morón caja chica</span>
+                  <strong id="statIngresadoChica">0</strong>
+                </div>
 
-        <div class="mini-stat">
-          <span>Esperado Morón caja grande</span>
-          <strong id="statEsperadoGrande">0</strong>
-        </div>
+                <div class="mini-stat">
+                  <span>Esperado Morón caja grande</span>
+                  <strong id="statEsperadoGrande">0</strong>
+                </div>
 
-        <div class="mini-stat">
-          <span>Ingresó Morón caja grande</span>
-          <strong id="statIngresadoGrande">0</strong>
-        </div>
-      </div>
-    </div>
+                <div class="mini-stat">
+                  <span>Ingresó Morón caja grande</span>
+                  <strong id="statIngresadoGrande">0</strong>
+                </div>
+              </div>
+            </div>
 
-    <div class="panel-card">
-      <div class="panel-header">
-        <h3>Últimas alertas</h3>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Producto</th>
-              <th>Bloque</th>
-              <th>Diferencia</th>
-            </tr>
-          </thead>
-          <tbody id="tablaDashboardAlertas">
-            <tr><td colspan="4">Sin alertas.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
- </section>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3>Últimas alertas</h3>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Producto</th>
+                      <th>Bloque</th>
+                      <th>Diferencia</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tablaDashboardAlertas">
+                    <tr><td colspan="4">Sin alertas.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section id="section-productos" class="section">
           <div class="content-grid two-col">
@@ -236,9 +237,8 @@
                 <div class="field">
                   <label>Visible para</label>
                   <div class="checks-grid">
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_chica" checked /> Caja chica</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="caja_grande" checked /> Caja grande</label>
-                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="neutro" checked /> Neutro</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="alvear" checked /> Alvear</label>
+                    <label class="check-pill"><input type="checkbox" name="visiblePara" value="moron" checked /> Morón</label>
                     <label class="check-pill"><input type="checkbox" name="visiblePara" value="banado" checked /> Bañado</label>
                   </div>
                 </div>
@@ -285,9 +285,8 @@
               <div class="field">
                 <label for="cargaFabrica">Fábrica</label>
                 <select id="cargaFabrica">
-                  <option value="caja_chica">Caja chica</option>
-                  <option value="caja_grande">Caja grande</option>
-                  <option value="neutro">Neutro</option>
+                  <option value="alvear">Alvear</option>
+                  <option value="moron">Morón</option>
                   <option value="banado">Bañado</option>
                 </select>
               </div>
@@ -315,6 +314,60 @@
             </div>
             <div class="excel-wrap">
               <table id="tablaCargaDiaria" class="excel-table"></table>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-pedido-semanal" class="section">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Pedido semanal</h3>
+            </div>
+
+            <div class="toolbar-grid">
+              <div class="field">
+                <label for="pedidoMes">Mes</label>
+                <input id="pedidoMes" type="month" />
+              </div>
+
+              <div class="field">
+                <label for="pedidoSemana">Semana</label>
+                <select id="pedidoSemana">
+                  <option value="">Seleccionar semana</option>
+                </select>
+              </div>
+
+              <div class="field field-grow">
+                <label>Estado</label>
+                <div id="pedidoEstado" class="status-box">Sin cargar</div>
+              </div>
+
+              <div class="actions-row">
+                <button id="btnCargarPedidoSemanal" class="btn btn-outline" type="button">Cargar semana</button>
+                <button id="btnGuardarPedidoSemanal" class="btn btn-primary" type="button">Guardar</button>
+              </div>
+            </div>
+
+            <div class="hint-box">
+              Morón carga lo que necesita para la semana siguiente. Una vez guardado por Morón, queda bloqueado para Morón. Alvear y Gerencia pueden seguir editando. Los cambios de Alvear y Gerencia deben conservar historial.
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Planilla semanal</h3>
+            </div>
+            <div class="excel-wrap">
+              <table id="tablaPedidoSemanal" class="excel-table"></table>
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Historial / observaciones</h3>
+            </div>
+            <div id="pedidoSemanalHistorial" class="hint-box">
+              Sin historial.
             </div>
           </div>
         </section>
@@ -370,7 +423,6 @@
     </div>
   </section>
 
-  <script type="module" src="js/app.js?v=8"></script>
-  <script type="module" src="./js/seed-productos.js"></script>
+  <script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>
