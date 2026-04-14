@@ -179,10 +179,12 @@ const MORON_INTERNAL_GROUPS = [
 ];
 
 const INITIAL_STOCK_COLUMNS = [
-  { key: 'alvearChica', label: 'ALV CH' },
+ { key: 'alvearChica', label: 'ALV CH' },
   { key: 'alvearGrande', label: 'ALV GR' },
   { key: 'moronChica', label: 'MOR CH' },
   { key: 'moronGrande', label: 'MOR GR' },
+  { key: 'secandoChica', label: 'SEC CH' },
+  { key: 'secandoGrande', label: 'SEC GR' },
   { key: 'banadoChica', label: 'BAÑ CH' },
   { key: 'banadoGrande', label: 'BAÑ GR' }
 ];
@@ -326,14 +328,16 @@ function createEmptyRow(producto) {
     productoId: producto.id,
     productoNombre: producto.nombre,
     categoria: producto.categoria || '',
-    stockInicial: {
-      alvearChica: 0,
-      alvearGrande: 0,
-      moronChica: 0,
-      moronGrande: 0,
-      banadoChica: 0,
-      banadoGrande: 0
-    },
+   stockInicial: {
+  alvearChica: 0,
+  alvearGrande: 0,
+  moronChica: 0,
+  moronGrande: 0,
+  secandoChica: 0,
+  secandoGrande: 0,
+  banadoChica: 0,
+  banadoGrande: 0
+},
     groups: {}
   };
 
@@ -351,12 +355,14 @@ function normalizeExistingRow(row = {}) {
     categoria: row.categoria || '',
     stockInicial: {
       alvearChica: num(row.stockInicial?.alvearChica ?? row.stockInicial?.alvear ?? 0),
-      alvearGrande: num(row.stockInicial?.alvearGrande),
-      moronChica: num(row.stockInicial?.moronChica ?? row.stockInicial?.moron ?? 0),
-      moronGrande: num(row.stockInicial?.moronGrande),
-      banadoChica: num(row.stockInicial?.banadoChica ?? row.stockInicial?.banado ?? 0),
-      banadoGrande: num(row.stockInicial?.banadoGrande)
-    },
+  alvearGrande: num(row.stockInicial?.alvearGrande),
+  moronChica: num(row.stockInicial?.moronChica ?? row.stockInicial?.moron ?? 0),
+  moronGrande: num(row.stockInicial?.moronGrande),
+  secandoChica: num(row.stockInicial?.secandoChica ?? row.stockInicial?.secando ?? 0),
+  secandoGrande: num(row.stockInicial?.secandoGrande),
+  banadoChica: num(row.stockInicial?.banadoChica ?? row.stockInicial?.banado ?? 0),
+  banadoGrande: num(row.stockInicial?.banadoGrande)
+},
     groups: {}
   };
 
@@ -493,10 +499,12 @@ function computeMoronInternalReadonly(groupKey, colKey, data = {}) {
 
 function computeStockInitialTotal(stock = {}) {
   return (
-    num(stock.alvearChica) +
+     num(stock.alvearChica) +
     num(stock.alvearGrande) +
     num(stock.moronChica) +
     num(stock.moronGrande) +
+    num(stock.secandoChica) +
+    num(stock.secandoGrande) +
     num(stock.banadoChica) +
     num(stock.banadoGrande)
   );
