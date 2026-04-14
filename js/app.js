@@ -940,18 +940,36 @@ function renderCargaDiaria() {
 
     visibleGroups.forEach((group) => {
       group.columns.forEach((col) => {
-        if (col.readonly) {
-          let totalValue = 0;
+       if (col.readonly) {
+  let totalValue = 0;
 
-          if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-            totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
-          } else {
-            totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
-          }
+  if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+    totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+  } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
+    const fechaActual = $('cargaFecha')?.value || '';
 
-          rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
-          columnTotals[`${group.key}_${col.key}`] += totalValue;
-        } else {
+    if (col.key === 'totalSecando') {
+      totalValue = getBanadoSecandoRunningTotal(
+        fechaActual,
+        row.productoId,
+        group.key,
+        row.stockInicial || {}
+      );
+    } else if (col.key === 'total') {
+      totalValue = getBanadoRunningTotal(
+        fechaActual,
+        row.productoId,
+        group.key,
+        row.stockInicial || {}
+      );
+    }
+  } else {
+    totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+  }
+
+  rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
+  columnTotals[`${group.key}_${col.key}`] += totalValue;
+} else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
 
