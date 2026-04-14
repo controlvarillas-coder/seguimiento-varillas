@@ -119,7 +119,6 @@ const DAY_GROUPS = [
     colorClass: 'group-banado-chica',
     columns: [
       { key: 'banadoPlus', label: 'BAÑADO+' },
-      { key: 'masMenos', label: '+/-' },
       { key: 'secando', label: 'SECANDO' },
       { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
@@ -134,7 +133,6 @@ const DAY_GROUPS = [
     colorClass: 'group-banado-grande',
     columns: [
       { key: 'banadoPlus', label: 'BAÑADO+' },
-      { key: 'masMenos', label: '+/-' },
       { key: 'secando', label: 'SECANDO' },
       { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
@@ -447,7 +445,6 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'banadoChica':
       return (
         num(data.banadoPlus) +
-        num(data.masMenos) +
         num(data.totalSecando) +
         num(data.cosecha) -
         num(data.salida) +
@@ -457,7 +454,6 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'banadoGrande':
       return (
         num(data.banadoPlus) +
-        num(data.masMenos) +
         num(data.totalSecando) +
         num(data.cosecha) -
         num(data.salida) +
@@ -786,7 +782,7 @@ function getVisibleGroupsForCurrentView() {
   }
 
   if (state.perfil?.rol === 'gerencia') {
-    return DAY_GROUPS;
+    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
   }
 
   if (fabrica === 'moron') {
@@ -809,7 +805,9 @@ function getEditableGroupsForCurrentUser() {
     fabrica = state.perfil.fabrica;
   }
 
-  if (state.perfil?.rol === 'gerencia') return DAY_GROUPS.map((g) => g.key);
+  if (state.perfil?.rol === 'gerencia') {
+    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].map((g) => g.key);
+  }
 
   if (fabrica === 'moron') {
     return MORON_INTERNAL_GROUPS.map((g) => g.key);
@@ -927,13 +925,14 @@ function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
     currentFabrica = state.perfil.fabrica;
   }
 
-  const isBanadoGroup = groupKey === 'banadoChica' || groupKey === 'banadoGrande';
+  const isCurrentReportGroup =
+    ['banadoChica', 'banadoGrande', 'moronChicaInterna', 'moronGrandeInterna', 'alvear', 'cajaChica', 'cajaGrandeAlv', 'cajaChicaMor', 'cajaGrandeMor']
+      .includes(groupKey);
 
   if (
     state.reporteActual &&
     state.reporteActual.fecha === fecha &&
-    currentFabrica === 'banado' &&
-    isBanadoGroup
+    isCurrentReportGroup
   ) {
     const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
     if (row?.groups?.[groupKey]) {
@@ -976,7 +975,6 @@ function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) 
 
     total +=
       num(rowData?.banadoPlus) +
-      num(rowData?.masMenos) +
       num(rowData?.cosecha) -
       num(rowData?.salida) +
       num(rowData?.dif);
@@ -995,7 +993,7 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, groupKey);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
 
     total +=
       num(rowData?.entrada) +
@@ -1013,7 +1011,7 @@ function getCajaChicaAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaChica');
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaChica');
 
     total +=
       num(rowData?.alvPlus) -
@@ -1030,7 +1028,7 @@ function getCajaGrandeAlvearRunningTotal(dayStr, productoId, stockInicial = {}) 
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaGrandeAlv');
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaGrandeAlv');
 
     total +=
       num(rowData?.alvPlus) -
@@ -1047,7 +1045,7 @@ function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaChicaMor');
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaChicaMor');
 
     total +=
       num(rowData?.morPlus) -
@@ -1064,7 +1062,7 @@ function getCajaGrandeMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaGrandeMor');
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaGrandeMor');
 
     total +=
       num(rowData?.morPlus) -
@@ -1139,7 +1137,7 @@ function getAlvearRunningTotal(dayStr, productoId) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'alvear');
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'alvear');
     total += num(rowData?.alv);
   }
 
@@ -1326,7 +1324,10 @@ function renderCargaDiaria() {
 
     const rowTotal =
       computeStockInitialTotal(row.stockInicial) +
-      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key]), 0);
+      visibleGroups.reduce((acc, g) => {
+        const groupData = row.groups[g.key] || {};
+        return acc + computeGroupTotal(g.key, groupData);
+      }, 0);
 
     grandTotal += rowTotal;
     rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
@@ -1551,12 +1552,12 @@ function renderGerenciaExcel() {
   });
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const dayColspan = 1 + DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
+    const dayColspan = 1 + [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].reduce((acc, g) => acc + g.columns.length, 0);
     header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
 
     header2 += `<th class="stock-head" rowspan="2">AROMA</th>`;
 
-    DAY_GROUPS.forEach((group) => {
+    [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
       header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
       group.columns.forEach((col) => {
         header3 += `<th class="${group.colorClass}">${col.label}</th>`;
@@ -1585,7 +1586,7 @@ function renderGerenciaExcel() {
 
       row += `<td class="product-name-cell">${producto.nombre}</td>`;
 
-      DAY_GROUPS.forEach((group) => {
+      [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
 
         group.columns.forEach((col) => {
@@ -1595,55 +1596,24 @@ function renderGerenciaExcel() {
             if (group.key === 'alvear') {
               totalValue = getAlvearRunningTotal(dayStr, producto.id);
             } else if (group.key === 'cajaChica') {
-              totalValue = getCajaChicaAlvearRunningTotal(
-                dayStr,
-                producto.id,
-                stockInicial
-              );
+              totalValue = getCajaChicaAlvearRunningTotal(dayStr, producto.id, stockInicial);
             } else if (group.key === 'cajaGrandeAlv') {
-              totalValue = getCajaGrandeAlvearRunningTotal(
-                dayStr,
-                producto.id,
-                stockInicial
-              );
+              totalValue = getCajaGrandeAlvearRunningTotal(dayStr, producto.id, stockInicial);
             } else if (group.key === 'cajaChicaMor') {
-              totalValue = getCajaChicaMoronRunningTotal(
-                dayStr,
-                producto.id,
-                stockInicial
-              );
+              totalValue = getCajaChicaMoronRunningTotal(dayStr, producto.id, stockInicial);
             } else if (group.key === 'cajaGrandeMor') {
-              totalValue = getCajaGrandeMoronRunningTotal(
-                dayStr,
-                producto.id,
-                stockInicial
-              );
+              totalValue = getCajaGrandeMoronRunningTotal(dayStr, producto.id, stockInicial);
             } else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
               if (col.key === 'salidaTotal') {
                 totalValue = computeMoronInternalReadonly(group.key, col.key, rowData || {});
               } else if (col.key === 'total') {
-                totalValue = getMoronRunningTotal(
-                  dayStr,
-                  producto.id,
-                  group.key,
-                  stockInicial
-                );
+                totalValue = getMoronRunningTotal(dayStr, producto.id, group.key, stockInicial);
               }
             } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
               if (col.key === 'totalSecando') {
-                totalValue = getBanadoSecandoRunningTotal(
-                  dayStr,
-                  producto.id,
-                  group.key,
-                  stockInicial
-                );
+                totalValue = getBanadoSecandoRunningTotal(dayStr, producto.id, group.key, stockInicial);
               } else if (col.key === 'total') {
-                totalValue = getBanadoRunningTotal(
-                  dayStr,
-                  producto.id,
-                  group.key,
-                  stockInicial
-                );
+                totalValue = getBanadoRunningTotal(dayStr, producto.id, group.key, stockInicial);
               }
             }
 
