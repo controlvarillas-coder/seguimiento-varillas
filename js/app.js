@@ -1007,6 +1007,74 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
   return total;
 }
 
+function getCajaChicaAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = num(stockInicial?.alvearChica);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaChica');
+
+    total +=
+      num(rowData?.alvPlus) -
+      num(rowData?.alvMinus) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
+
+function getCajaGrandeAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = num(stockInicial?.alvearGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaGrandeAlv');
+
+    total +=
+      num(rowData?.alvPlus) -
+      num(rowData?.alvMinus) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
+
+function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = num(stockInicial?.moronChica);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaChicaMor');
+
+    total +=
+      num(rowData?.morPlus) -
+      num(rowData?.morMinus) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
+
+function getCajaGrandeMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = num(stockInicial?.moronGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'cajaGrandeMor');
+
+    total +=
+      num(rowData?.morPlus) -
+      num(rowData?.morMinus) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
+
 function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return null;
 
@@ -1018,10 +1086,10 @@ function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!lastRow) return null;
 
   return {
-    alvearChica: num(lastRow.stockInicial?.alvearChica),
-    alvearGrande: num(lastRow.stockInicial?.alvearGrande),
-    moronChica: num(lastRow.stockInicial?.moronChica),
-    moronGrande: num(lastRow.stockInicial?.moronGrande),
+    alvearChica: getCajaChicaAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    alvearGrande: getCajaGrandeAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    moronChica: getCajaChicaMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    moronGrande: getCajaGrandeMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
     secandoChica: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
     secandoGrande: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {}),
     banadoChica: getBanadoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
@@ -1065,12 +1133,9 @@ function getInitialStockForMonth(productoId, monthValue) {
   };
 }
 
-function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+function getAlvearRunningTotal(dayStr, productoId) {
   const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    num(stockInicial?.alvearChica) +
-    num(stockInicial?.alvearGrande);
+  let total = 0;
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
@@ -1177,12 +1242,12 @@ function renderCargaDiaria() {
       group.columns.forEach((col) => {
         if (col.readonly) {
           let totalValue = 0;
+          const fechaActual = $('cargaFecha')?.value || '';
 
           if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
             if (col.key === 'salidaTotal') {
               totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
             } else if (col.key === 'total') {
-              const fechaActual = $('cargaFecha')?.value || '';
               totalValue = getMoronRunningTotal(
                 fechaActual,
                 row.productoId,
@@ -1191,8 +1256,6 @@ function renderCargaDiaria() {
               );
             }
           } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
-            const fechaActual = $('cargaFecha')?.value || '';
-
             if (col.key === 'totalSecando') {
               totalValue = getBanadoSecandoRunningTotal(
                 fechaActual,
@@ -1209,8 +1272,30 @@ function renderCargaDiaria() {
               );
             }
           } else if (group.key === 'alvear') {
-            const fechaActual = $('cargaFecha')?.value || '';
             totalValue = getAlvearRunningTotal(
+              fechaActual,
+              row.productoId
+            );
+          } else if (group.key === 'cajaChica') {
+            totalValue = getCajaChicaAlvearRunningTotal(
+              fechaActual,
+              row.productoId,
+              row.stockInicial || {}
+            );
+          } else if (group.key === 'cajaGrandeAlv') {
+            totalValue = getCajaGrandeAlvearRunningTotal(
+              fechaActual,
+              row.productoId,
+              row.stockInicial || {}
+            );
+          } else if (group.key === 'cajaChicaMor') {
+            totalValue = getCajaChicaMoronRunningTotal(
+              fechaActual,
+              row.productoId,
+              row.stockInicial || {}
+            );
+          } else if (group.key === 'cajaGrandeMor') {
+            totalValue = getCajaGrandeMoronRunningTotal(
               fechaActual,
               row.productoId,
               row.stockInicial || {}
@@ -1508,7 +1593,31 @@ function renderGerenciaExcel() {
             let totalValue = computeGroupTotal(group.key, rowData || {});
 
             if (group.key === 'alvear') {
-              totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
+              totalValue = getAlvearRunningTotal(dayStr, producto.id);
+            } else if (group.key === 'cajaChica') {
+              totalValue = getCajaChicaAlvearRunningTotal(
+                dayStr,
+                producto.id,
+                stockInicial
+              );
+            } else if (group.key === 'cajaGrandeAlv') {
+              totalValue = getCajaGrandeAlvearRunningTotal(
+                dayStr,
+                producto.id,
+                stockInicial
+              );
+            } else if (group.key === 'cajaChicaMor') {
+              totalValue = getCajaChicaMoronRunningTotal(
+                dayStr,
+                producto.id,
+                stockInicial
+              );
+            } else if (group.key === 'cajaGrandeMor') {
+              totalValue = getCajaGrandeMoronRunningTotal(
+                dayStr,
+                producto.id,
+                stockInicial
+              );
             } else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
               if (col.key === 'salidaTotal') {
                 totalValue = computeMoronInternalReadonly(group.key, col.key, rowData || {});
