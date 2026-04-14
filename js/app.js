@@ -1222,6 +1222,71 @@ function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   return total;
 }
+function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
+  const currentFecha = $('cargaFecha')?.value;
+  let currentFabrica = $('cargaFabrica')?.value;
+
+  if (!currentFabrica && state.perfil?.fabrica) {
+    currentFabrica = state.perfil.fabrica;
+  }
+
+  const isBanadoGroup = groupKey === 'banadoChica' || groupKey === 'banadoGrande';
+
+  if (
+    state.reporteActual &&
+    state.reporteActual.fecha === fecha &&
+    currentFabrica === 'banado' &&
+    isBanadoGroup
+  ) {
+    const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
+    if (row?.groups?.[groupKey]) {
+      return row.groups[groupKey];
+    }
+  }
+
+  return getMergedGroupDataForDay(fecha, productoId, groupKey);
+}
+
+function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'banadoChica'
+      ? num(stockInicial?.secandoChica)
+      : num(stockInicial?.secandoGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total += num(rowData?.secando) - num(rowData?.cosecha);
+  }
+
+  return total;
+}
+
+function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'banadoChica'
+      ? num(stockInicial?.banadoChica)
+      : num(stockInicial?.banadoGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total +=
+      num(rowData?.banadoPlus) +
+      num(rowData?.masMenos) +
+      num(rowData?.cosecha) -
+      num(rowData?.salida) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
 
 function renderGerenciaExcel() {
   const table = $('tablaGerenciaExcel');
