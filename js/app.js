@@ -1374,15 +1374,31 @@ function renderGerenciaExcel() {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
 
         group.columns.forEach((col) => {
-          if (col.readonly) {
-            let totalValue = computeGroupTotal(group.key, rowData || {});
+         if (col.readonly) {
+  let totalValue = computeGroupTotal(group.key, rowData || {});
 
-            if (group.key === 'alvear') {
-              totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
-            }
+  if (group.key === 'alvear') {
+    totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
+  } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
+    if (col.key === 'totalSecando') {
+      totalValue = getBanadoSecandoRunningTotal(
+        dayStr,
+        producto.id,
+        group.key,
+        stockInicial
+      );
+    } else if (col.key === 'total') {
+      totalValue = getBanadoRunningTotal(
+        dayStr,
+        producto.id,
+        group.key,
+        stockInicial
+      );
+    }
+  }
 
-            row += `<td class="${group.colorClass}">${totalValue}</td>`;
-          } else {
+  row += `<td class="${group.colorClass}">${totalValue}</td>`;
+}else {
             row += `<td class="${group.colorClass}">${num(rowData?.[col.key])}</td>`;
           }
         });
