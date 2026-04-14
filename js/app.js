@@ -35,6 +35,8 @@ import {
 
 const $ = (id) => document.getElementById(id);
 
+const MANUAL_INITIAL_MONTH = '2026-04'; // excepción manual
+
 const state = {
   currentUser: null,
   perfil: null,
@@ -119,7 +121,7 @@ const DAY_GROUPS = [
       { key: 'banadoPlus', label: 'BAÑADO+' },
       { key: 'masMenos', label: '+/-' },
       { key: 'secando', label: 'SECANDO' },
-      { key: 'totalSecando', label: 'TOTAL SECANDO' },
+      { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
       { key: 'salida', label: 'SALIDA' },
       { key: 'dif', label: 'DIF' },
@@ -134,7 +136,7 @@ const DAY_GROUPS = [
       { key: 'banadoPlus', label: 'BAÑADO+' },
       { key: 'masMenos', label: '+/-' },
       { key: 'secando', label: 'SECANDO' },
-      { key: 'totalSecando', label: 'TOTAL SECANDO' },
+      { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
       { key: 'salida', label: 'SALIDA' },
       { key: 'dif', label: 'DIF' },
@@ -179,7 +181,7 @@ const MORON_INTERNAL_GROUPS = [
 ];
 
 const INITIAL_STOCK_COLUMNS = [
- { key: 'alvearChica', label: 'ALV CH' },
+  { key: 'alvearChica', label: 'ALV CH' },
   { key: 'alvearGrande', label: 'ALV GR' },
   { key: 'moronChica', label: 'MOR CH' },
   { key: 'moronGrande', label: 'MOR GR' },
@@ -328,16 +330,16 @@ function createEmptyRow(producto) {
     productoId: producto.id,
     productoNombre: producto.nombre,
     categoria: producto.categoria || '',
-   stockInicial: {
-  alvearChica: 0,
-  alvearGrande: 0,
-  moronChica: 0,
-  moronGrande: 0,
-  secandoChica: 0,
-  secandoGrande: 0,
-  banadoChica: 0,
-  banadoGrande: 0
-},
+    stockInicial: {
+      alvearChica: 0,
+      alvearGrande: 0,
+      moronChica: 0,
+      moronGrande: 0,
+      secandoChica: 0,
+      secandoGrande: 0,
+      banadoChica: 0,
+      banadoGrande: 0
+    },
     groups: {}
   };
 
@@ -355,14 +357,14 @@ function normalizeExistingRow(row = {}) {
     categoria: row.categoria || '',
     stockInicial: {
       alvearChica: num(row.stockInicial?.alvearChica ?? row.stockInicial?.alvear ?? 0),
-  alvearGrande: num(row.stockInicial?.alvearGrande),
-  moronChica: num(row.stockInicial?.moronChica ?? row.stockInicial?.moron ?? 0),
-  moronGrande: num(row.stockInicial?.moronGrande),
-  secandoChica: num(row.stockInicial?.secandoChica ?? row.stockInicial?.secando ?? 0),
-  secandoGrande: num(row.stockInicial?.secandoGrande),
-  banadoChica: num(row.stockInicial?.banadoChica ?? row.stockInicial?.banado ?? 0),
-  banadoGrande: num(row.stockInicial?.banadoGrande)
-},
+      alvearGrande: num(row.stockInicial?.alvearGrande),
+      moronChica: num(row.stockInicial?.moronChica ?? row.stockInicial?.moron ?? 0),
+      moronGrande: num(row.stockInicial?.moronGrande),
+      secandoChica: num(row.stockInicial?.secandoChica ?? row.stockInicial?.secando ?? 0),
+      secandoGrande: num(row.stockInicial?.secandoGrande),
+      banadoChica: num(row.stockInicial?.banadoChica ?? row.stockInicial?.banado ?? 0),
+      banadoGrande: num(row.stockInicial?.banadoGrande)
+    },
     groups: {}
   };
 
@@ -499,7 +501,7 @@ function computeMoronInternalReadonly(groupKey, colKey, data = {}) {
 
 function computeStockInitialTotal(stock = {}) {
   return (
-     num(stock.alvearChica) +
+    num(stock.alvearChica) +
     num(stock.alvearGrande) +
     num(stock.moronChica) +
     num(stock.moronGrande) +
@@ -846,6 +848,214 @@ function renderCellInput({
   return `<input ${attrs} ${canEdit ? '' : 'disabled'}>`;
 }
 
+function hasAnyNonZeroValue(obj = {}) {
+  return Object.values(obj || {}).some((value) => num(value) !== 0);
+}
+
+function getMergedGroupDataForDay(fecha, productoId, groupKey) {
+  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
+  let fallback = null;
+
+  for (const reporte of reportesDelDia) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (!row?.groups?.[groupKey]) continue;
+
+    const groupData = row.groups[groupKey];
+    if (!fallback) fallback = groupData;
+
+    if (hasAnyNonZeroValue(groupData)) {
+      return groupData;
+    }
+  }
+
+  return fallback || createEmptyGroupData(groupKey);
+}
+
+function getFirstRowForMonth(productoId, monthValue) {
+  const reportesDelMes = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (row) return normalizeExistingRow(row);
+  }
+
+  return null;
+}
+
+function getDateParts(dateStr) {
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  return { year, month, day };
+}
+
+function buildDateStr(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function getPreviousMonthValue(monthValue) {
+  const [year, month] = monthValue.split('-').map(Number);
+  const prev = new Date(year, month - 2, 1);
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getLastAvailableDateForMonth(monthValue) {
+  const fechas = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .map((r) => r.fecha)
+    .sort();
+
+  return fechas.length ? fechas[fechas.length - 1] : null;
+}
+
+function getAnyRowForDateProduct(fecha, productoId) {
+  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
+
+  for (const reporte of reportesDelDia) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (row) return normalizeExistingRow(row);
+  }
+
+  return null;
+}
+
+function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
+  const currentFecha = $('cargaFecha')?.value;
+  let currentFabrica = $('cargaFabrica')?.value;
+
+  if (!currentFabrica && state.perfil?.fabrica) {
+    currentFabrica = state.perfil.fabrica;
+  }
+
+  const isBanadoGroup = groupKey === 'banadoChica' || groupKey === 'banadoGrande';
+
+  if (
+    state.reporteActual &&
+    state.reporteActual.fecha === fecha &&
+    currentFabrica === 'banado' &&
+    isBanadoGroup
+  ) {
+    const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
+    if (row?.groups?.[groupKey]) {
+      return row.groups[groupKey];
+    }
+  }
+
+  return getMergedGroupDataForDay(fecha, productoId, groupKey);
+}
+
+function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'banadoChica'
+      ? num(stockInicial?.secandoChica)
+      : num(stockInicial?.secandoGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total += num(rowData?.secando) - num(rowData?.cosecha);
+  }
+
+  return total;
+}
+
+function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'banadoChica'
+      ? num(stockInicial?.banadoChica)
+      : num(stockInicial?.banadoGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total +=
+      num(rowData?.banadoPlus) +
+      num(rowData?.masMenos) +
+      num(rowData?.cosecha) -
+      num(rowData?.salida) +
+      num(rowData?.dif);
+  }
+
+  return total;
+}
+
+function getClosingStockFromPreviousMonth(productoId, monthValue) {
+  if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return null;
+
+  const previousMonth = getPreviousMonthValue(monthValue);
+  const lastDate = getLastAvailableDateForMonth(previousMonth);
+  if (!lastDate) return null;
+
+  const lastRow = getAnyRowForDateProduct(lastDate, productoId);
+  if (!lastRow) return null;
+
+  return {
+    alvearChica: num(lastRow.stockInicial?.alvearChica),
+    alvearGrande: num(lastRow.stockInicial?.alvearGrande),
+    moronChica: num(lastRow.stockInicial?.moronChica),
+    moronGrande: num(lastRow.stockInicial?.moronGrande),
+    secandoChica: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
+    secandoGrande: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {}),
+    banadoChica: getBanadoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
+    banadoGrande: getBanadoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {})
+  };
+}
+
+function applyPreviousMonthInitialStock(rows = [], monthValue = '') {
+  if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return rows;
+
+  return rows.map((row) => {
+    const closing = getClosingStockFromPreviousMonth(row.productoId, monthValue);
+    if (!closing) return row;
+
+    return {
+      ...row,
+      stockInicial: {
+        ...row.stockInicial,
+        ...closing
+      }
+    };
+  });
+}
+
+function getInitialStockForMonth(productoId, monthValue) {
+  const firstRow = getFirstRowForMonth(productoId, monthValue);
+  if (firstRow) return firstRow.stockInicial;
+
+  const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
+  if (closing) return closing;
+
+  return {
+    alvearChica: 0,
+    alvearGrande: 0,
+    moronChica: 0,
+    moronGrande: 0,
+    secandoChica: 0,
+    secandoGrande: 0,
+    banadoChica: 0,
+    banadoGrande: 0
+  };
+}
+
+function getAlvearRunningTotal(dayStr, productoId) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = 0;
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'alvear');
+    total += num(rowData?.alv);
+  }
+
+  return total;
+}
+
 function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
   if (!table) return;
@@ -940,36 +1150,36 @@ function renderCargaDiaria() {
 
     visibleGroups.forEach((group) => {
       group.columns.forEach((col) => {
-       if (col.readonly) {
-  let totalValue = 0;
+        if (col.readonly) {
+          let totalValue = 0;
 
-  if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-    totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
-  } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
-    const fechaActual = $('cargaFecha')?.value || '';
+          if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+            totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+          } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
+            const fechaActual = $('cargaFecha')?.value || '';
 
-    if (col.key === 'totalSecando') {
-      totalValue = getBanadoSecandoRunningTotal(
-        fechaActual,
-        row.productoId,
-        group.key,
-        row.stockInicial || {}
-      );
-    } else if (col.key === 'total') {
-      totalValue = getBanadoRunningTotal(
-        fechaActual,
-        row.productoId,
-        group.key,
-        row.stockInicial || {}
-      );
-    }
-  } else {
-    totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
-  }
+            if (col.key === 'totalSecando') {
+              totalValue = getBanadoSecandoRunningTotal(
+                fechaActual,
+                row.productoId,
+                group.key,
+                row.stockInicial || {}
+              );
+            } else if (col.key === 'total') {
+              totalValue = getBanadoRunningTotal(
+                fechaActual,
+                row.productoId,
+                group.key,
+                row.stockInicial || {}
+              );
+            }
+          } else {
+            totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+          }
 
-  rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
-  columnTotals[`${group.key}_${col.key}`] += totalValue;
-} else {
+          rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
+          columnTotals[`${group.key}_${col.key}`] += totalValue;
+        } else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
 
@@ -1106,6 +1316,10 @@ async function cargarReporteDiario() {
       toast('Esta fecha ya fue cargada para esta fábrica. Solo lectura.');
     }
   } else {
+    const monthValue = String(fecha).slice(0, 7);
+    let rows = buildDefaultRows(fabrica);
+    rows = applyPreviousMonthInitialStock(rows, monthValue);
+
     state.reporteActual = {
       id,
       fecha,
@@ -1113,9 +1327,14 @@ async function cargarReporteDiario() {
       estado: 'borrador',
       creadoPor: state.currentUser?.email || '',
       idYaExistia: false,
-      rows: buildDefaultRows(fabrica)
+      rows
     };
-    toast('Nueva planilla preparada.');
+
+    toast(
+      monthValue === MANUAL_INITIAL_MONTH
+        ? 'Nueva planilla preparada. Este mes usa stock inicial manual.'
+        : 'Nueva planilla preparada con stock inicial del mes anterior.'
+    );
   }
 
   renderCargaDiaria();
@@ -1183,129 +1402,6 @@ async function guardarReporte(estado = 'borrador') {
   await cargarReporteDiario();
 }
 
-function hasAnyNonZeroValue(obj = {}) {
-  return Object.values(obj || {}).some((value) => num(value) !== 0);
-}
-
-function getMergedGroupDataForDay(fecha, productoId, groupKey) {
-  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
-  let fallback = null;
-
-  for (const reporte of reportesDelDia) {
-    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (!row?.groups?.[groupKey]) continue;
-
-    const groupData = row.groups[groupKey];
-    if (!fallback) fallback = groupData;
-
-    if (hasAnyNonZeroValue(groupData)) {
-      return groupData;
-    }
-  }
-
-  return fallback || createEmptyGroupData(groupKey);
-}
-
-function getFirstRowForMonth(productoId, monthValue) {
-  const reportesDelMes = state.reportes
-    .filter((r) => r.fecha?.startsWith(monthValue))
-    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
-
-  for (const reporte of reportesDelMes) {
-    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (row) return normalizeExistingRow(row);
-  }
-
-  return null;
-}
-
-function getDateParts(dateStr) {
-  const [year, month, day] = String(dateStr).split('-').map(Number);
-  return { year, month, day };
-}
-
-function buildDateStr(year, month, day) {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
-  const { year, month, day } = getDateParts(dayStr);
-  let total = num(stockInicial?.alvearChica) + num(stockInicial?.alvearGrande);
-
-  for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getMergedGroupDataForDay(currentDate, productoId, 'alvear');
-    total += num(rowData?.alv);
-  }
-
-  return total;
-}
-function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
-  const currentFecha = $('cargaFecha')?.value;
-  let currentFabrica = $('cargaFabrica')?.value;
-
-  if (!currentFabrica && state.perfil?.fabrica) {
-    currentFabrica = state.perfil.fabrica;
-  }
-
-  const isBanadoGroup = groupKey === 'banadoChica' || groupKey === 'banadoGrande';
-
-  if (
-    state.reporteActual &&
-    state.reporteActual.fecha === fecha &&
-    currentFabrica === 'banado' &&
-    isBanadoGroup
-  ) {
-    const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
-    if (row?.groups?.[groupKey]) {
-      return row.groups[groupKey];
-    }
-  }
-
-  return getMergedGroupDataForDay(fecha, productoId, groupKey);
-}
-
-function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
-  const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    groupKey === 'banadoChica'
-      ? num(stockInicial?.secandoChica)
-      : num(stockInicial?.secandoGrande);
-
-  for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
-
-    total += num(rowData?.secando) - num(rowData?.cosecha);
-  }
-
-  return total;
-}
-
-function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
-  const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    groupKey === 'banadoChica'
-      ? num(stockInicial?.banadoChica)
-      : num(stockInicial?.banadoGrande);
-
-  for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
-
-    total +=
-      num(rowData?.banadoPlus) +
-      num(rowData?.masMenos) +
-      num(rowData?.cosecha) -
-      num(rowData?.salida) +
-      num(rowData?.dif);
-  }
-
-  return total;
-}
-
 function renderGerenciaExcel() {
   const table = $('tablaGerenciaExcel');
   if (!table) return;
@@ -1351,15 +1447,7 @@ function renderGerenciaExcel() {
   productos.forEach((producto) => {
     let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;
 
-    const firstRow = getFirstRowForMonth(producto.id, monthValue);
-    const stockInicial = firstRow?.stockInicial || {
-      alvearChica: 0,
-      alvearGrande: 0,
-      moronChica: 0,
-      moronGrande: 0,
-      banadoChica: 0,
-      banadoGrande: 0
-    };
+    const stockInicial = getInitialStockForMonth(producto.id, monthValue);
 
     INITIAL_STOCK_COLUMNS.forEach((col) => {
       row += `<td>${num(stockInicial?.[col.key])}</td>`;
@@ -1374,31 +1462,31 @@ function renderGerenciaExcel() {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
 
         group.columns.forEach((col) => {
-         if (col.readonly) {
-  let totalValue = computeGroupTotal(group.key, rowData || {});
+          if (col.readonly) {
+            let totalValue = computeGroupTotal(group.key, rowData || {});
 
-  if (group.key === 'alvear') {
-    totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
-  } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
-    if (col.key === 'totalSecando') {
-      totalValue = getBanadoSecandoRunningTotal(
-        dayStr,
-        producto.id,
-        group.key,
-        stockInicial
-      );
-    } else if (col.key === 'total') {
-      totalValue = getBanadoRunningTotal(
-        dayStr,
-        producto.id,
-        group.key,
-        stockInicial
-      );
-    }
-  }
+            if (group.key === 'alvear') {
+              totalValue = getAlvearRunningTotal(dayStr, producto.id);
+            } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
+              if (col.key === 'totalSecando') {
+                totalValue = getBanadoSecandoRunningTotal(
+                  dayStr,
+                  producto.id,
+                  group.key,
+                  stockInicial
+                );
+              } else if (col.key === 'total') {
+                totalValue = getBanadoRunningTotal(
+                  dayStr,
+                  producto.id,
+                  group.key,
+                  stockInicial
+                );
+              }
+            }
 
-  row += `<td class="${group.colorClass}">${totalValue}</td>`;
-}else {
+            row += `<td class="${group.colorClass}">${totalValue}</td>`;
+          } else {
             row += `<td class="${group.colorClass}">${num(rowData?.[col.key])}</td>`;
           }
         });
