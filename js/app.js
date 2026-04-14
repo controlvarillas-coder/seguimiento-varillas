@@ -35,7 +35,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 
-const MANUAL_INITIAL_MONTH = '2026-04'; // excepción manual
+const MANUAL_INITIAL_MONTH = '2026-04';
 
 const state = {
   currentUser: null,
@@ -985,6 +985,28 @@ function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) 
   return total;
 }
 
+function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'moronChicaInterna'
+      ? num(stockInicial?.moronChica)
+      : num(stockInicial?.moronGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getMergedGroupDataForDay(currentDate, productoId, groupKey);
+
+    total +=
+      num(rowData?.entrada) +
+      num(rowData?.sobrante) -
+      num(rowData?.pEmpaq) +
+      num(rowData?.diferencia);
+  }
+
+  return total;
+}
+
 function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return null;
 
@@ -1043,9 +1065,12 @@ function getInitialStockForMonth(productoId, monthValue) {
   };
 }
 
-function getAlvearRunningTotal(dayStr, productoId) {
+function getAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
-  let total = 0;
+
+  let total =
+    num(stockInicial?.alvearChica) +
+    num(stockInicial?.alvearGrande);
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
@@ -1154,7 +1179,17 @@ function renderCargaDiaria() {
           let totalValue = 0;
 
           if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-            totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+            if (col.key === 'salidaTotal') {
+              totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+            } else if (col.key === 'total') {
+              const fechaActual = $('cargaFecha')?.value || '';
+              totalValue = getMoronRunningTotal(
+                fechaActual,
+                row.productoId,
+                group.key,
+                row.stockInicial || {}
+              );
+            }
           } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
             const fechaActual = $('cargaFecha')?.value || '';
 
@@ -1173,6 +1208,13 @@ function renderCargaDiaria() {
                 row.stockInicial || {}
               );
             }
+          } else if (group.key === 'alvear') {
+            const fechaActual = $('cargaFecha')?.value || '';
+            totalValue = getAlvearRunningTotal(
+              fechaActual,
+              row.productoId,
+              row.stockInicial || {}
+            );
           } else {
             totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
           }
@@ -1466,7 +1508,18 @@ function renderGerenciaExcel() {
             let totalValue = computeGroupTotal(group.key, rowData || {});
 
             if (group.key === 'alvear') {
-              totalValue = getAlvearRunningTotal(dayStr, producto.id);
+              totalValue = getAlvearRunningTotal(dayStr, producto.id, stockInicial);
+            } else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+              if (col.key === 'salidaTotal') {
+                totalValue = computeMoronInternalReadonly(group.key, col.key, rowData || {});
+              } else if (col.key === 'total') {
+                totalValue = getMoronRunningTotal(
+                  dayStr,
+                  producto.id,
+                  group.key,
+                  stockInicial
+                );
+              }
             } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
               if (col.key === 'totalSecando') {
                 totalValue = getBanadoSecandoRunningTotal(
