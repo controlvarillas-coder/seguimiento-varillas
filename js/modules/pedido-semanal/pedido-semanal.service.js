@@ -75,6 +75,8 @@ export function createEmptyWeeklyRow(producto) {
     alvearDiaProduccion: '',
     alvearObservacion: '',
     gerenciaObservacion: '',
+    entregadoChica: false,
+    entregadoGrande: false,
     historial: []
   };
 }
@@ -97,6 +99,8 @@ export function normalizeWeeklyRows(rows = [], productos = []) {
       alvearDiaProduccion: String(row.alvearDiaProduccion || ''),
       alvearObservacion: String(row.alvearObservacion || ''),
       gerenciaObservacion: String(row.gerenciaObservacion || ''),
+      entregadoChica: !!row.entregadoChica,
+      entregadoGrande: !!row.entregadoGrande,
       historial: Array.isArray(row.historial) ? row.historial : []
     });
   });
