@@ -23,6 +23,8 @@ export function renderWeekOptions(selectEl, weeks = []) {
 
   if (weeks.some((w) => w.key === currentValue)) {
     selectEl.value = currentValue;
+  } else if (!currentValue && weeks.length) {
+    selectEl.value = weeks[0].key;
   }
 }
 
@@ -63,12 +65,25 @@ function renderDaySelect({ rowIndex, fieldKey, value, disabled = false }) {
   `;
 }
 
+function renderCheckbox({ rowIndex, fieldKey, checked = false, disabled = false }) {
+  return `
+    <input
+      type="checkbox"
+      data-row="${rowIndex}"
+      data-field="${fieldKey}"
+      ${checked ? 'checked' : ''}
+      ${disabled ? 'disabled' : ''}
+    />
+  `;
+}
+
 export function renderPedidoSemanalTable(tableEl, {
   rows = [],
   canEditField,
   selectedRowIndex = null,
   onFieldChange,
-  onSelectHistory
+  onSelectHistory,
+  viewMode = 'gerencia'
 }) {
   if (!tableEl) return;
 
@@ -126,6 +141,24 @@ export function renderPedidoSemanalTable(tableEl, {
         </td>
 
         <td class="pedido-col-alvear">
+          ${renderCheckbox({
+            rowIndex,
+            fieldKey: 'entregadoChica',
+            checked: !!row.entregadoChica,
+            disabled: !canEditField('entregadoChica')
+          })}
+        </td>
+
+        <td class="pedido-col-alvear">
+          ${renderCheckbox({
+            rowIndex,
+            fieldKey: 'entregadoGrande',
+            checked: !!row.entregadoGrande,
+            disabled: !canEditField('entregadoGrande')
+          })}
+        </td>
+
+        <td class="pedido-col-alvear">
           ${renderTextarea({
             rowIndex,
             fieldKey: 'alvearObservacion',
@@ -155,7 +188,7 @@ export function renderPedidoSemanalTable(tableEl, {
   }).join('');
 
   if (!body) {
-    body = `<tr><td colspan="8">Sin productos.</td></tr>`;
+    body = `<tr><td colspan="10">Sin productos para mostrar.</td></tr>`;
   }
 
   tableEl.innerHTML = `
@@ -165,7 +198,9 @@ export function renderPedidoSemanalTable(tableEl, {
         <th class="pedido-col-moron">PEDIDO MORÓN CH</th>
         <th class="pedido-col-moron">PEDIDO MORÓN GR</th>
         <th class="pedido-col-moron">OBS. MORÓN</th>
-        <th class="pedido-col-alvear">DÍA PRODUCCIÓN ALVEAR</th>
+        <th class="pedido-col-alvear">DÍA PROD. ALVEAR</th>
+        <th class="pedido-col-alvear">ENTREGADO CH</th>
+        <th class="pedido-col-alvear">ENTREGADO GR</th>
         <th class="pedido-col-alvear">OBS. ALVEAR</th>
         <th class="pedido-col-gerencia">OBS. GERENCIA</th>
         <th class="pedido-readonly">HISTORIAL</th>
@@ -174,11 +209,19 @@ export function renderPedidoSemanalTable(tableEl, {
     <tbody>${body}</tbody>
   `;
 
-  tableEl.querySelectorAll('[data-field]').forEach((el) => {
+  tableEl.querySelectorAll('input[type="text"], textarea, select').forEach((el) => {
     el.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
       const fieldKey = e.target.dataset.field;
       onFieldChange(rowIndex, fieldKey, e.target.value);
+    });
+  });
+
+  tableEl.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      const rowIndex = Number(e.target.dataset.row);
+      const fieldKey = e.target.dataset.field;
+      onFieldChange(rowIndex, fieldKey, e.target.checked);
     });
   });
 
