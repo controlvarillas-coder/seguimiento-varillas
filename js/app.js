@@ -1662,11 +1662,20 @@ function canEditPedidoField(fieldKey) {
 
   if (isMoron) {
     if (moronLocked) return false;
-    return [PEDIDO_FIELDS.MORON_CHICA, PEDIDO_FIELDS.MORON_GRANDE, PEDIDO_FIELDS.MORON_OBS].includes(fieldKey);
+    return [
+      'moronPedidoChica',
+      'moronPedidoGrande',
+      'moronObservacion'
+    ].includes(fieldKey);
   }
 
   if (isAlvear) {
-    return [PEDIDO_FIELDS.ALVEAR_DIA, PEDIDO_FIELDS.ALVEAR_OBS].includes(fieldKey);
+    return [
+      'alvearDiaProduccion',
+      'entregadoChica',
+      'entregadoGrande',
+      'alvearObservacion'
+    ].includes(fieldKey);
   }
 
   return false;
@@ -1683,6 +1692,57 @@ function getPedidoEstadoText() {
   return 'Borrador editable';
 }
 
+function getPedidoSemanalViewMode() {
+  if (state.perfil?.rol === 'gerencia') return 'gerencia';
+  if (state.perfil?.fabrica === 'moron') return 'moron';
+  if (state.perfil?.fabrica === 'alvear') return 'alvear';
+  return 'otro';
+}
+
+function getPedidoSemanalRowsForView(rows = []) {
+  const viewMode = getPedidoSemanalViewMode();
+
+  if (viewMode === 'gerencia') return rows;
+  if (viewMode === 'moron') return rows;
+
+  if (viewMode === 'alvear') {
+    return rows.filter((row) =>
+      num(row.moronPedidoChica) > 0 || num(row.moronPedidoGrande) > 0
+    );
+  }
+
+  return [];
+}
+
+function hasWeeklyPendingRows(rows = []) {
+  return rows.some((row) =>
+    (num(row.moronPedidoChica) > 0 && !row.entregadoChica) ||
+    (num(row.moronPedidoGrande) > 0 && !row.entregadoGrande)
+  );
+}
+
+function getWeeklyPendingDatesForMonth(monthValue) {
+  const weeks = buildWeeksForMonth(monthValue);
+  const pendingDates = new Set();
+
+  weeks.forEach((week) => {
+    const id = getWeekDocId(monthValue, week.key);
+    const current = state.pedidoSemanalActual?.id === id ? state.pedidoSemanalActual : null;
+
+    let rows = current?.rows || [];
+    if (!rows.length) {
+      const docRows = [];
+      const existingWeekly = state.pedidosSemanalesCache?.[id];
+      if (existingWeekly?.rows) rows = existingWeekly.rows;
+    }
+
+    if (hasWeeklyPendingRows(rows)) {
+      pendingDates.add(week.start);
+    }
+  });
+
+  return pendingDates;
+}
 function ensurePedidoDraft() {
   if (state.pedidoSemanalActual) return;
 
@@ -1805,13 +1865,31 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
   ensurePedidoDraft();
   if (!state.pedidoSemanalActual) return;
 
-  const row = state.pedidoSemanalActual.rows[rowIndex];
-  if (!row) return;
+  const visibleRows = getPedidoSemanalRowsForView(state.pedidoSemanalActual.rows || []);
+  const visibleRow = visibleRows[rowIndex];
+  if (!visibleRow) return;
 
+  const realIndex = state.pedidoSemanalActual.rows.findIndex((r) => r.productoId === visibleRow.productoId);
+  if (realIndex < 0) return;
+
+  const row = state.pedidoSemanalActual.rows[realIndex];
   const oldValue = row[fieldKey] ?? '';
-  const normalizedNewValue = typeof oldValue === 'number' || fieldKey === PEDIDO_FIELDS.MORON_CHICA || fieldKey === PEDIDO_FIELDS.MORON_GRANDE
-    ? num(newValue)
-    : String(newValue || '');
+
+  let normalizedNewValue = newValue;
+
+  if ([
+    'moronPedidoChica',
+    'moronPedidoGrande'
+  ].includes(fieldKey)) {
+    normalizedNewValue = num(newValue);
+  } else if ([
+    'entregadoChica',
+    'entregadoGrande'
+  ].includes(fieldKey)) {
+    normalizedNewValue = !!newValue;
+  } else {
+    normalizedNewValue = String(newValue || '');
+  }
 
   row[fieldKey] = normalizedNewValue;
 
@@ -1837,10 +1915,13 @@ function renderPedidoSemanal() {
     statusBox.textContent = getPedidoEstadoText();
   }
 
-  const rows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
+  const allRows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
+  const rows = getPedidoSemanalRowsForView(allRows);
+  const viewMode = getPedidoSemanalViewMode();
 
   renderPedidoSemanalTable(table, {
     rows,
+    viewMode,
     canEditField,
     selectedRowIndex: state.pedidoSemanalSelectedRow,
     onFieldChange: handlePedidoFieldChange,
@@ -1870,6 +1951,12 @@ async function refreshAll() {
     ...reporte,
     rows: (reporte.rows || []).map(normalizeExistingRow)
   }));
+
+ const pedidosSemanales = await loadCollection('pedidos_semanales');
+  state.pedidosSemanalesCache = {};
+  pedidosSemanales.forEach((item) => {
+    state.pedidosSemanalesCache[item.id] = item;
+  });
 
   state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
 
