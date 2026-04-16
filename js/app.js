@@ -2090,3 +2090,420 @@ onAuthStateChanged(auth, async (user) => {
 
 mountNavigation();
 bindEvents();
+
+/* =========================================================
+   app.js COMPLETO + CARGA MASIVA EXCEL
+   PEGAR AL FINAL DE TU app.js ACTUAL
+   (NO reemplaza todo tu sistema, agrega funcionalidad)
+========================================================= */
+
+/* =========================================================
+   CONFIG CARGA MASIVA
+========================================================= */
+
+const MASS_UPLOAD_COLUMN_MAPS = {
+  alvear: {
+    alv: ['ALV'],
+    cajaChica: {
+      alvPlus: ['ALV_PLUS_CH'],
+      alvMinus: ['ALV_MINUS_CH'],
+      dif: ['DIF_CH']
+    },
+    cajaGrandeAlv: {
+      alvPlus: ['ALV_PLUS_GR'],
+      alvMinus: ['ALV_MINUS_GR'],
+      dif: ['DIF_GR']
+    }
+  },
+
+  banado: {
+    banadoChica: {
+      banadoPlus: ['BANADO_PLUS_CH'],
+      secando: ['SECANDO_CH'],
+      cosecha: ['COSECHA_CH'],
+      salida: ['SALIDA_CH'],
+      dif: ['DIF_CH']
+    },
+    banadoGrande: {
+      banadoPlus: ['BANADO_PLUS_GR'],
+      secando: ['SECANDO_GR'],
+      cosecha: ['COSECHA_GR'],
+      salida: ['SALIDA_GR'],
+      dif: ['DIF_GR']
+    }
+  },
+
+  moron: {
+    moronChicaInterna: {
+      totalBase: ['TOTAL_BASE_CH'],
+      entrada: ['ENTRADA_CH'],
+      sobrante: ['SOBRANTE_CH'],
+      pEmpaq: ['P_EMPAQ_CH'],
+      diferencia: ['DIFERENCIA_CH'],
+      fallados: ['FALLADOS_CH'],
+      devoluciones: ['DEVOLUCIONES_CH']
+    },
+
+    moronGrandeInterna: {
+      totalBase: ['TOTAL_BASE_GR'],
+      entrada: ['ENTRADA_GR'],
+      sobrante: ['SOBRANTE_GR'],
+      pEmpaq: ['P_EMPAQ_GR'],
+      diferencia: ['DIFERENCIA_GR'],
+      fallados: ['FALLADOS_GR'],
+      devoluciones: ['DEVOLUCIONES_GR']
+    }
+  }
+};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function normalizeHeader(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeProduct(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function numExcel(v) {
+  if (v === '' || v === null || v === undefined) return 0;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function findHeader(headers, aliases = []) {
+  const normalized = headers.map(normalizeHeader);
+
+  for (const alias of aliases) {
+    const idx = normalized.indexOf(normalizeHeader(alias));
+    if (idx >= 0) return idx;
+  }
+
+  return -1;
+}
+
+function getCurrentFactory() {
+  let fabrica = $('cargaFabrica')?.value;
+
+  if (!fabrica && state.perfil?.fabrica) {
+    fabrica = state.perfil.fabrica;
+  }
+
+  return fabrica;
+}
+
+
+/* =========================================================
+   CREAR BORRADOR SI NO EXISTE
+========================================================= */
+
+function ensureMassiveDraft() {
+  const fecha = $('cargaFecha')?.value;
+  const fabrica = getCurrentFactory();
+
+  if (!fecha || !fabrica) {
+    toast('Seleccioná fecha y fábrica.');
+    return false;
+  }
+
+  if (!state.reporteActual) {
+    state.reporteActual = {
+      id: `${fecha}_${fabrica}`,
+      fecha,
+      fabrica,
+      estado: 'borrador',
+      rows: buildDefaultRows(fabrica)
+    };
+  }
+
+  return true;
+}
+
+
+/* =========================================================
+   DESCARGAR PLANTILLA
+========================================================= */
+
+function getTemplateHeaders(fabrica) {
+
+  if (fabrica === 'alvear') {
+    return [
+      'PRODUCTO',
+      'ALV',
+      'ALV_PLUS_CH',
+      'ALV_MINUS_CH',
+      'DIF_CH',
+      'ALV_PLUS_GR',
+      'ALV_MINUS_GR',
+      'DIF_GR'
+    ];
+  }
+
+  if (fabrica === 'banado') {
+    return [
+      'PRODUCTO',
+      'BANADO_PLUS_CH',
+      'SECANDO_CH',
+      'COSECHA_CH',
+      'SALIDA_CH',
+      'DIF_CH',
+      'BANADO_PLUS_GR',
+      'SECANDO_GR',
+      'COSECHA_GR',
+      'SALIDA_GR',
+      'DIF_GR'
+    ];
+  }
+
+  if (fabrica === 'moron') {
+    return [
+      'PRODUCTO',
+      'TOTAL_BASE_CH',
+      'ENTRADA_CH',
+      'SOBRANTE_CH',
+      'P_EMPAQ_CH',
+      'DIFERENCIA_CH',
+      'FALLADOS_CH',
+      'DEVOLUCIONES_CH',
+      'TOTAL_BASE_GR',
+      'ENTRADA_GR',
+      'SOBRANTE_GR',
+      'P_EMPAQ_GR',
+      'DIFERENCIA_GR',
+      'FALLADOS_GR',
+      'DEVOLUCIONES_GR'
+    ];
+  }
+
+  return ['PRODUCTO'];
+}
+
+function descargarPlantillaCargaMasiva() {
+
+  const fabrica = getCurrentFactory();
+
+  if (!fabrica) {
+    toast('Seleccioná fábrica.');
+    return;
+  }
+
+  const headers = getTemplateHeaders(fabrica);
+
+  const productos = getProductosParaFabrica(fabrica);
+
+  const rows = [
+    headers,
+    ...productos.map(p => {
+      const row = new Array(headers.length).fill('');
+      row[0] = p.nombre;
+      return row;
+    })
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Carga');
+
+  XLSX.writeFile(wb, `plantilla_${fabrica}.xlsx`);
+}
+
+
+/* =========================================================
+   IMPORTAR EXCEL
+========================================================= */
+
+function procesarCargaMasivaExcel() {
+
+  const file = $('fileCargaMasiva')?.files?.[0];
+  const fabrica = getCurrentFactory();
+
+  if (!file) {
+    toast('Seleccioná archivo.');
+    return;
+  }
+
+  if (!ensureMassiveDraft()) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+
+    const data = new Uint8Array(e.target.result);
+
+    const workbook = XLSX.read(data, { type: 'array' });
+
+    const ws = workbook.Sheets[workbook.SheetNames[0]];
+
+    const rows = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: ''
+    });
+
+    if (rows.length < 2) {
+      toast('Excel vacío.');
+      return;
+    }
+
+    const headers = rows[0];
+
+    const idxProducto = findHeader(headers, ['PRODUCTO']);
+
+    if (idxProducto < 0) {
+      toast('Debe existir columna PRODUCTO.');
+      return;
+    }
+
+    const mapRows = new Map();
+
+    state.reporteActual.rows.forEach((r, i) => {
+      mapRows.set(normalizeProduct(r.productoNombre), i);
+    });
+
+    let cargados = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+
+      const row = rows[i];
+
+      const producto = normalizeProduct(row[idxProducto]);
+
+      if (!producto) continue;
+
+      const targetIndex = mapRows.get(producto);
+
+      if (targetIndex === undefined) continue;
+
+      const target = state.reporteActual.rows[targetIndex];
+
+      if (fabrica === 'alvear') {
+
+        const idxAlv = findHeader(headers, ['ALV']);
+        if (idxAlv >= 0) target.groups.alvear.alv = numExcel(row[idxAlv]);
+
+        target.groups.cajaChica.alvPlus =
+          numExcel(row[findHeader(headers, ['ALV_PLUS_CH'])]);
+
+        target.groups.cajaChica.alvMinus =
+          numExcel(row[findHeader(headers, ['ALV_MINUS_CH'])]);
+
+        target.groups.cajaChica.dif =
+          numExcel(row[findHeader(headers, ['DIF_CH'])]);
+
+        target.groups.cajaGrandeAlv.alvPlus =
+          numExcel(row[findHeader(headers, ['ALV_PLUS_GR'])]);
+
+        target.groups.cajaGrandeAlv.alvMinus =
+          numExcel(row[findHeader(headers, ['ALV_MINUS_GR'])]);
+
+        target.groups.cajaGrandeAlv.dif =
+          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+      }
+
+      if (fabrica === 'banado') {
+
+        target.groups.banadoChica.banadoPlus =
+          numExcel(row[findHeader(headers, ['BANADO_PLUS_CH'])]);
+
+        target.groups.banadoChica.secando =
+          numExcel(row[findHeader(headers, ['SECANDO_CH'])]);
+
+        target.groups.banadoChica.cosecha =
+          numExcel(row[findHeader(headers, ['COSECHA_CH'])]);
+
+        target.groups.banadoChica.salida =
+          numExcel(row[findHeader(headers, ['SALIDA_CH'])]);
+
+        target.groups.banadoChica.dif =
+          numExcel(row[findHeader(headers, ['DIF_CH'])]);
+
+        target.groups.banadoGrande.banadoPlus =
+          numExcel(row[findHeader(headers, ['BANADO_PLUS_GR'])]);
+
+        target.groups.banadoGrande.secando =
+          numExcel(row[findHeader(headers, ['SECANDO_GR'])]);
+
+        target.groups.banadoGrande.cosecha =
+          numExcel(row[findHeader(headers, ['COSECHA_GR'])]);
+
+        target.groups.banadoGrande.salida =
+          numExcel(row[findHeader(headers, ['SALIDA_GR'])]);
+
+        target.groups.banadoGrande.dif =
+          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+      }
+
+      if (fabrica === 'moron') {
+
+        target.groups.moronChicaInterna.totalBase =
+          numExcel(row[findHeader(headers, ['TOTAL_BASE_CH'])]);
+
+        target.groups.moronChicaInterna.entrada =
+          numExcel(row[findHeader(headers, ['ENTRADA_CH'])]);
+
+        target.groups.moronChicaInterna.sobrante =
+          numExcel(row[findHeader(headers, ['SOBRANTE_CH'])]);
+
+        target.groups.moronChicaInterna.pEmpaq =
+          numExcel(row[findHeader(headers, ['P_EMPAQ_CH'])]);
+
+        target.groups.moronChicaInterna.diferencia =
+          numExcel(row[findHeader(headers, ['DIFERENCIA_CH'])]);
+
+        target.groups.moronGrandeInterna.totalBase =
+          numExcel(row[findHeader(headers, ['TOTAL_BASE_GR'])]);
+
+        target.groups.moronGrandeInterna.entrada =
+          numExcel(row[findHeader(headers, ['ENTRADA_GR'])]);
+
+        target.groups.moronGrandeInterna.sobrante =
+          numExcel(row[findHeader(headers, ['SOBRANTE_GR'])]);
+
+        target.groups.moronGrandeInterna.pEmpaq =
+          numExcel(row[findHeader(headers, ['P_EMPAQ_GR'])]);
+
+        target.groups.moronGrandeInterna.diferencia =
+          numExcel(row[findHeader(headers, ['DIFERENCIA_GR'])]);
+      }
+
+      cargados++;
+    }
+
+    renderCargaDiaria();
+
+    $('estadoCargaMasiva').textContent =
+      `Importación correcta. ${cargados} productos cargados.`;
+
+    toast('Carga masiva completada.');
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+
+/* =========================================================
+   EVENTOS
+========================================================= */
+
+document.addEventListener('DOMContentLoaded', () => {
+
+  $('btnDescargarPlantillaCarga')
+    ?.addEventListener('click', descargarPlantillaCargaMasiva);
+
+  $('btnProcesarCargaMasiva')
+    ?.addEventListener('click', procesarCargaMasivaExcel);
+
+});
