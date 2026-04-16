@@ -199,12 +199,11 @@ const INPUT_GROUP_BY_FABRICA = {
 };
 
 const PEDIDO_FIELDS = {
-  MORON_CHICA: 'moronPedidoChica',
-  MORON_GRANDE: 'moronPedidoGrande',
-  MORON_OBS: 'moronObservacion',
-  ALVEAR_DIA: 'alvearDiaProduccion',
-  ALVEAR_OBS: 'alvearObservacion',
-  GERENCIA_OBS: 'gerenciaObservacion'
+  CANTIDAD_SOLICITADA: 'cantidadSolicitada',
+  FECHA_ENTREGA: 'fechaEntrega',
+  CANTIDAD_ENTREGADA: 'cantidadEntregada',
+  MOTIVO: 'motivoIncumplimiento',
+  MOTIVO_OTRO: 'motivoOtro'
 };
 
 const els = {
@@ -245,16 +244,17 @@ function setSection(sectionId) {
     gerencia: 'Excel gerencia',
     carga: 'Carga diaria',
     usuarios: 'Usuarios',
-    'pedido-semanal': 'Pedido semanal'
+    'pedido-semanal': 'ORDEN DE FABRICACION',
+    reporte: 'Reporte'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
 
   if (sectionId === 'pedido-semanal') {
+    refreshPedidoWeeks();
     renderPedidoSemanal();
   }
 }
-
 function mountNavigation() {
   document.querySelectorAll('.nav-link').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1657,24 +1657,22 @@ function canEditPedidoField(fieldKey) {
   const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
   const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
   const moronLocked = !!state.pedidoSemanalActual?.moronLocked;
+  const alvearLocked = !!state.pedidoSemanalActual?.alvearLocked;
 
   if (isGerencia) return true;
 
   if (isMoron) {
     if (moronLocked) return false;
-    return [
-      'moronPedidoChica',
-      'moronPedidoGrande',
-      'moronObservacion'
-    ].includes(fieldKey);
+    return [PEDIDO_FIELDS.CANTIDAD_SOLICITADA].includes(fieldKey);
   }
 
   if (isAlvear) {
+    if (alvearLocked) return false;
     return [
-      'alvearDiaProduccion',
-      'entregadoChica',
-      'entregadoGrande',
-      'alvearObservacion'
+      PEDIDO_FIELDS.FECHA_ENTREGA,
+      PEDIDO_FIELDS.CANTIDAD_ENTREGADA,
+      PEDIDO_FIELDS.MOTIVO,
+      PEDIDO_FIELDS.MOTIVO_OTRO
     ].includes(fieldKey);
   }
 
@@ -1706,9 +1704,7 @@ function getPedidoSemanalRowsForView(rows = []) {
   if (viewMode === 'moron') return rows;
 
   if (viewMode === 'alvear') {
-    return rows.filter((row) =>
-      num(row.moronPedidoChica) > 0 || num(row.moronPedidoGrande) > 0
-    );
+    return rows.filter((row) => num(row.cantidadSolicitada) > 0);
   }
 
   return [];
@@ -1817,10 +1813,16 @@ async function guardarPedidoSemanal() {
   }
 
   const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
+  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
   const isGerencia = state.perfil?.rol === 'gerencia';
 
   if (isMoron && state.pedidoSemanalActual.moronLocked) {
-    toast('Morón ya guardó esta semana y no puede modificarla.');
+    toast('Morón ya confirmó esta semana.');
+    return;
+  }
+
+  if (isAlvear && state.pedidoSemanalActual.alvearLocked) {
+    toast('Alvear ya cerró esta semana.');
     return;
   }
 
@@ -1835,6 +1837,7 @@ async function guardarPedidoSemanal() {
     weekStart: weekMeta.start,
     weekEnd: weekMeta.end,
     moronLocked: isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
+    alvearLocked: isGerencia ? !!state.pedidoSemanalActual.alvearLocked : (isAlvear ? true : !!state.pedidoSemanalActual.alvearLocked),
     updatedBy: state.currentUser?.email || '',
     updatedAtText: new Date().toISOString(),
     updatedAt: serverTimestamp(),
@@ -1857,7 +1860,7 @@ async function guardarPedidoSemanal() {
     ...payload
   };
 
-  toast('Pedido semanal guardado.');
+  toast('Orden de fabricación guardada.');
   renderPedidoSemanal();
 }
 
@@ -1877,16 +1880,8 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
 
   let normalizedNewValue = newValue;
 
-  if ([
-    'moronPedidoChica',
-    'moronPedidoGrande'
-  ].includes(fieldKey)) {
+  if ([PEDIDO_FIELDS.CANTIDAD_SOLICITADA, PEDIDO_FIELDS.CANTIDAD_ENTREGADA].includes(fieldKey)) {
     normalizedNewValue = num(newValue);
-  } else if ([
-    'entregadoChica',
-    'entregadoGrande'
-  ].includes(fieldKey)) {
-    normalizedNewValue = !!newValue;
   } else {
     normalizedNewValue = String(newValue || '');
   }
