@@ -1,14 +1,16 @@
 import { getHistoryTitle } from './pedido-semanal.service.js';
 
-const DIAS_PRODUCCION = [
+const MOTIVOS = [
   '',
-  'Lunes',
-  'Martes',
-  'Miércoles',
-  'Jueves',
-  'Viernes',
-  'Sábado',
-  'Domingo'
+  'Falta de palitero',
+  'Falta de esencia',
+  'Falta de insumos',
+  'Falta de personal',
+  'Problema de secado',
+  'Rotura / merma',
+  'Demora de producción',
+  'Prioridad a otro pedido',
+  'Otro'
 ];
 
 export function renderWeekOptions(selectEl, weeks = []) {
@@ -43,6 +45,19 @@ function renderTextInput({ rowIndex, fieldKey, value, disabled = false, numeric 
   `;
 }
 
+function renderDateInput({ rowIndex, fieldKey, value, disabled = false }) {
+  return `
+    <input
+      type="date"
+      class="excel-input pedido-col-alvear"
+      data-row="${rowIndex}"
+      data-field="${fieldKey}"
+      value="${value || ''}"
+      ${disabled ? 'disabled' : ''}
+    />
+  `;
+}
+
 function renderTextarea({ rowIndex, fieldKey, value, disabled = false, extraClass = '' }) {
   return `
     <textarea
@@ -55,25 +70,15 @@ function renderTextarea({ rowIndex, fieldKey, value, disabled = false, extraClas
   `;
 }
 
-function renderDaySelect({ rowIndex, fieldKey, value, disabled = false }) {
+function renderReasonSelect({ rowIndex, fieldKey, value, disabled = false }) {
   return `
     <select data-row="${rowIndex}" data-field="${fieldKey}" ${disabled ? 'disabled' : ''}>
-      ${DIAS_PRODUCCION.map((dia) => `
-        <option value="${dia}" ${String(value || '') === dia ? 'selected' : ''}>${dia || 'Sin definir'}</option>
+      ${MOTIVOS.map((item) => `
+        <option value="${item}" ${String(value || '') === item ? 'selected' : ''}>
+          ${item || 'Sin definir'}
+        </option>
       `).join('')}
     </select>
-  `;
-}
-
-function renderCheckbox({ rowIndex, fieldKey, checked = false, disabled = false }) {
-  return `
-    <input
-      type="checkbox"
-      data-row="${rowIndex}"
-      data-field="${fieldKey}"
-      ${checked ? 'checked' : ''}
-      ${disabled ? 'disabled' : ''}
-    />
   `;
 }
 
@@ -94,87 +99,55 @@ export function renderPedidoSemanalTable(tableEl, {
 
     return `
       <tr class="${isSelected ? 'pedido-row-selected' : ''}">
-        <td class="sticky-col product-name-cell">
-          ${row.productoNombre || '-'}
-          ${historyCount ? '<span class="pedido-history-dot" title="Tiene historial"></span>' : ''}
-        </td>
+        <td class="sticky-col product-name-cell">${row.productoNombre || '-'}</td>
 
         <td class="pedido-col-moron">
           ${renderTextInput({
             rowIndex,
-            fieldKey: 'moronPedidoChica',
-            value: row.moronPedidoChica ?? 0,
-            disabled: !canEditField('moronPedidoChica'),
+            fieldKey: 'cantidadSolicitada',
+            value: row.cantidadSolicitada ?? 0,
+            disabled: !canEditField('cantidadSolicitada'),
             numeric: true,
             extraClass: 'pedido-col-moron'
           })}
         </td>
 
-        <td class="pedido-col-moron">
+        <td class="pedido-col-alvear">
+          ${renderDateInput({
+            rowIndex,
+            fieldKey: 'fechaEntrega',
+            value: row.fechaEntrega || '',
+            disabled: !canEditField('fechaEntrega')
+          })}
+        </td>
+
+        <td class="pedido-col-alvear">
           ${renderTextInput({
             rowIndex,
-            fieldKey: 'moronPedidoGrande',
-            value: row.moronPedidoGrande ?? 0,
-            disabled: !canEditField('moronPedidoGrande'),
+            fieldKey: 'cantidadEntregada',
+            value: row.cantidadEntregada ?? 0,
+            disabled: !canEditField('cantidadEntregada'),
             numeric: true,
-            extraClass: 'pedido-col-moron'
-          })}
-        </td>
-
-        <td class="pedido-col-moron">
-          ${renderTextarea({
-            rowIndex,
-            fieldKey: 'moronObservacion',
-            value: row.moronObservacion || '',
-            disabled: !canEditField('moronObservacion'),
-            extraClass: 'pedido-col-moron'
-          })}
-        </td>
-
-        <td class="pedido-col-alvear">
-          ${renderDaySelect({
-            rowIndex,
-            fieldKey: 'alvearDiaProduccion',
-            value: row.alvearDiaProduccion || '',
-            disabled: !canEditField('alvearDiaProduccion')
-          })}
-        </td>
-
-        <td class="pedido-col-alvear">
-          ${renderCheckbox({
-            rowIndex,
-            fieldKey: 'entregadoChica',
-            checked: !!row.entregadoChica,
-            disabled: !canEditField('entregadoChica')
-          })}
-        </td>
-
-        <td class="pedido-col-alvear">
-          ${renderCheckbox({
-            rowIndex,
-            fieldKey: 'entregadoGrande',
-            checked: !!row.entregadoGrande,
-            disabled: !canEditField('entregadoGrande')
-          })}
-        </td>
-
-        <td class="pedido-col-alvear">
-          ${renderTextarea({
-            rowIndex,
-            fieldKey: 'alvearObservacion',
-            value: row.alvearObservacion || '',
-            disabled: !canEditField('alvearObservacion'),
             extraClass: 'pedido-col-alvear'
           })}
         </td>
 
-        <td class="pedido-col-gerencia">
+        <td class="pedido-col-alvear">
+          ${renderReasonSelect({
+            rowIndex,
+            fieldKey: 'motivoIncumplimiento',
+            value: row.motivoIncumplimiento || '',
+            disabled: !canEditField('motivoIncumplimiento')
+          })}
+        </td>
+
+        <td class="pedido-col-alvear">
           ${renderTextarea({
             rowIndex,
-            fieldKey: 'gerenciaObservacion',
-            value: row.gerenciaObservacion || '',
-            disabled: !canEditField('gerenciaObservacion'),
-            extraClass: 'pedido-col-gerencia'
+            fieldKey: 'motivoOtro',
+            value: row.motivoOtro || '',
+            disabled: !canEditField('motivoOtro'),
+            extraClass: 'pedido-col-alvear'
           })}
         </td>
 
@@ -188,40 +161,29 @@ export function renderPedidoSemanalTable(tableEl, {
   }).join('');
 
   if (!body) {
-    body = `<tr><td colspan="10">Sin productos para mostrar.</td></tr>`;
+    body = `<tr><td colspan="6">Sin productos para mostrar.</td></tr>`;
   }
 
   tableEl.innerHTML = `
     <thead>
       <tr>
         <th class="sticky-col">AROMA</th>
-        <th class="pedido-col-moron">PEDIDO MORÓN CH</th>
-        <th class="pedido-col-moron">PEDIDO MORÓN GR</th>
-        <th class="pedido-col-moron">OBS. MORÓN</th>
-        <th class="pedido-col-alvear">DÍA PROD. ALVEAR</th>
-        <th class="pedido-col-alvear">ENTREGADO CH</th>
-        <th class="pedido-col-alvear">ENTREGADO GR</th>
-        <th class="pedido-col-alvear">OBS. ALVEAR</th>
-        <th class="pedido-col-gerencia">OBS. GERENCIA</th>
+        <th class="pedido-col-moron">CANTIDAD SOLICITADA</th>
+        <th class="pedido-col-alvear">FECHA ENTREGA</th>
+        <th class="pedido-col-alvear">CANTIDAD ENTREGADA</th>
+        <th class="pedido-col-alvear">MOTIVO</th>
+        <th class="pedido-col-alvear">OTRO MOTIVO</th>
         <th class="pedido-readonly">HISTORIAL</th>
       </tr>
     </thead>
     <tbody>${body}</tbody>
   `;
 
-  tableEl.querySelectorAll('input[type="text"], textarea, select').forEach((el) => {
+  tableEl.querySelectorAll('input[type="text"], input[type="date"], textarea, select').forEach((el) => {
     el.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
       const fieldKey = e.target.dataset.field;
       onFieldChange(rowIndex, fieldKey, e.target.value);
-    });
-  });
-
-  tableEl.querySelectorAll('input[type="checkbox"]').forEach((el) => {
-    el.addEventListener('change', (e) => {
-      const rowIndex = Number(e.target.dataset.row);
-      const fieldKey = e.target.dataset.field;
-      onFieldChange(rowIndex, fieldKey, e.target.checked);
     });
   });
 
