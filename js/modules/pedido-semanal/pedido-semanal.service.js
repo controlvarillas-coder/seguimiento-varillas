@@ -69,14 +69,11 @@ export function createEmptyWeeklyRow(producto) {
     productoId: producto.id,
     productoNombre: producto.nombre,
     categoria: producto.categoria || '',
-    moronPedidoChica: 0,
-    moronPedidoGrande: 0,
-    moronObservacion: '',
-    alvearDiaProduccion: '',
-    alvearObservacion: '',
-    gerenciaObservacion: '',
-    entregadoChica: false,
-    entregadoGrande: false,
+    cantidadSolicitada: 0,
+    fechaEntrega: '',
+    cantidadEntregada: 0,
+    motivoIncumplimiento: '',
+    motivoOtro: '',
     historial: []
   };
 }
@@ -93,14 +90,11 @@ export function normalizeWeeklyRows(rows = [], productos = []) {
       productoId: row.productoId || '',
       productoNombre: row.productoNombre || '',
       categoria: row.categoria || '',
-      moronPedidoChica: Number(row.moronPedidoChica || 0),
-      moronPedidoGrande: Number(row.moronPedidoGrande || 0),
-      moronObservacion: String(row.moronObservacion || ''),
-      alvearDiaProduccion: String(row.alvearDiaProduccion || ''),
-      alvearObservacion: String(row.alvearObservacion || ''),
-      gerenciaObservacion: String(row.gerenciaObservacion || ''),
-      entregadoChica: !!row.entregadoChica,
-      entregadoGrande: !!row.entregadoGrande,
+      cantidadSolicitada: Number(row.cantidadSolicitada || 0),
+      fechaEntrega: String(row.fechaEntrega || ''),
+      cantidadEntregada: Number(row.cantidadEntregada || 0),
+      motivoIncumplimiento: String(row.motivoIncumplimiento || ''),
+      motivoOtro: String(row.motivoOtro || ''),
       historial: Array.isArray(row.historial) ? row.historial : []
     });
   });
