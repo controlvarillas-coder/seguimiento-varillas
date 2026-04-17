@@ -6,10 +6,14 @@ import {
   getWeekDocId,
   buildDefaultWeeklyRows,
   normalizeWeeklyRows,
-  pushWeeklyHistory
+  pushWeeklyHistory,
+  evaluateWeekCompletion,
+  computeProductividadAlvear,
+  MOTIVOS_PREDEFINIDOS
 } from './modules/pedido-semanal/pedido-semanal.service.js';
 import {
   renderWeekOptions,
+  renderWeekCalendar,
   renderPedidoSemanalTable,
   renderPedidoSemanalHistory
 } from './modules/pedido-semanal/pedido-semanal.ui.js';
@@ -47,7 +51,8 @@ const state = {
   alertas: [],
   pedidoSemanas: [],
   pedidoSemanalActual: null,
-  pedidoSemanalSelectedRow: null
+  pedidoSemanalSelectedRow: null,
+  pedidosSemanalesCache: {}
 };
 
 const FABRICAS = {
@@ -198,14 +203,6 @@ const INPUT_GROUP_BY_FABRICA = {
   neutro: []
 };
 
-const PEDIDO_FIELDS = {
-  CANTIDAD_SOLICITADA: 'cantidadSolicitada',
-  FECHA_ENTREGA: 'fechaEntrega',
-  CANTIDAD_ENTREGADA: 'cantidadEntregada',
-  MOTIVO: 'motivoIncumplimiento',
-  MOTIVO_OTRO: 'motivoOtro'
-};
-
 const els = {
   loginScreen: $('screen-login'),
   appScreen: $('screen-app'),
@@ -216,6 +213,10 @@ const els = {
   sidebar: $('sidebar'),
   pageTitle: $('pageTitle')
 };
+
+/* ================================================================
+   UTILIDADES
+================================================================ */
 
 function toast(message) {
   if (!els.toast) return;
@@ -244,17 +245,16 @@ function setSection(sectionId) {
     gerencia: 'Excel gerencia',
     carga: 'Carga diaria',
     usuarios: 'Usuarios',
-    'pedido-semanal': 'ORDEN DE FABRICACION',
-    reporte: 'Reporte'
+    'pedido-semanal': 'Orden de fabricación',
+    reportes: 'Reportes'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
 
-  if (sectionId === 'pedido-semanal') {
-    refreshPedidoWeeks();
-    renderPedidoSemanal();
-  }
+  if (sectionId === 'pedido-semanal') renderPedidoSemanal();
+  if (sectionId === 'reportes') renderReportesFiltros();
 }
+
 function mountNavigation() {
   document.querySelectorAll('.nav-link').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -285,7 +285,6 @@ function applyRoleUI() {
 function fillUserCard() {
   const name = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
   const role = state.perfil?.rol || 'usuario';
-
   if ($('miniName')) $('miniName').textContent = name;
   if ($('miniRole')) $('miniRole').textContent = role;
   if ($('avatarMini')) $('avatarMini').textContent = name.trim().charAt(0).toUpperCase();
@@ -294,9 +293,7 @@ function fillUserCard() {
 async function fetchPerfil(email) {
   const q = query(collection(db, 'usuarios'), where('email', '==', email));
   const snap = await getDocs(q);
-
   if (snap.empty) return null;
-
   const d = snap.docs[0];
   return { id: d.id, ...d.data() };
 }
@@ -310,16 +307,16 @@ function num(v) {
   return Number(v || 0);
 }
 
+/* ================================================================
+   PRODUCTOS / ROWS
+================================================================ */
+
 function createEmptyGroupData(groupKey) {
   const allGroups = [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
   const group = allGroups.find((g) => g.key === groupKey);
   const base = {};
   if (!group) return base;
-
-  group.columns.forEach((col) => {
-    if (!col.readonly) base[col.key] = 0;
-  });
-
+  group.columns.forEach((col) => { if (!col.readonly) base[col.key] = 0; });
   return base;
 }
 
@@ -329,22 +326,16 @@ function createEmptyRow(producto) {
     productoNombre: producto.nombre,
     categoria: producto.categoria || '',
     stockInicial: {
-      alvearChica: 0,
-      alvearGrande: 0,
-      moronChica: 0,
-      moronGrande: 0,
-      secandoChica: 0,
-      secandoGrande: 0,
-      banadoChica: 0,
-      banadoGrande: 0
+      alvearChica: 0, alvearGrande: 0,
+      moronChica: 0, moronGrande: 0,
+      secandoChica: 0, secandoGrande: 0,
+      banadoChica: 0, banadoGrande: 0
     },
     groups: {}
   };
-
   [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
     row.groups[group.key] = createEmptyGroupData(group.key);
   });
-
   return row;
 }
 
@@ -373,7 +364,6 @@ function normalizeExistingRow(row = {}) {
   if (row.groups && typeof row.groups === 'object') {
     Object.keys(row.groups).forEach((groupKey) => {
       if (!normalized.groups[groupKey]) return;
-
       Object.keys(row.groups[groupKey] || {}).forEach((fieldKey) => {
         if (fieldKey in normalized.groups[groupKey]) {
           normalized.groups[groupKey][fieldKey] = num(row.groups[groupKey][fieldKey]);
@@ -392,9 +382,10 @@ function getProductosParaFabrica(fabrica) {
 }
 
 function getWeeklyProducts() {
-  return state.productos.filter((p) => p.activo !== false && (
-    (p.visiblePara || []).includes('moron') || (p.visiblePara || []).includes('alvear')
-  ));
+  return state.productos.filter((p) =>
+    p.activo !== false &&
+    ((p.visiblePara || []).includes('moron') || (p.visiblePara || []).includes('alvear'))
+  );
 }
 
 function buildDefaultRows(fabrica) {
@@ -404,12 +395,10 @@ function buildDefaultRows(fabrica) {
 function normalizeRowsForCurrentProducts(rows = [], fabrica = '') {
   const allowedProducts = getProductosParaFabrica(fabrica);
   const byId = new Map();
-
   rows.forEach((row) => {
     const normalized = normalizeExistingRow(row);
     byId.set(normalized.productoId, normalized);
   });
-
   return allowedProducts.map((producto) => {
     const existing = byId.get(producto.id);
     if (existing) {
@@ -425,88 +414,43 @@ function getReporteId(fecha, fabrica) {
   return `${fecha}_${fabrica}`;
 }
 
+/* ================================================================
+   CÁLCULOS DE TOTALES (sin cambios)
+================================================================ */
+
 function computeGroupTotal(groupKey, data = {}) {
   switch (groupKey) {
-    case 'alvear':
-      return num(data.alv);
-
-    case 'cajaChica':
-      return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
-
-    case 'cajaGrandeAlv':
-      return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
-
-    case 'cajaChicaMor':
-      return num(data.morPlus) - num(data.morMinus) + num(data.dif);
-
-    case 'cajaGrandeMor':
-      return num(data.morPlus) - num(data.morMinus) + num(data.dif);
-
+    case 'alvear': return num(data.alv);
+    case 'cajaChica': return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
+    case 'cajaGrandeAlv': return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
+    case 'cajaChicaMor': return num(data.morPlus) - num(data.morMinus) + num(data.dif);
+    case 'cajaGrandeMor': return num(data.morPlus) - num(data.morMinus) + num(data.dif);
     case 'banadoChica':
-      return (
-        num(data.banadoPlus) +
-        num(data.totalSecando) +
-        num(data.cosecha) -
-        num(data.salida) +
-        num(data.dif)
-      );
-
     case 'banadoGrande':
-      return (
-        num(data.banadoPlus) +
-        num(data.totalSecando) +
-        num(data.cosecha) -
-        num(data.salida) +
-        num(data.dif)
-      );
-
+      return num(data.banadoPlus) + num(data.totalSecando) + num(data.cosecha) - num(data.salida) + num(data.dif);
     case 'moronChicaInterna':
-      return (
-        num(data.totalBase) +
-        num(data.entrada) +
-        num(data.sobrante) -
-        num(data.pEmpaq) +
-        num(data.diferencia)
-      );
-
     case 'moronGrandeInterna':
-      return (
-        num(data.totalBase) +
-        num(data.entrada) +
-        num(data.sobrante) -
-        num(data.pEmpaq) +
-        num(data.diferencia)
-      );
-
-    default:
-      return 0;
+      return num(data.totalBase) + num(data.entrada) + num(data.sobrante) - num(data.pEmpaq) + num(data.diferencia);
+    default: return 0;
   }
 }
 
 function computeMoronInternalReadonly(groupKey, colKey, data = {}) {
-  if (colKey === 'salidaTotal') {
-    return num(data.pEmpaq) - num(data.sobrante);
-  }
-
-  if (colKey === 'total') {
-    return computeGroupTotal(groupKey, data);
-  }
-
+  if (colKey === 'salidaTotal') return num(data.pEmpaq) - num(data.sobrante);
+  if (colKey === 'total') return computeGroupTotal(groupKey, data);
   return 0;
 }
 
 function computeStockInitialTotal(stock = {}) {
-  return (
-    num(stock.alvearChica) +
-    num(stock.alvearGrande) +
-    num(stock.moronChica) +
-    num(stock.moronGrande) +
-    num(stock.secandoChica) +
-    num(stock.secandoGrande) +
-    num(stock.banadoChica) +
-    num(stock.banadoGrande)
-  );
+  return num(stock.alvearChica) + num(stock.alvearGrande) +
+    num(stock.moronChica) + num(stock.moronGrande) +
+    num(stock.secandoChica) + num(stock.secandoGrande) +
+    num(stock.banadoChica) + num(stock.banadoGrande);
 }
+
+/* ================================================================
+   FECHAS
+================================================================ */
 
 function setMonthlyDefault() {
   const now = new Date();
@@ -514,372 +458,14 @@ function setMonthlyDefault() {
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
   if ($('pedidoMes')) $('pedidoMes').value = ym;
+  if ($('reporteMes')) $('reporteMes').value = ym;
   state.pedidoSemanas = buildWeeksForMonth(ym);
   renderWeekOptions($('pedidoSemana'), state.pedidoSemanas);
 }
 
 function getTodayLocalISO() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function computeDashboardLogisticsSummary(reportes = [], productos = [], fecha = '') {
-  const productosActivos = (productos || []).filter((p) => p.activo !== false);
-
-  let esperadoChica = 0;
-  let ingresadoChica = 0;
-  let esperadoGrande = 0;
-  let ingresadoGrande = 0;
-
-  productosActivos.forEach((producto) => {
-    const reporteAlvear = reportes.find((r) => r.fecha === fecha && r.fabrica === 'alvear');
-    const reporteBanado = reportes.find((r) => r.fecha === fecha && r.fabrica === 'banado');
-    const reporteMoron = reportes.find((r) => r.fecha === fecha && r.fabrica === 'moron');
-
-    const rowAlvear = reporteAlvear?.rows?.find((x) => x.productoId === producto.id);
-    const rowBanado = reporteBanado?.rows?.find((x) => x.productoId === producto.id);
-    const rowMoron = reporteMoron?.rows?.find((x) => x.productoId === producto.id);
-
-    esperadoChica +=
-      num(rowAlvear?.groups?.cajaChica?.alvMinus) +
-      num(rowBanado?.groups?.banadoChica?.salida);
-
-    ingresadoChica += num(rowMoron?.groups?.moronChicaInterna?.entrada);
-
-    esperadoGrande +=
-      num(rowAlvear?.groups?.cajaGrandeAlv?.alvMinus) +
-      num(rowBanado?.groups?.banadoGrande?.salida);
-
-    ingresadoGrande += num(rowMoron?.groups?.moronGrandeInterna?.entrada);
-  });
-
-  return {
-    esperadoChica,
-    ingresadoChica,
-    esperadoGrande,
-    ingresadoGrande
-  };
-}
-
-function renderDashboard() {
-  const hoy = getTodayLocalISO();
-
-  const productosActivos = state.productos.filter((p) => p.activo !== false);
-  const usuariosActivos = state.usuarios.filter((u) => u.activo !== false);
-  const usuariosOperativos = usuariosActivos.filter((u) => u.rol !== 'gerencia' && u.fabrica);
-
-  const fabricasOperativas = [...new Set(usuariosOperativos.map((u) => u.fabrica))];
-  const reportesHoy = state.reportes.filter((r) => r.fecha === hoy);
-  const fabricasHoy = new Set(reportesHoy.map((r) => r.fabrica));
-  const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
-
-  if ($('statProductos')) $('statProductos').textContent = productosActivos.length;
-  if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
-  if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
-  if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
-  if ($('statAlertas')) $('statAlertas').textContent = state.alertas.length;
-  if ($('statHoyCargadas')) $('statHoyCargadas').textContent = reportesHoy.length;
-  if ($('statPendientesHoy')) $('statPendientesHoy').textContent = pendientesHoy.length;
-  if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = usuariosActivos.length;
-
-  if ($('tablaDashboardReportes')) {
-    $('tablaDashboardReportes').innerHTML = state.reportes
-      .slice()
-      .sort((a, b) => {
-        const fa = `${a.fecha || ''}_${a.fabrica || ''}`;
-        const fb = `${b.fecha || ''}_${b.fabrica || ''}`;
-        return fa < fb ? 1 : -1;
-      })
-      .slice(0, 12)
-      .map((r) => `
-        <tr>
-          <td>${r.fecha || '-'}</td>
-          <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
-          <td>${r.estado || '-'}</td>
-          <td>${r.creadoPor || '-'}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
-  }
-
-  if ($('tablaDashboardFabricas')) {
-    $('tablaDashboardFabricas').innerHTML = fabricasOperativas.map((f) => {
-      const ultimo = state.reportes
-        .filter((r) => r.fabrica === f)
-        .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
-
-      const estadoHoy = fabricasHoy.has(f) ? 'Cargó' : 'Pendiente';
-
-      return `
-        <tr>
-          <td>${FABRICAS[f] || f}</td>
-          <td>${estadoHoy}</td>
-          <td>${ultimo?.fecha || '-'}</td>
-        </tr>
-      `;
-    }).join('') || '<tr><td colspan="3">Sin datos.</td></tr>';
-  }
-
-  const resumen = computeDashboardLogisticsSummary(state.reportes, state.productos, hoy);
-
-  if ($('statEsperadoChica')) $('statEsperadoChica').textContent = resumen.esperadoChica;
-  if ($('statIngresadoChica')) $('statIngresadoChica').textContent = resumen.ingresadoChica;
-  if ($('statEsperadoGrande')) $('statEsperadoGrande').textContent = resumen.esperadoGrande;
-  if ($('statIngresadoGrande')) $('statIngresadoGrande').textContent = resumen.ingresadoGrande;
-
-  if ($('tablaDashboardAlertas')) {
-    $('tablaDashboardAlertas').innerHTML = state.alertas
-      .slice()
-      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
-      .slice(0, 10)
-      .map((a) => `
-        <tr>
-          <td>${a.fecha || '-'}</td>
-          <td>${a.productoNombre || '-'}</td>
-          <td>${a.bloque || '-'}</td>
-          <td>${a.diferencia || 0}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="4">Sin alertas.</td></tr>';
-  }
-}
-
-function renderProductos() {
-  if ($('productosCount')) $('productosCount').textContent = state.productos.length;
-  if ($('productosActivos')) $('productosActivos').textContent = state.productos.filter((p) => p.activo !== false).length;
-
-  if (!$('productosList')) return;
-
-  const productosOrdenados = [...state.productos].sort((a, b) => {
-    const oa = Number(a.orden || 0);
-    const ob = Number(b.orden || 0);
-    if (oa !== ob) return oa - ob;
-    return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
-  });
-
-  $('productosList').innerHTML = productosOrdenados.map((p) => {
-    const visibles = p.visiblePara || [];
-
-    return `
-      <div class="product-row">
-        <div class="product-main">
-          <div class="product-title">${p.nombre || '-'}</div>
-          <div class="product-sub">
-            Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'}
-          </div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-            <label>
-              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="alvear" ${visibles.includes('alvear') ? 'checked' : ''}>
-              Alvear
-            </label>
-            <label>
-              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="moron" ${visibles.includes('moron') ? 'checked' : ''}>
-              Morón
-            </label>
-            <label>
-              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="banado" ${visibles.includes('banado') ? 'checked' : ''}>
-              Bañado
-            </label>
-          </div>
-        </div>
-
-        <div class="product-actions" style="display:flex; flex-direction:column; gap:8px;">
-          <button class="btn btn-primary btn-sm" data-save="${p.id}">
-            Guardar
-          </button>
-          <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
-            ${p.activo === false ? 'Activar' : 'Desactivar'}
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('') || '<div class="empty-state">Sin productos.</div>';
-
-  document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.toggleProducto;
-      const item = state.productos.find((p) => p.id === id);
-      if (!item) return;
-
-      await updateDoc(doc(db, 'productos', id), {
-        activo: item.activo === false ? true : false
-      });
-
-      toast('Producto actualizado.');
-      await refreshAll();
-    });
-  });
-
-  document.querySelectorAll('[data-save]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.save;
-      const checks = Array.from(
-        document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`)
-      );
-      const visiblePara = checks.map((c) => c.value);
-
-      await updateDoc(doc(db, 'productos', id), {
-        visiblePara
-      });
-
-      toast('Visibilidad guardada.');
-      await refreshAll();
-    });
-  });
-}
-
-function renderUsuarios() {
-  if (!$('tablaUsuarios')) return;
-
-  $('tablaUsuarios').innerHTML = state.usuarios.map((u) => `
-    <tr>
-      <td>${u.nombre || '-'}</td>
-      <td>${u.email || '-'}</td>
-      <td>${u.rol || '-'}</td>
-      <td>${FABRICAS[u.fabrica] || '-'}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="4">Sin usuarios.</td></tr>';
-}
-
-async function registrarProducto(ev) {
-  ev.preventDefault();
-
-  const nombre = $('prodNombre')?.value.trim();
-  const codigo = $('prodCodigo')?.value.trim();
-  const categoria = $('prodCategoria')?.value.trim();
-  const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((el) => el.value);
-
-  if (!nombre) {
-    toast('Ingresá el nombre del producto.');
-    return;
-  }
-
-  await addDoc(collection(db, 'productos'), {
-    nombre,
-    codigo,
-    categoria,
-    visiblePara,
-    activo: true,
-    creadoEn: serverTimestamp(),
-    orden: state.productos.length + 1
-  });
-
-  ev.target.reset();
-  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => {
-    el.checked = true;
-  });
-
-  toast('Producto guardado.');
-  await refreshAll();
-}
-
-function getVisibleGroupsForCurrentView() {
-  let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-  }
-
-  if (state.perfil?.rol === 'gerencia') {
-    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
-  }
-
-  if (fabrica === 'moron') {
-    return MORON_INTERNAL_GROUPS;
-  }
-
-  const groupsByFactory = {
-    alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-    banado: ['banadoChica', 'banadoGrande']
-  };
-
-  const allowedKeys = groupsByFactory[fabrica] || [];
-  return DAY_GROUPS.filter((g) => allowedKeys.includes(g.key));
-}
-
-function getEditableGroupsForCurrentUser() {
-  let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-  }
-
-  if (state.perfil?.rol === 'gerencia') {
-    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].map((g) => g.key);
-  }
-
-  if (fabrica === 'moron') {
-    return MORON_INTERNAL_GROUPS.map((g) => g.key);
-  }
-
-  return INPUT_GROUP_BY_FABRICA[fabrica] || [];
-}
-
-function currentReporteIsLocked() {
-  if (!state.reporteActual) return false;
-  if (state.perfil?.rol === 'gerencia') return false;
-  return !!state.reporteActual.idYaExistia;
-}
-
-function renderCellInput({
-  rowIndex,
-  groupKey = '',
-  area = '',
-  key,
-  value,
-  canEdit,
-  extraClass = ''
-}) {
-  const attrs = [
-    `class="excel-input ${extraClass}"`,
-    `data-row="${rowIndex}"`,
-    key ? `data-key="${key}"` : '',
-    groupKey ? `data-group="${groupKey}"` : '',
-    area ? `data-area="${area}"` : '',
-    'type="text"',
-    'inputmode="numeric"',
-    'autocomplete="off"',
-    `value="${value}"`
-  ].filter(Boolean).join(' ');
-
-  return `<input ${attrs} ${canEdit ? '' : 'disabled'}>`;
-}
-
-function hasAnyNonZeroValue(obj = {}) {
-  return Object.values(obj || {}).some((value) => num(value) !== 0);
-}
-
-function getMergedGroupDataForDay(fecha, productoId, groupKey) {
-  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
-  let fallback = null;
-
-  for (const reporte of reportesDelDia) {
-    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (!row?.groups?.[groupKey]) continue;
-
-    const groupData = row.groups[groupKey];
-    if (!fallback) fallback = groupData;
-
-    if (hasAnyNonZeroValue(groupData)) {
-      return groupData;
-    }
-  }
-
-  return fallback || createEmptyGroupData(groupKey);
-}
-
-function getFirstRowForMonth(productoId, monthValue) {
-  const reportesDelMes = state.reportes
-    .filter((r) => r.fecha?.startsWith(monthValue))
-    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
-
-  for (const reporte of reportesDelMes) {
-    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (row) return normalizeExistingRow(row);
-  }
-
-  return null;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 function getDateParts(dateStr) {
@@ -898,191 +484,395 @@ function getPreviousMonthValue(monthValue) {
 }
 
 function getLastAvailableDateForMonth(monthValue) {
-  const fechas = state.reportes
-    .filter((r) => r.fecha?.startsWith(monthValue))
-    .map((r) => r.fecha)
-    .sort();
-
+  const fechas = state.reportes.filter((r) => r.fecha?.startsWith(monthValue)).map((r) => r.fecha).sort();
   return fechas.length ? fechas[fechas.length - 1] : null;
 }
 
 function getAnyRowForDateProduct(fecha, productoId) {
-  const reportesDelDia = state.reportes.filter((r) => r.fecha === fecha);
-
-  for (const reporte of reportesDelDia) {
+  for (const reporte of state.reportes.filter((r) => r.fecha === fecha)) {
     const row = (reporte.rows || []).find((x) => x.productoId === productoId);
     if (row) return normalizeExistingRow(row);
   }
+  return null;
+}
 
+/* ================================================================
+   DASHBOARD
+================================================================ */
+
+function computeDashboardLogisticsSummary(reportes = [], productos = [], fecha = '') {
+  const productosActivos = (productos || []).filter((p) => p.activo !== false);
+  let esperadoChica = 0, ingresadoChica = 0, esperadoGrande = 0, ingresadoGrande = 0;
+
+  productosActivos.forEach((producto) => {
+    const rowAlvear = reportes.find((r) => r.fecha === fecha && r.fabrica === 'alvear')
+      ?.rows?.find((x) => x.productoId === producto.id);
+    const rowBanado = reportes.find((r) => r.fecha === fecha && r.fabrica === 'banado')
+      ?.rows?.find((x) => x.productoId === producto.id);
+    const rowMoron = reportes.find((r) => r.fecha === fecha && r.fabrica === 'moron')
+      ?.rows?.find((x) => x.productoId === producto.id);
+
+    esperadoChica += num(rowAlvear?.groups?.cajaChica?.alvMinus) + num(rowBanado?.groups?.banadoChica?.salida);
+    ingresadoChica += num(rowMoron?.groups?.moronChicaInterna?.entrada);
+    esperadoGrande += num(rowAlvear?.groups?.cajaGrandeAlv?.alvMinus) + num(rowBanado?.groups?.banadoGrande?.salida);
+    ingresadoGrande += num(rowMoron?.groups?.moronGrandeInterna?.entrada);
+  });
+
+  return { esperadoChica, ingresadoChica, esperadoGrande, ingresadoGrande };
+}
+
+function renderDashboard() {
+  const hoy = getTodayLocalISO();
+  const productosActivos = state.productos.filter((p) => p.activo !== false);
+  const usuariosActivos = state.usuarios.filter((u) => u.activo !== false);
+  const usuariosOperativos = usuariosActivos.filter((u) => u.rol !== 'gerencia' && u.fabrica);
+  const fabricasOperativas = [...new Set(usuariosOperativos.map((u) => u.fabrica))];
+  const reportesHoy = state.reportes.filter((r) => r.fecha === hoy);
+  const fabricasHoy = new Set(reportesHoy.map((r) => r.fabrica));
+  const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
+
+  if ($('statProductos')) $('statProductos').textContent = productosActivos.length;
+  if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
+  if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
+  if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
+  if ($('statAlertas')) $('statAlertas').textContent = state.alertas.length;
+  if ($('statHoyCargadas')) $('statHoyCargadas').textContent = reportesHoy.length;
+  if ($('statPendientesHoy')) $('statPendientesHoy').textContent = pendientesHoy.length;
+  if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = usuariosActivos.length;
+
+  if ($('tablaDashboardReportes')) {
+    $('tablaDashboardReportes').innerHTML = state.reportes
+      .slice().sort((a, b) => {
+        const fa = `${a.fecha || ''}_${a.fabrica || ''}`;
+        const fb = `${b.fecha || ''}_${b.fabrica || ''}`;
+        return fa < fb ? 1 : -1;
+      }).slice(0, 12).map((r) => `
+        <tr>
+          <td>${r.fecha || '-'}</td>
+          <td>${FABRICAS[r.fabrica] || r.fabrica || '-'}</td>
+          <td>${r.estado || '-'}</td>
+          <td>${r.creadoPor || '-'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">Sin reportes.</td></tr>';
+  }
+
+  if ($('tablaDashboardFabricas')) {
+    $('tablaDashboardFabricas').innerHTML = fabricasOperativas.map((f) => {
+      const ultimo = state.reportes.filter((r) => r.fabrica === f)
+        .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
+      return `<tr>
+        <td>${FABRICAS[f] || f}</td>
+        <td>${fabricasHoy.has(f) ? 'Cargó' : 'Pendiente'}</td>
+        <td>${ultimo?.fecha || '-'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="3">Sin datos.</td></tr>';
+  }
+
+  const resumen = computeDashboardLogisticsSummary(state.reportes, state.productos, hoy);
+  if ($('statEsperadoChica')) $('statEsperadoChica').textContent = resumen.esperadoChica;
+  if ($('statIngresadoChica')) $('statIngresadoChica').textContent = resumen.ingresadoChica;
+  if ($('statEsperadoGrande')) $('statEsperadoGrande').textContent = resumen.esperadoGrande;
+  if ($('statIngresadoGrande')) $('statIngresadoGrande').textContent = resumen.ingresadoGrande;
+
+  if ($('tablaDashboardAlertas')) {
+    $('tablaDashboardAlertas').innerHTML = state.alertas.slice()
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+      .slice(0, 10).map((a) => `
+        <tr>
+          <td>${a.fecha || '-'}</td>
+          <td>${a.productoNombre || '-'}</td>
+          <td>${a.bloque || '-'}</td>
+          <td>${a.diferencia || 0}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">Sin alertas.</td></tr>';
+  }
+
+  // Panel productividad Alvear en dashboard (solo gerencia)
+  if (state.perfil?.rol === 'gerencia') {
+    renderDashboardProductividad();
+  }
+}
+
+function renderDashboardProductividad() {
+  const prod = computeProductividadAlvear(state.pedidosSemanalesCache || {});
+
+  if ($('statTotalPedido')) $('statTotalPedido').textContent = prod.totalPedido;
+  if ($('statTotalEntregado')) $('statTotalEntregado').textContent = prod.totalEntregado;
+  if ($('statPorcentaje')) $('statPorcentaje').textContent = `${prod.porcentajeGlobal}%`;
+  if ($('statSemanasCompletas')) $('statSemanasCompletas').textContent = `${prod.semanasCompletas} / ${prod.semanasCerradas}`;
+
+  // Motivos
+  const motivosEl = $('dashMotivosContent');
+  if (motivosEl) {
+    const motivos = Object.entries(prod.motivosTotales).sort((a, b) => b[1] - a[1]);
+    if (!motivos.length) {
+      motivosEl.innerHTML = '<div style="color:var(--muted);font-size:13px;">Sin motivos registrados.</div>';
+    } else {
+      motivosEl.innerHTML = motivos.map(([motivo, count]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);">
+          <span style="font-size:13px;">${motivo}</span>
+          <span style="font-weight:700;color:#ff5a5a;">${count}</span>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+/* ================================================================
+   PRODUCTOS
+================================================================ */
+
+function renderProductos() {
+  if ($('productosCount')) $('productosCount').textContent = state.productos.length;
+  if ($('productosActivos')) $('productosActivos').textContent = state.productos.filter((p) => p.activo !== false).length;
+  if (!$('productosList')) return;
+
+  const productosOrdenados = [...state.productos].sort((a, b) => {
+    const oa = Number(a.orden || 0);
+    const ob = Number(b.orden || 0);
+    if (oa !== ob) return oa - ob;
+    return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+  });
+
+  $('productosList').innerHTML = productosOrdenados.map((p) => {
+    const visibles = p.visiblePara || [];
+    return `
+      <div class="product-row">
+        <div class="product-main">
+          <div class="product-title">${p.nombre || '-'}</div>
+          <div class="product-sub">Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'}</div>
+          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+            <label><input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="alvear" ${visibles.includes('alvear') ? 'checked' : ''}> Alvear</label>
+            <label><input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="moron" ${visibles.includes('moron') ? 'checked' : ''}> Morón</label>
+            <label><input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="banado" ${visibles.includes('banado') ? 'checked' : ''}> Bañado</label>
+          </div>
+        </div>
+        <div class="product-actions" style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary btn-sm" data-save="${p.id}">Guardar</button>
+          <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">${p.activo === false ? 'Activar' : 'Desactivar'}</button>
+        </div>
+      </div>
+    `;
+  }).join('') || '<div class="empty-state">Sin productos.</div>';
+
+  document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.toggleProducto;
+      const item = state.productos.find((p) => p.id === id);
+      if (!item) return;
+      await updateDoc(doc(db, 'productos', id), { activo: item.activo === false ? true : false });
+      toast('Producto actualizado.');
+      await refreshAll();
+    });
+  });
+
+  document.querySelectorAll('[data-save]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.save;
+      const checks = Array.from(document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`));
+      const visiblePara = checks.map((c) => c.value);
+      await updateDoc(doc(db, 'productos', id), { visiblePara });
+      toast('Visibilidad guardada.');
+      await refreshAll();
+    });
+  });
+}
+
+function renderUsuarios() {
+  if (!$('tablaUsuarios')) return;
+  $('tablaUsuarios').innerHTML = state.usuarios.map((u) => `
+    <tr>
+      <td>${u.nombre || '-'}</td>
+      <td>${u.email || '-'}</td>
+      <td>${u.rol || '-'}</td>
+      <td>${FABRICAS[u.fabrica] || '-'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4">Sin usuarios.</td></tr>';
+}
+
+async function registrarProducto(ev) {
+  ev.preventDefault();
+  const nombre = $('prodNombre')?.value.trim();
+  const codigo = $('prodCodigo')?.value.trim();
+  const categoria = $('prodCategoria')?.value.trim();
+  const visiblePara = Array.from(document.querySelectorAll('input[name="visiblePara"]:checked')).map((el) => el.value);
+
+  if (!nombre) { toast('Ingresá el nombre del producto.'); return; }
+
+  await addDoc(collection(db, 'productos'), {
+    nombre, codigo, categoria, visiblePara,
+    activo: true, creadoEn: serverTimestamp(), orden: state.productos.length + 1
+  });
+
+  ev.target.reset();
+  document.querySelectorAll('input[name="visiblePara"]').forEach((el) => { el.checked = true; });
+  toast('Producto guardado.');
+  await refreshAll();
+}
+
+/* ================================================================
+   CARGA DIARIA (sin cambios funcionales)
+================================================================ */
+
+function getVisibleGroupsForCurrentView() {
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+  if (state.perfil?.rol === 'gerencia') return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
+  if (fabrica === 'moron') return MORON_INTERNAL_GROUPS;
+  const groupsByFactory = { alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'], banado: ['banadoChica', 'banadoGrande'] };
+  const allowedKeys = groupsByFactory[fabrica] || [];
+  return DAY_GROUPS.filter((g) => allowedKeys.includes(g.key));
+}
+
+function getEditableGroupsForCurrentUser() {
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+  if (state.perfil?.rol === 'gerencia') return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].map((g) => g.key);
+  if (fabrica === 'moron') return MORON_INTERNAL_GROUPS.map((g) => g.key);
+  return INPUT_GROUP_BY_FABRICA[fabrica] || [];
+}
+
+function currentReporteIsLocked() {
+  if (!state.reporteActual) return false;
+  if (state.perfil?.rol === 'gerencia') return false;
+  return !!state.reporteActual.idYaExistia;
+}
+
+function renderCellInput({ rowIndex, groupKey = '', area = '', key, value, canEdit, extraClass = '' }) {
+  const attrs = [
+    `class="excel-input ${extraClass}"`,
+    `data-row="${rowIndex}"`,
+    key ? `data-key="${key}"` : '',
+    groupKey ? `data-group="${groupKey}"` : '',
+    area ? `data-area="${area}"` : '',
+    'type="text"', 'inputmode="numeric"', 'autocomplete="off"',
+    `value="${value}"`
+  ].filter(Boolean).join(' ');
+  return `<input ${attrs} ${canEdit ? '' : 'disabled'}>`;
+}
+
+function hasAnyNonZeroValue(obj = {}) {
+  return Object.values(obj || {}).some((value) => num(value) !== 0);
+}
+
+function getMergedGroupDataForDay(fecha, productoId, groupKey) {
+  let fallback = null;
+  for (const reporte of state.reportes.filter((r) => r.fecha === fecha)) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (!row?.groups?.[groupKey]) continue;
+    const groupData = row.groups[groupKey];
+    if (!fallback) fallback = groupData;
+    if (hasAnyNonZeroValue(groupData)) return groupData;
+  }
+  return fallback || createEmptyGroupData(groupKey);
+}
+
+function getFirstRowForMonth(productoId, monthValue) {
+  const reportesDelMes = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (row) return normalizeExistingRow(row);
+  }
   return null;
 }
 
 function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
-  const currentFecha = $('cargaFecha')?.value;
-  let currentFabrica = $('cargaFabrica')?.value;
-
-  if (!currentFabrica && state.perfil?.fabrica) {
-    currentFabrica = state.perfil.fabrica;
-  }
-
-  const isCurrentReportGroup =
-    ['banadoChica', 'banadoGrande', 'moronChicaInterna', 'moronGrandeInterna', 'alvear', 'cajaChica', 'cajaGrandeAlv', 'cajaChicaMor', 'cajaGrandeMor']
-      .includes(groupKey);
-
-  if (
-    state.reporteActual &&
-    state.reporteActual.fecha === fecha &&
-    isCurrentReportGroup
-  ) {
+  if (state.reporteActual && state.reporteActual.fecha === fecha) {
     const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
-    if (row?.groups?.[groupKey]) {
-      return row.groups[groupKey];
-    }
+    if (row?.groups?.[groupKey]) return row.groups[groupKey];
   }
-
   return getMergedGroupDataForDay(fecha, productoId, groupKey);
 }
 
 function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    groupKey === 'banadoChica'
-      ? num(stockInicial?.secandoChica)
-      : num(stockInicial?.secandoGrande);
-
+  let total = groupKey === 'banadoChica' ? num(stockInicial?.secandoChica) : num(stockInicial?.secandoGrande);
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
-
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, groupKey);
     total += num(rowData?.secando) - num(rowData?.cosecha);
   }
-
   return total;
 }
 
 function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    groupKey === 'banadoChica'
-      ? num(stockInicial?.banadoChica)
-      : num(stockInicial?.banadoGrande);
-
+  let total = groupKey === 'banadoChica' ? num(stockInicial?.banadoChica) : num(stockInicial?.banadoGrande);
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
-
-    total +=
-      num(rowData?.banadoPlus) +
-      num(rowData?.cosecha) -
-      num(rowData?.salida) +
-      num(rowData?.dif);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, groupKey);
+    total += num(rowData?.banadoPlus) + num(rowData?.cosecha) - num(rowData?.salida) + num(rowData?.dif);
   }
-
   return total;
 }
 
 function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
-
-  let total =
-    groupKey === 'moronChicaInterna'
-      ? num(stockInicial?.moronChica)
-      : num(stockInicial?.moronGrande);
-
+  let total = groupKey === 'moronChicaInterna' ? num(stockInicial?.moronChica) : num(stockInicial?.moronGrande);
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
-
-    total +=
-      num(rowData?.entrada) +
-      num(rowData?.sobrante) -
-      num(rowData?.pEmpaq) +
-      num(rowData?.diferencia);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, groupKey);
+    total += num(rowData?.entrada) + num(rowData?.sobrante) - num(rowData?.pEmpaq) + num(rowData?.diferencia);
   }
-
   return total;
 }
 
 function getCajaChicaAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
   let total = num(stockInicial?.alvearChica);
-
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaChica');
-
-    total +=
-      num(rowData?.alvPlus) -
-      num(rowData?.alvMinus) +
-      num(rowData?.dif);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, 'cajaChica');
+    total += num(rowData?.alvPlus) - num(rowData?.alvMinus) + num(rowData?.dif);
   }
-
   return total;
 }
 
 function getCajaGrandeAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
   let total = num(stockInicial?.alvearGrande);
-
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaGrandeAlv');
-
-    total +=
-      num(rowData?.alvPlus) -
-      num(rowData?.alvMinus) +
-      num(rowData?.dif);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, 'cajaGrandeAlv');
+    total += num(rowData?.alvPlus) - num(rowData?.alvMinus) + num(rowData?.dif);
   }
-
   return total;
 }
 
 function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
   let total = num(stockInicial?.moronChica);
-
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaChicaMor');
-
-    total +=
-      num(rowData?.morPlus) -
-      num(rowData?.morMinus) +
-      num(rowData?.dif);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, 'cajaChicaMor');
+    total += num(rowData?.morPlus) - num(rowData?.morMinus) + num(rowData?.dif);
   }
-
   return total;
 }
 
 function getCajaGrandeMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
   const { year, month, day } = getDateParts(dayStr);
   let total = num(stockInicial?.moronGrande);
-
   for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaGrandeMor');
-
-    total +=
-      num(rowData?.morPlus) -
-      num(rowData?.morMinus) +
-      num(rowData?.dif);
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, 'cajaGrandeMor');
+    total += num(rowData?.morPlus) - num(rowData?.morMinus) + num(rowData?.dif);
   }
+  return total;
+}
 
+function getAlvearRunningTotal(dayStr, productoId) {
+  const { year, month, day } = getDateParts(dayStr);
+  let total = 0;
+  for (let d = 1; d <= day; d++) {
+    const rowData = getEffectiveGroupDataForDay(buildDateStr(year, month, d), productoId, 'alvear');
+    total += num(rowData?.alv);
+  }
   return total;
 }
 
 function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return null;
-
   const previousMonth = getPreviousMonthValue(monthValue);
   const lastDate = getLastAvailableDateForMonth(previousMonth);
   if (!lastDate) return null;
-
   const lastRow = getAnyRowForDateProduct(lastDate, productoId);
   if (!lastRow) return null;
-
   return {
     alvearChica: getCajaChicaAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
     alvearGrande: getCajaGrandeAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
@@ -1097,60 +887,26 @@ function getClosingStockFromPreviousMonth(productoId, monthValue) {
 
 function applyPreviousMonthInitialStock(rows = [], monthValue = '') {
   if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return rows;
-
   return rows.map((row) => {
     const closing = getClosingStockFromPreviousMonth(row.productoId, monthValue);
     if (!closing) return row;
-
-    return {
-      ...row,
-      stockInicial: {
-        ...row.stockInicial,
-        ...closing
-      }
-    };
+    return { ...row, stockInicial: { ...row.stockInicial, ...closing } };
   });
 }
 
 function getInitialStockForMonth(productoId, monthValue) {
   const firstRow = getFirstRowForMonth(productoId, monthValue);
   if (firstRow) return firstRow.stockInicial;
-
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
-
-  return {
-    alvearChica: 0,
-    alvearGrande: 0,
-    moronChica: 0,
-    moronGrande: 0,
-    secandoChica: 0,
-    secandoGrande: 0,
-    banadoChica: 0,
-    banadoGrande: 0
-  };
-}
-
-function getAlvearRunningTotal(dayStr, productoId) {
-  const { year, month, day } = getDateParts(dayStr);
-  let total = 0;
-
-  for (let d = 1; d <= day; d++) {
-    const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'alvear');
-    total += num(rowData?.alv);
-  }
-
-  return total;
+  return { alvearChica: 0, alvearGrande: 0, moronChica: 0, moronGrande: 0, secandoChica: 0, secandoGrande: 0, banadoChica: 0, banadoGrande: 0 };
 }
 
 function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
   if (!table) return;
 
-  let fecha = $('cargaFecha')?.value;
   let fabrica = $('cargaFabrica')?.value;
-
   if (state.perfil?.rol !== 'gerencia' && state.perfil?.fabrica) {
     fabrica = state.perfil.fabrica;
     if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
@@ -1177,11 +933,11 @@ function renderCargaDiaria() {
 
   if ($('estadoCarga')) {
     if (state.reporteActual?.idYaExistia && state.perfil?.rol !== 'gerencia') {
-      $('estadoCarga').textContent = `Planilla ya cargada para ${fecha || ''} - solo lectura`;
+      $('estadoCarga').textContent = `Planilla ya cargada para ${$('cargaFecha')?.value || ''} - solo lectura`;
     } else {
       $('estadoCarga').textContent = state.reporteActual
         ? `Estado: ${state.reporteActual.estado || 'borrador'}`
-        : `Nueva planilla ${fecha || ''}`;
+        : `Nueva planilla ${$('cargaFecha')?.value || ''}`;
     }
   }
 
@@ -1192,15 +948,11 @@ function renderCargaDiaria() {
   let thead2 = '<tr>';
   let thead3 = '<tr>';
 
-  INITIAL_STOCK_COLUMNS.forEach((col) => {
-    thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`;
-  });
+  INITIAL_STOCK_COLUMNS.forEach((col) => { thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`; });
 
   visibleGroups.forEach((group) => {
     thead1 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
-    group.columns.forEach((col) => {
-      thead2 += `<th class="${group.colorClass}" rowspan="2">${col.label}</th>`;
-    });
+    group.columns.forEach((col) => { thead2 += `<th class="${group.colorClass}" rowspan="2">${col.label}</th>`; });
   });
 
   thead1 += '<th rowspan="3" class="total-head">TOTAL FILA</th></tr>';
@@ -1209,12 +961,8 @@ function renderCargaDiaria() {
 
   let body = '';
   const columnTotals = {};
-  INITIAL_STOCK_COLUMNS.forEach((c) => {
-    columnTotals[`stock_${c.key}`] = 0;
-  });
-  visibleGroups.forEach((g) => g.columns.forEach((c) => {
-    columnTotals[`${g.key}_${c.key}`] = 0;
-  }));
+  INITIAL_STOCK_COLUMNS.forEach((c) => { columnTotals[`stock_${c.key}`] = 0; });
+  visibleGroups.forEach((g) => g.columns.forEach((c) => { columnTotals[`${g.key}_${c.key}`] = 0; }));
   let grandTotal = 0;
 
   rows.forEach((row, rowIndex) => {
@@ -1223,16 +971,7 @@ function renderCargaDiaria() {
     INITIAL_STOCK_COLUMNS.forEach((col) => {
       const value = num(row.stockInicial?.[col.key]);
       const canEdit = state.perfil?.rol === 'gerencia';
-
-      rowHtml += `<td>${renderCellInput({
-        rowIndex,
-        area: 'stockInicial',
-        key: col.key,
-        value,
-        canEdit,
-        extraClass: 'stock-input'
-      })}</td>`;
-
+      rowHtml += `<td>${renderCellInput({ rowIndex, area: 'stockInicial', key: col.key, value, canEdit, extraClass: 'stock-input' })}</td>`;
       columnTotals[`stock_${col.key}`] += value;
     });
 
@@ -1241,155 +980,80 @@ function renderCargaDiaria() {
         if (col.readonly) {
           let totalValue = 0;
           const fechaActual = $('cargaFecha')?.value || '';
-
           if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-            if (col.key === 'salidaTotal') {
-              totalValue = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
-            } else if (col.key === 'total') {
-              totalValue = getMoronRunningTotal(
-                fechaActual,
-                row.productoId,
-                group.key,
-                row.stockInicial || {}
-              );
-            }
+            totalValue = col.key === 'salidaTotal'
+              ? computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {})
+              : getMoronRunningTotal(fechaActual, row.productoId, group.key, row.stockInicial || {});
           } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
-            if (col.key === 'totalSecando') {
-              totalValue = getBanadoSecandoRunningTotal(
-                fechaActual,
-                row.productoId,
-                group.key,
-                row.stockInicial || {}
-              );
-            } else if (col.key === 'total') {
-              totalValue = getBanadoRunningTotal(
-                fechaActual,
-                row.productoId,
-                group.key,
-                row.stockInicial || {}
-              );
-            }
+            totalValue = col.key === 'totalSecando'
+              ? getBanadoSecandoRunningTotal(fechaActual, row.productoId, group.key, row.stockInicial || {})
+              : getBanadoRunningTotal(fechaActual, row.productoId, group.key, row.stockInicial || {});
           } else if (group.key === 'alvear') {
-            totalValue = getAlvearRunningTotal(
-              fechaActual,
-              row.productoId
-            );
+            totalValue = getAlvearRunningTotal(fechaActual, row.productoId);
           } else if (group.key === 'cajaChica') {
-            totalValue = getCajaChicaAlvearRunningTotal(
-              fechaActual,
-              row.productoId,
-              row.stockInicial || {}
-            );
+            totalValue = getCajaChicaAlvearRunningTotal(fechaActual, row.productoId, row.stockInicial || {});
           } else if (group.key === 'cajaGrandeAlv') {
-            totalValue = getCajaGrandeAlvearRunningTotal(
-              fechaActual,
-              row.productoId,
-              row.stockInicial || {}
-            );
+            totalValue = getCajaGrandeAlvearRunningTotal(fechaActual, row.productoId, row.stockInicial || {});
           } else if (group.key === 'cajaChicaMor') {
-            totalValue = getCajaChicaMoronRunningTotal(
-              fechaActual,
-              row.productoId,
-              row.stockInicial || {}
-            );
+            totalValue = getCajaChicaMoronRunningTotal(fechaActual, row.productoId, row.stockInicial || {});
           } else if (group.key === 'cajaGrandeMor') {
-            totalValue = getCajaGrandeMoronRunningTotal(
-              fechaActual,
-              row.productoId,
-              row.stockInicial || {}
-            );
+            totalValue = getCajaGrandeMoronRunningTotal(fechaActual, row.productoId, row.stockInicial || {});
           } else {
             totalValue = computeGroupTotal(group.key, row.groups?.[group.key] || {});
           }
-
           rowHtml += `<td class="readonly-cell ${group.colorClass}">${totalValue}</td>`;
           columnTotals[`${group.key}_${col.key}`] += totalValue;
         } else {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
-
-          rowHtml += `<td>${renderCellInput({
-            rowIndex,
-            groupKey: group.key,
-            key: col.key,
-            value,
-            canEdit,
-            extraClass: group.colorClass
-          })}</td>`;
-
+          rowHtml += `<td>${renderCellInput({ rowIndex, groupKey: group.key, key: col.key, value, canEdit, extraClass: group.colorClass })}</td>`;
           columnTotals[`${group.key}_${col.key}`] += value;
         }
       });
     });
 
-    const rowTotal =
-      computeStockInitialTotal(row.stockInicial) +
-      visibleGroups.reduce((acc, g) => {
-        const groupData = row.groups[g.key] || {};
-        return acc + computeGroupTotal(g.key, groupData);
-      }, 0);
-
+    const rowTotal = computeStockInitialTotal(row.stockInicial) +
+      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups[g.key] || {}), 0);
     grandTotal += rowTotal;
     rowHtml += `<td class="total-cell">${rowTotal}</td></tr>`;
     body += rowHtml;
   });
 
   let tfoot = `<tr><th class="sticky-col">TOTAL</th>`;
-  INITIAL_STOCK_COLUMNS.forEach((col) => {
-    tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`;
-  });
+  INITIAL_STOCK_COLUMNS.forEach((col) => { tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`; });
   visibleGroups.forEach((group) => {
-    group.columns.forEach((col) => {
-      tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`;
-    });
+    group.columns.forEach((col) => { tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`; });
   });
   tfoot += `<th>${grandTotal}</th></tr>`;
 
   table.innerHTML = `<thead>${thead1}${thead2}${thead3}</thead><tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody><tfoot>${tfoot}</tfoot>`;
-
   bindCargaInputs();
 }
 
 function bindCargaInputs() {
   document.querySelectorAll('#tablaCargaDiaria input').forEach((input) => {
     input.addEventListener('keydown', (e) => {
-      const allowed = [
-        'Backspace', 'Delete', 'Tab', 'Enter',
-        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'
-      ];
-
-      if (allowed.includes(e.key)) return;
-      if (/^[0-9]$/.test(e.key)) return;
-
+      const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+      if (allowed.includes(e.key) || /^[0-9]$/.test(e.key)) return;
       e.preventDefault();
     });
-
     input.addEventListener('paste', (e) => {
       const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-      if (!/^\d*$/.test(pasted)) {
-        e.preventDefault();
-      }
+      if (!/^\d*$/.test(pasted)) e.preventDefault();
     });
-
     input.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
       const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
       const numericValue = cleanValue === '' ? 0 : Number(cleanValue);
-
       e.target.value = numericValue;
 
       if (!state.reporteActual) {
         let fabrica = $('cargaFabrica')?.value;
-        if (!fabrica && state.perfil?.fabrica) {
-          fabrica = state.perfil.fabrica;
-        }
-
+        if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
         state.reporteActual = {
           id: getReporteId($('cargaFecha')?.value, fabrica),
-          fecha: $('cargaFecha')?.value,
-          fabrica,
-          estado: 'borrador',
-          idYaExistia: false,
+          fecha: $('cargaFecha')?.value, fabrica,
+          estado: 'borrador', idYaExistia: false,
           rows: buildDefaultRows(fabrica)
         };
       }
@@ -1397,14 +1061,10 @@ function bindCargaInputs() {
       if (e.target.dataset.area === 'stockInicial') {
         state.reporteActual.rows[rowIndex].stockInicial[e.target.dataset.key] = numericValue;
       } else {
-        const group = e.target.dataset.group;
-        const key = e.target.dataset.key;
-        state.reporteActual.rows[rowIndex].groups[group][key] = numericValue;
+        state.reporteActual.rows[rowIndex].groups[e.target.dataset.group][e.target.dataset.key] = numericValue;
       }
-
       renderCargaDiaria();
     });
-
     input.addEventListener('blur', (e) => {
       const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
       e.target.value = cleanValue === '' ? 0 : Number(cleanValue);
@@ -1415,82 +1075,33 @@ function bindCargaInputs() {
 async function cargarReporteDiario() {
   const fecha = $('cargaFecha')?.value;
   let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-    if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
-  }
-
-  if (!fecha || !fabrica) {
-    toast('Seleccioná fecha y fábrica.');
-    return;
-  }
+  if (!fabrica && state.perfil?.fabrica) { fabrica = state.perfil.fabrica; if ($('cargaFabrica')) $('cargaFabrica').value = fabrica; }
+  if (!fecha || !fabrica) { toast('Seleccioná fecha y fábrica.'); return; }
 
   const id = getReporteId(fecha, fabrica);
-  const ref = doc(db, 'reportes_diarios', id);
-  const snap = await getDoc(ref);
+  const snap = await getDoc(doc(db, 'reportes_diarios', id));
 
   if (snap.exists()) {
     const loaded = { id: snap.id, ...snap.data() };
-    state.reporteActual = {
-      ...loaded,
-      idYaExistia: true,
-      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
-    };
-
-    if (state.perfil?.rol === 'gerencia') {
-      toast('Reporte cargado.');
-    } else {
-      toast('Esta fecha ya fue cargada para esta fábrica. Solo lectura.');
-    }
+    state.reporteActual = { ...loaded, idYaExistia: true, rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica) };
+    toast(state.perfil?.rol === 'gerencia' ? 'Reporte cargado.' : 'Esta fecha ya fue cargada. Solo lectura.');
   } else {
     const monthValue = String(fecha).slice(0, 7);
     let rows = buildDefaultRows(fabrica);
     rows = applyPreviousMonthInitialStock(rows, monthValue);
-
-    state.reporteActual = {
-      id,
-      fecha,
-      fabrica,
-      estado: 'borrador',
-      creadoPor: state.currentUser?.email || '',
-      idYaExistia: false,
-      rows
-    };
-
-    toast(
-      monthValue === MANUAL_INITIAL_MONTH
-        ? 'Nueva planilla preparada. Este mes usa stock inicial manual.'
-        : 'Nueva planilla preparada con stock inicial del mes anterior.'
-    );
+    state.reporteActual = { id, fecha, fabrica, estado: 'borrador', creadoPor: state.currentUser?.email || '', idYaExistia: false, rows };
+    toast(monthValue === MANUAL_INITIAL_MONTH ? 'Nueva planilla preparada. Este mes usa stock inicial manual.' : 'Nueva planilla preparada con stock inicial del mes anterior.');
   }
-
   renderCargaDiaria();
 }
 
 async function guardarReporte(estado = 'borrador') {
   const fecha = $('cargaFecha')?.value;
   let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-    if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
-  }
-
-  if (!fecha || !fabrica) {
-    toast('Seleccioná fecha y fábrica.');
-    return;
-  }
-
-  if (!state.reporteActual) {
-    toast('Primero cargá la planilla.');
-    return;
-  }
-
-  if (currentReporteIsLocked()) {
-    toast('Esta fábrica ya cargó una planilla para esa fecha.');
-    return;
-  }
+  if (!fabrica && state.perfil?.fabrica) { fabrica = state.perfil.fabrica; if ($('cargaFabrica')) $('cargaFabrica').value = fabrica; }
+  if (!fecha || !fabrica) { toast('Seleccioná fecha y fábrica.'); return; }
+  if (!state.reporteActual) { toast('Primero cargá la planilla.'); return; }
+  if (currentReporteIsLocked()) { toast('Esta fábrica ya cargó una planilla para esa fecha.'); return; }
 
   const id = getReporteId(fecha, fabrica);
   const ref = doc(db, 'reportes_diarios', id);
@@ -1503,42 +1114,26 @@ async function guardarReporte(estado = 'borrador') {
     return;
   }
 
-  const payload = {
-    fecha,
-    fabrica,
-    estado,
-    creadoPor: state.currentUser?.email || '',
-    actualizadoEnTexto: new Date().toISOString(),
-    actualizadoEn: serverTimestamp(),
-    rows: state.reporteActual.rows.map(normalizeExistingRow)
-  };
-
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      ...payload,
-      creadoEn: serverTimestamp()
-    });
-  } else {
-    await updateDoc(ref, payload);
-  }
+  const payload = { fecha, fabrica, estado, creadoPor: state.currentUser?.email || '', actualizadoEnTexto: new Date().toISOString(), actualizadoEn: serverTimestamp(), rows: state.reporteActual.rows.map(normalizeExistingRow) };
+  if (!snap.exists()) { await setDoc(ref, { ...payload, creadoEn: serverTimestamp() }); }
+  else { await updateDoc(ref, payload); }
 
   state.reporteActual.estado = estado;
   state.reporteActual.idYaExistia = true;
-
   toast(estado === 'enviada' ? 'Planilla enviada.' : 'Planilla guardada.');
   await refreshAll();
   await cargarReporteDiario();
 }
 
+/* ================================================================
+   GERENCIA EXCEL
+================================================================ */
+
 function renderGerenciaExcel() {
   const table = $('tablaGerenciaExcel');
   if (!table) return;
-
   const monthValue = $('mesGerencia')?.value;
-  if (!monthValue) {
-    table.innerHTML = '<tbody><tr><td>Seleccioná un mes.</td></tr></tbody>';
-    return;
-  }
+  if (!monthValue) { table.innerHTML = '<tbody><tr><td>Seleccioná un mes.</td></tr></tbody>'; return; }
 
   const [year, month] = monthValue.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -1547,76 +1142,50 @@ function renderGerenciaExcel() {
   let header2 = '<tr>';
   let header3 = '<tr>';
 
-  INITIAL_STOCK_COLUMNS.forEach((col) => {
-    header2 += `<th class="stock-head" rowspan="2">${col.label}</th>`;
-  });
+  INITIAL_STOCK_COLUMNS.forEach((col) => { header2 += `<th class="stock-head" rowspan="2">${col.label}</th>`; });
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dayColspan = 1 + [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].reduce((acc, g) => acc + g.columns.length, 0);
     header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
-
     header2 += `<th class="stock-head" rowspan="2">AROMA</th>`;
-
     [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
       header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
-      group.columns.forEach((col) => {
-        header3 += `<th class="${group.colorClass}">${col.label}</th>`;
-      });
+      group.columns.forEach((col) => { header3 += `<th class="${group.colorClass}">${col.label}</th>`; });
     });
   }
 
-  header1 += '</tr>';
-  header2 += '</tr>';
-  header3 += '</tr>';
+  header1 += '</tr>'; header2 += '</tr>'; header3 += '</tr>';
 
   const productos = state.productos.filter((p) => p.activo !== false);
   let body = '';
 
   productos.forEach((producto) => {
     let row = `<tr><td class="sticky-col product-name-cell">${producto.nombre}</td>`;
-
     const stockInicial = getInitialStockForMonth(producto.id, monthValue);
-
-    INITIAL_STOCK_COLUMNS.forEach((col) => {
-      row += `<td>${num(stockInicial?.[col.key])}</td>`;
-    });
+    INITIAL_STOCK_COLUMNS.forEach((col) => { row += `<td>${num(stockInicial?.[col.key])}</td>`; });
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
       row += `<td class="product-name-cell">${producto.nombre}</td>`;
-
       [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
-
         group.columns.forEach((col) => {
           if (col.readonly) {
             let totalValue = computeGroupTotal(group.key, rowData || {});
-
-            if (group.key === 'alvear') {
-              totalValue = getAlvearRunningTotal(dayStr, producto.id);
-            } else if (group.key === 'cajaChica') {
-              totalValue = getCajaChicaAlvearRunningTotal(dayStr, producto.id, stockInicial);
-            } else if (group.key === 'cajaGrandeAlv') {
-              totalValue = getCajaGrandeAlvearRunningTotal(dayStr, producto.id, stockInicial);
-            } else if (group.key === 'cajaChicaMor') {
-              totalValue = getCajaChicaMoronRunningTotal(dayStr, producto.id, stockInicial);
-            } else if (group.key === 'cajaGrandeMor') {
-              totalValue = getCajaGrandeMoronRunningTotal(dayStr, producto.id, stockInicial);
-            } else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-              if (col.key === 'salidaTotal') {
-                totalValue = computeMoronInternalReadonly(group.key, col.key, rowData || {});
-              } else if (col.key === 'total') {
-                totalValue = getMoronRunningTotal(dayStr, producto.id, group.key, stockInicial);
-              }
+            if (group.key === 'alvear') totalValue = getAlvearRunningTotal(dayStr, producto.id);
+            else if (group.key === 'cajaChica') totalValue = getCajaChicaAlvearRunningTotal(dayStr, producto.id, stockInicial);
+            else if (group.key === 'cajaGrandeAlv') totalValue = getCajaGrandeAlvearRunningTotal(dayStr, producto.id, stockInicial);
+            else if (group.key === 'cajaChicaMor') totalValue = getCajaChicaMoronRunningTotal(dayStr, producto.id, stockInicial);
+            else if (group.key === 'cajaGrandeMor') totalValue = getCajaGrandeMoronRunningTotal(dayStr, producto.id, stockInicial);
+            else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+              totalValue = col.key === 'salidaTotal'
+                ? computeMoronInternalReadonly(group.key, col.key, rowData || {})
+                : getMoronRunningTotal(dayStr, producto.id, group.key, stockInicial);
             } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
-              if (col.key === 'totalSecando') {
-                totalValue = getBanadoSecandoRunningTotal(dayStr, producto.id, group.key, stockInicial);
-              } else if (col.key === 'total') {
-                totalValue = getBanadoRunningTotal(dayStr, producto.id, group.key, stockInicial);
-              }
+              totalValue = col.key === 'totalSecando'
+                ? getBanadoSecandoRunningTotal(dayStr, producto.id, group.key, stockInicial)
+                : getBanadoRunningTotal(dayStr, producto.id, group.key, stockInicial);
             }
-
             row += `<td class="${group.colorClass}">${totalValue}</td>`;
           } else {
             row += `<td class="${group.colorClass}">${num(rowData?.[col.key])}</td>`;
@@ -1624,7 +1193,6 @@ function renderGerenciaExcel() {
         });
       });
     }
-
     row += '</tr>';
     body += row;
   });
@@ -1632,7 +1200,9 @@ function renderGerenciaExcel() {
   table.innerHTML = `<thead>${header1}${header2}${header3}</thead><tbody>${body || '<tr><td colspan="999">Sin datos.</td></tr>'}</tbody>`;
 }
 
-/* ========= PEDIDO SEMANAL ========= */
+/* ================================================================
+   PEDIDO SEMANAL — ORDEN DE FABRICACIÓN
+================================================================ */
 
 function refreshPedidoWeeks() {
   const monthValue = $('pedidoMes')?.value;
@@ -1657,23 +1227,18 @@ function canEditPedidoField(fieldKey) {
   const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
   const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
   const moronLocked = !!state.pedidoSemanalActual?.moronLocked;
-  const alvearLocked = !!state.pedidoSemanalActual?.alvearLocked;
+  const alvearLocked = !!state.pedidoSemanalActual?.alvearConfirmado;
 
   if (isGerencia) return true;
 
   if (isMoron) {
     if (moronLocked) return false;
-    return [PEDIDO_FIELDS.CANTIDAD_SOLICITADA].includes(fieldKey);
+    return ['moronCantidad', 'moronObservacion'].includes(fieldKey);
   }
 
   if (isAlvear) {
     if (alvearLocked) return false;
-    return [
-      PEDIDO_FIELDS.FECHA_ENTREGA,
-      PEDIDO_FIELDS.CANTIDAD_ENTREGADA,
-      PEDIDO_FIELDS.MOTIVO,
-      PEDIDO_FIELDS.MOTIVO_OTRO
-    ].includes(fieldKey);
+    return ['alvearFechaEntrega', 'alvearCantidadEntregada', 'alvearMotivos', 'alvearObservacion'].includes(fieldKey);
   }
 
   return false;
@@ -1682,12 +1247,10 @@ function canEditPedidoField(fieldKey) {
 function getPedidoEstadoText() {
   if (!state.pedidoSemanalActual) return 'Sin cargar';
   const moronLocked = !!state.pedidoSemanalActual.moronLocked;
-
-  if (moronLocked) {
-    return 'Morón ya guardó su pedido. Morón bloqueado.';
-  }
-
-  return 'Borrador editable';
+  const alvearConfirmado = !!state.pedidoSemanalActual.alvearConfirmado;
+  if (alvearConfirmado) return '✅ Semana cerrada — Alvear confirmó la entrega';
+  if (moronLocked) return '⏳ Pedido enviado por Morón — Alvear cargando entregas';
+  return '📝 Borrador — Morón puede editar';
 }
 
 function getPedidoSemanalViewMode() {
@@ -1699,61 +1262,21 @@ function getPedidoSemanalViewMode() {
 
 function getPedidoSemanalRowsForView(rows = []) {
   const viewMode = getPedidoSemanalViewMode();
-
-  if (viewMode === 'gerencia') return rows;
-  if (viewMode === 'moron') return rows;
-
-  if (viewMode === 'alvear') {
-    return rows.filter((row) => num(row.cantidadSolicitada) > 0);
-  }
-
+  if (viewMode === 'gerencia' || viewMode === 'moron') return rows;
+  if (viewMode === 'alvear') return rows.filter((row) => num(row.moronCantidad) > 0);
   return [];
 }
 
-function hasWeeklyPendingRows(rows = []) {
-  return rows.some((row) =>
-    (num(row.moronPedidoChica) > 0 && !row.entregadoChica) ||
-    (num(row.moronPedidoGrande) > 0 && !row.entregadoGrande)
-  );
-}
-
-function getWeeklyPendingDatesForMonth(monthValue) {
-  const weeks = buildWeeksForMonth(monthValue);
-  const pendingDates = new Set();
-
-  weeks.forEach((week) => {
-    const id = getWeekDocId(monthValue, week.key);
-    const current = state.pedidoSemanalActual?.id === id ? state.pedidoSemanalActual : null;
-
-    let rows = current?.rows || [];
-    if (!rows.length) {
-      const docRows = [];
-      const existingWeekly = state.pedidosSemanalesCache?.[id];
-      if (existingWeekly?.rows) rows = existingWeekly.rows;
-    }
-
-    if (hasWeeklyPendingRows(rows)) {
-      pendingDates.add(week.start);
-    }
-  });
-
-  return pendingDates;
-}
 function ensurePedidoDraft() {
   if (state.pedidoSemanalActual) return;
-
   const weekMeta = getSelectedWeekMeta();
   const monthValue = $('pedidoMes')?.value;
   if (!weekMeta || !monthValue) return;
-
   state.pedidoSemanalActual = {
     id: getWeekDocId(monthValue, weekMeta.key),
-    monthValue,
-    weekKey: weekMeta.key,
-    weekLabel: weekMeta.label,
-    weekStart: weekMeta.start,
-    weekEnd: weekMeta.end,
-    moronLocked: false,
+    monthValue, weekKey: weekMeta.key, weekLabel: weekMeta.label,
+    weekStart: weekMeta.start, weekEnd: weekMeta.end,
+    moronLocked: false, alvearConfirmado: false,
     rows: buildDefaultWeeklyRows(getWeeklyProducts())
   };
 }
@@ -1761,33 +1284,23 @@ function ensurePedidoDraft() {
 async function cargarPedidoSemanal() {
   const monthValue = $('pedidoMes')?.value;
   const weekMeta = getSelectedWeekMeta();
-
-  if (!monthValue || !weekMeta) {
-    toast('Seleccioná mes y semana.');
-    return;
-  }
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
 
   const id = getWeekDocId(monthValue, weekMeta.key);
-  const ref = doc(db, 'pedidos_semanales', id);
-  const snap = await getDoc(ref);
+  const snap = await getDoc(doc(db, 'pedidos_semanales', id));
 
   if (snap.exists()) {
     const data = snap.data() || {};
     state.pedidoSemanalActual = {
-      id,
-      ...data,
+      id, ...data,
       rows: normalizeWeeklyRows(data.rows || [], getWeeklyProducts())
     };
     toast('Pedido semanal cargado.');
   } else {
     state.pedidoSemanalActual = {
-      id,
-      monthValue,
-      weekKey: weekMeta.key,
-      weekLabel: weekMeta.label,
-      weekStart: weekMeta.start,
-      weekEnd: weekMeta.end,
-      moronLocked: false,
+      id, monthValue, weekKey: weekMeta.key, weekLabel: weekMeta.label,
+      weekStart: weekMeta.start, weekEnd: weekMeta.end,
+      moronLocked: false, alvearConfirmado: false,
       rows: buildDefaultWeeklyRows(getWeeklyProducts())
     };
     toast('Nueva semana preparada.');
@@ -1800,29 +1313,22 @@ async function cargarPedidoSemanal() {
 async function guardarPedidoSemanal() {
   const monthValue = $('pedidoMes')?.value;
   const weekMeta = getSelectedWeekMeta();
-
-  if (!monthValue || !weekMeta) {
-    toast('Seleccioná mes y semana.');
-    return;
-  }
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
 
   ensurePedidoDraft();
-  if (!state.pedidoSemanalActual) {
-    toast('Primero cargá la semana.');
-    return;
-  }
+  if (!state.pedidoSemanalActual) { toast('Primero cargá la semana.'); return; }
 
   const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
   const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
   const isGerencia = state.perfil?.rol === 'gerencia';
 
   if (isMoron && state.pedidoSemanalActual.moronLocked) {
-    toast('Morón ya confirmó esta semana.');
+    toast('Morón ya confirmó esta semana y no puede modificarla.');
     return;
   }
 
-  if (isAlvear && state.pedidoSemanalActual.alvearLocked) {
-    toast('Alvear ya cerró esta semana.');
+  if (isAlvear && state.pedidoSemanalActual.alvearConfirmado) {
+    toast('La semana ya está cerrada.');
     return;
   }
 
@@ -1831,13 +1337,10 @@ async function guardarPedidoSemanal() {
   const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
 
   const payload = {
-    monthValue,
-    weekKey: weekMeta.key,
-    weekLabel: weekMeta.label,
-    weekStart: weekMeta.start,
-    weekEnd: weekMeta.end,
+    monthValue, weekKey: weekMeta.key, weekLabel: weekMeta.label,
+    weekStart: weekMeta.start, weekEnd: weekMeta.end,
     moronLocked: isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
-    alvearLocked: isGerencia ? !!state.pedidoSemanalActual.alvearLocked : (isAlvear ? true : !!state.pedidoSemanalActual.alvearLocked),
+    alvearConfirmado: !!state.pedidoSemanalActual.alvearConfirmado,
     updatedBy: state.currentUser?.email || '',
     updatedAtText: new Date().toISOString(),
     updatedAt: serverTimestamp(),
@@ -1845,22 +1348,51 @@ async function guardarPedidoSemanal() {
   };
 
   const snap = await getDoc(ref);
-  if (snap.exists()) {
-    await updateDoc(ref, payload);
-  } else {
-    await setDoc(ref, {
-      ...payload,
-      createdAt: serverTimestamp(),
-      createdBy: state.currentUser?.email || ''
-    });
-  }
+  if (snap.exists()) { await updateDoc(ref, payload); }
+  else { await setDoc(ref, { ...payload, createdAt: serverTimestamp(), createdBy: state.currentUser?.email || '' }); }
 
-  state.pedidoSemanalActual = {
-    id,
-    ...payload
+  state.pedidoSemanalActual = { id, ...payload };
+
+  if (isMoron) toast('✅ Pedido confirmado y enviado a Alvear.');
+  else toast('Pedido semanal guardado.');
+
+  await refreshAll();
+  renderPedidoSemanal();
+}
+
+async function confirmarEntregaAlvear() {
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
+  ensurePedidoDraft();
+  if (!state.pedidoSemanalActual) { toast('Primero cargá la semana.'); return; }
+
+  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
+  const isGerencia = state.perfil?.rol === 'gerencia';
+  if (!isAlvear && !isGerencia) { toast('Solo Alvear puede confirmar la entrega.'); return; }
+
+  if (!confirm('¿Confirmás la entrega de esta semana? Una vez confirmada no podrás modificar los datos.')) return;
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+
+  const payload = {
+    ...state.pedidoSemanalActual,
+    alvearConfirmado: true,
+    alvearConfirmadoPor: state.currentUser?.email || '',
+    alvearConfirmadoEn: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+    rows: currentRows
   };
 
-  toast('Orden de fabricación guardada.');
+  const snap = await getDoc(ref);
+  if (snap.exists()) { await updateDoc(ref, payload); }
+  else { await setDoc(ref, { ...payload, createdAt: serverTimestamp() }); }
+
+  state.pedidoSemanalActual = { id, ...payload };
+  toast('✅ Semana cerrada. El calendario se actualizará.');
+  await refreshAll();
   renderPedidoSemanal();
 }
 
@@ -1868,20 +1400,17 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
   ensurePedidoDraft();
   if (!state.pedidoSemanalActual) return;
 
-  const visibleRows = getPedidoSemanalRowsForView(state.pedidoSemanalActual.rows || []);
-  const visibleRow = visibleRows[rowIndex];
-  if (!visibleRow) return;
+  // rowIndex es el índice REAL (ya mapeado en la UI)
+  const row = state.pedidoSemanalActual.rows[rowIndex];
+  if (!row) return;
 
-  const realIndex = state.pedidoSemanalActual.rows.findIndex((r) => r.productoId === visibleRow.productoId);
-  if (realIndex < 0) return;
-
-  const row = state.pedidoSemanalActual.rows[realIndex];
   const oldValue = row[fieldKey] ?? '';
-
   let normalizedNewValue = newValue;
 
-  if ([PEDIDO_FIELDS.CANTIDAD_SOLICITADA, PEDIDO_FIELDS.CANTIDAD_ENTREGADA].includes(fieldKey)) {
+  if (['moronCantidad', 'alvearCantidadEntregada'].includes(fieldKey)) {
     normalizedNewValue = num(newValue);
+  } else if (fieldKey === 'alvearMotivos') {
+    normalizedNewValue = Array.isArray(newValue) ? newValue : [];
   } else {
     normalizedNewValue = String(newValue || '');
   }
@@ -1891,7 +1420,6 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
   const actor = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
   pushWeeklyHistory(row, fieldKey, oldValue, normalizedNewValue, actor);
 
-  state.pedidoSemanalSelectedRow = rowIndex;
   renderPedidoSemanal();
 }
 
@@ -1899,31 +1427,36 @@ function renderPedidoSemanal() {
   const table = $('tablaPedidoSemanal');
   const historyBox = $('pedidoSemanalHistorial');
   const statusBox = $('pedidoEstado');
-
   if (!table) return;
 
-  if (!state.pedidoSemanas.length) {
-    refreshPedidoWeeks();
-  }
-
-  if (statusBox) {
-    statusBox.textContent = getPedidoEstadoText();
-  }
+  if (!state.pedidoSemanas.length) refreshPedidoWeeks();
+  if (statusBox) statusBox.textContent = getPedidoEstadoText();
 
   const allRows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
   const rows = getPedidoSemanalRowsForView(allRows);
   const viewMode = getPedidoSemanalViewMode();
+  const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
+
+  // Mostrar / ocultar botón confirmar Alvear
+  const btnConfirmarContainer = $('btnConfirmarAlvear');
+  if (btnConfirmarContainer) {
+    const mostrarBoton = (viewMode === 'alvear' || viewMode === 'gerencia')
+      && !!state.pedidoSemanalActual?.moronLocked
+      && !alvearConfirmado;
+    btnConfirmarContainer.style.display = mostrarBoton ? 'block' : 'none';
+  }
 
   renderPedidoSemanalTable(table, {
     rows,
     viewMode,
-    canEditField,
+    canEditField: canEditPedidoField,
     selectedRowIndex: state.pedidoSemanalSelectedRow,
     onFieldChange: handlePedidoFieldChange,
     onSelectHistory: (rowIndex) => {
       state.pedidoSemanalSelectedRow = rowIndex;
       renderPedidoSemanal();
-    }
+    },
+    alvearConfirmado
   });
 
   const selectedRow = typeof state.pedidoSemanalSelectedRow === 'number'
@@ -1931,27 +1464,129 @@ function renderPedidoSemanal() {
     : null;
 
   renderPedidoSemanalHistory(historyBox, selectedRow);
+
+  // Calendario — solo si el elemento existe
+  const calendario = $('pedidoCalendario');
+  if (calendario) {
+    const monthValue = $('pedidoMes')?.value || '';
+    renderWeekCalendar(calendario, state.pedidoSemanas, state.pedidosSemanalesCache || {}, monthValue);
+  }
 }
 
-async function seedBaseData() {
-  return;
+/* ================================================================
+   REPORTES
+================================================================ */
+
+function renderReportesFiltros() {
+  // Poblar select de categorías
+  const selectCat = $('reporteCategoria');
+  if (selectCat) {
+    const categorias = [...new Set(state.productos.filter((p) => p.categoria).map((p) => p.categoria))].sort();
+    const current = selectCat.value;
+    selectCat.innerHTML = '<option value="">Todas las categorías</option>' +
+      categorias.map((c) => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
+  }
 }
+
+function renderReportes() {
+  const categoria = $('reporteCategoria')?.value || '';
+  const mes = $('reporteMes')?.value || '';
+
+  const docs = Object.values(state.pedidosSemanalesCache || {});
+  const filteredDocs = docs.filter((d) => !mes || (d.monthValue || d.id || '').startsWith(mes));
+
+  let filas = [];
+
+  filteredDocs.sort((a, b) => (a.id || '').localeCompare(b.id || '')).forEach((doc) => {
+    const rows = doc.rows || [];
+    rows.forEach((row) => {
+      if (num(row.moronCantidad) === 0) return;
+      if (categoria && row.categoria !== categoria) return;
+
+      const ped = num(row.moronCantidad);
+      const ent = num(row.alvearCantidadEntregada);
+      const pct = ped > 0 ? Math.round((ent / ped) * 100) : 0;
+      const motivos = Array.isArray(row.alvearMotivos) ? row.alvearMotivos.join(', ') : '';
+      const completion = evaluateWeekCompletion([row]);
+
+      let estadoLabel = '—';
+      let estadoColor = 'var(--muted)';
+      if (doc.alvearConfirmado) {
+        if (ent >= ped) { estadoLabel = '✅ Completo'; estadoColor = '#3ddc97'; }
+        else { estadoLabel = '❌ Incompleto'; estadoColor = '#ff5a5a'; }
+      } else if (doc.moronLocked) {
+        estadoLabel = '⏳ En proceso'; estadoColor = '#ffd166';
+      } else {
+        estadoLabel = '📝 Sin confirmar'; estadoColor = '#a5b1d8';
+      }
+
+      filas.push({ doc, row, ped, ent, pct, motivos, estadoLabel, estadoColor });
+    });
+  });
+
+  const tbody = $('tablaReportesBody');
+  if (tbody) {
+    tbody.innerHTML = filas.map((f) => `
+      <tr>
+        <td>${f.doc.weekLabel || f.doc.weekKey || f.doc.id}</td>
+        <td style="font-weight:600;">${f.row.productoNombre}</td>
+        <td style="color:var(--muted);">${f.row.categoria || '-'}</td>
+        <td style="text-align:center;font-weight:700;">${f.ped}</td>
+        <td style="text-align:center;">${f.ent}</td>
+        <td style="text-align:center;font-weight:700;color:${f.pct >= 100 ? '#3ddc97' : f.pct >= 50 ? '#ffd166' : '#ff5a5a'};">${f.pct}%</td>
+        <td style="font-size:12px;color:var(--muted);">${f.motivos || '—'}</td>
+        <td style="font-weight:600;color:${f.estadoColor};">${f.estadoLabel}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="8" style="color:var(--muted);">Sin datos para los filtros seleccionados.</td></tr>';
+  }
+
+  // Panel productividad en sección reportes
+  if (state.perfil?.rol === 'gerencia') {
+    const prod = computeProductividadAlvear(state.pedidosSemanalesCache || {});
+
+    const prodContent = $('productividadContent');
+    if (prodContent) {
+      prodContent.innerHTML = `
+        <div class="summary-boxes">
+          <div class="mini-stat"><span>Total pedido</span><strong>${prod.totalPedido}</strong></div>
+          <div class="mini-stat"><span>Total entregado</span><strong>${prod.totalEntregado}</strong></div>
+          <div class="mini-stat"><span>% cumplimiento</span><strong style="color:${prod.porcentajeGlobal >= 90 ? '#3ddc97' : prod.porcentajeGlobal >= 60 ? '#ffd166' : '#ff5a5a'}">${prod.porcentajeGlobal}%</strong></div>
+          <div class="mini-stat"><span>Semanas completas</span><strong>${prod.semanasCompletas} / ${prod.semanasCerradas}</strong></div>
+        </div>
+      `;
+    }
+
+    const motivosContent = $('motivosContent');
+    if (motivosContent) {
+      const motivos = Object.entries(prod.motivosTotales).sort((a, b) => b[1] - a[1]);
+      motivosContent.innerHTML = motivos.length
+        ? motivos.map(([m, c]) => `
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
+            <span style="font-size:13px;">${m}</span>
+            <span style="font-weight:700;color:#ff5a5a;">${c}</span>
+          </div>`).join('')
+        : '<div style="color:var(--muted);font-size:13px;">Sin motivos registrados.</div>';
+    }
+  }
+}
+
+/* ================================================================
+   REFRESH GLOBAL
+================================================================ */
+
+async function seedBaseData() { return; }
 
 async function refreshAll() {
-  state.productos = (await loadCollection('productos'))
-    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-
+  state.productos = (await loadCollection('productos')).sort((a, b) => (a.orden || 0) - (b.orden || 0));
   state.usuarios = await loadCollection('usuarios');
   state.reportes = (await loadCollection('reportes_diarios')).map((reporte) => ({
     ...reporte,
     rows: (reporte.rows || []).map(normalizeExistingRow)
   }));
 
- const pedidosSemanales = await loadCollection('pedidos_semanales');
+  const pedidosSemanales = await loadCollection('pedidos_semanales');
   state.pedidosSemanalesCache = {};
-  pedidosSemanales.forEach((item) => {
-    state.pedidosSemanalesCache[item.id] = item;
-  });
+  pedidosSemanales.forEach((item) => { state.pedidosSemanalesCache[item.id] = item; });
 
   state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
 
@@ -1961,31 +1596,31 @@ async function refreshAll() {
   renderCargaDiaria();
   renderGerenciaExcel();
   renderPedidoSemanal();
+  renderReportesFiltros();
 
   renderGerenciaMenuBadge(state.alertas);
   renderGerenciaAlertsPanel(state.alertas);
 }
 
+/* ================================================================
+   EVENTOS
+================================================================ */
+
 function bindEvents() {
   if (els.loginForm) {
     els.loginForm.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-
       try {
-        const cred = await signInWithEmailAndPassword(auth, $('email')?.value, $('password')?.value);
-        console.log('LOGIN OK:', cred.user?.email);
+        await signInWithEmailAndPassword(auth, $('email')?.value, $('password')?.value);
         toast('Sesión iniciada correctamente.');
       } catch (error) {
-        console.error('ERROR LOGIN:', error);
         toast(`Error login: ${error.code || error.message}`);
       }
     });
   }
 
   if (els.logoutBtn) {
-    els.logoutBtn.addEventListener('click', async () => {
-      await signOut(auth);
-    });
+    els.logoutBtn.addEventListener('click', async () => { await signOut(auth); });
   }
 
   $('formProducto')?.addEventListener('submit', registrarProducto);
@@ -2001,15 +1636,8 @@ function bindEvents() {
     renderDashboard();
   });
 
-  $('cargaFecha')?.addEventListener('change', () => {
-    state.reporteActual = null;
-    renderCargaDiaria();
-  });
-
-  $('cargaFabrica')?.addEventListener('change', () => {
-    state.reporteActual = null;
-    renderCargaDiaria();
-  });
+  $('cargaFecha')?.addEventListener('change', () => { state.reporteActual = null; renderCargaDiaria(); });
+  $('cargaFabrica')?.addEventListener('change', () => { state.reporteActual = null; renderCargaDiaria(); });
 
   $('pedidoMes')?.addEventListener('change', () => {
     state.pedidoSemanalActual = null;
@@ -2027,20 +1655,28 @@ function bindEvents() {
   $('btnCargarPedidoSemanal')?.addEventListener('click', cargarPedidoSemanal);
   $('btnGuardarPedidoSemanal')?.addEventListener('click', guardarPedidoSemanal);
 
-  els.menuBtn?.addEventListener('click', () => {
-    els.sidebar?.classList.toggle('open');
+  // Botón confirmar Alvear — se crea dinámicamente en el HTML
+  document.addEventListener('click', (e) => {
+    if (e.target?.id === 'btnConfirmarPedidoAlvear') confirmarEntregaAlvear();
   });
+
+  $('btnGenerarReporte')?.addEventListener('click', renderReportes);
+
+  $('reporteCategoria')?.addEventListener('change', renderReportes);
+  $('reporteMes')?.addEventListener('change', renderReportes);
+
+  els.menuBtn?.addEventListener('click', () => { els.sidebar?.classList.toggle('open'); });
 }
+
+/* ================================================================
+   AUTH
+================================================================ */
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    state.currentUser = null;
-    state.perfil = null;
-    state.reporteActual = null;
-    state.alertas = [];
-    state.pedidoSemanas = [];
-    state.pedidoSemanalActual = null;
-    state.pedidoSemanalSelectedRow = null;
+    state.currentUser = null; state.perfil = null; state.reporteActual = null;
+    state.alertas = []; state.pedidoSemanas = []; state.pedidoSemanalActual = null;
+    state.pedidoSemanalSelectedRow = null; state.pedidosSemanalesCache = {};
     setLoggedUI(false);
     return;
   }
@@ -2049,21 +1685,16 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
     await seedBaseData();
-
     state.perfil = await fetchPerfil(user.email);
 
     if (!state.perfil) {
       toast('El login funcionó, pero falta tu usuario en Firestore/usuarios.');
-      await signOut(auth);
-      setLoggedUI(false);
-      return;
+      await signOut(auth); setLoggedUI(false); return;
     }
 
     if (state.perfil.activo === false) {
       toast('Tu usuario está inactivo en Firestore.');
-      await signOut(auth);
-      setLoggedUI(false);
-      return;
+      await signOut(auth); setLoggedUI(false); return;
     }
 
     setLoggedUI(true);
@@ -2086,419 +1717,122 @@ onAuthStateChanged(auth, async (user) => {
 mountNavigation();
 bindEvents();
 
-/* =========================================================
-   app.js COMPLETO + CARGA MASIVA EXCEL
-   PEGAR AL FINAL DE TU app.js ACTUAL
-   (NO reemplaza todo tu sistema, agrega funcionalidad)
-========================================================= */
-
-/* =========================================================
-   CONFIG CARGA MASIVA
-========================================================= */
+/* ================================================================
+   CARGA MASIVA EXCEL (sin cambios)
+================================================================ */
 
 const MASS_UPLOAD_COLUMN_MAPS = {
-  alvear: {
-    alv: ['ALV'],
-    cajaChica: {
-      alvPlus: ['ALV_PLUS_CH'],
-      alvMinus: ['ALV_MINUS_CH'],
-      dif: ['DIF_CH']
-    },
-    cajaGrandeAlv: {
-      alvPlus: ['ALV_PLUS_GR'],
-      alvMinus: ['ALV_MINUS_GR'],
-      dif: ['DIF_GR']
-    }
-  },
-
-  banado: {
-    banadoChica: {
-      banadoPlus: ['BANADO_PLUS_CH'],
-      secando: ['SECANDO_CH'],
-      cosecha: ['COSECHA_CH'],
-      salida: ['SALIDA_CH'],
-      dif: ['DIF_CH']
-    },
-    banadoGrande: {
-      banadoPlus: ['BANADO_PLUS_GR'],
-      secando: ['SECANDO_GR'],
-      cosecha: ['COSECHA_GR'],
-      salida: ['SALIDA_GR'],
-      dif: ['DIF_GR']
-    }
-  },
-
-  moron: {
-    moronChicaInterna: {
-      totalBase: ['TOTAL_BASE_CH'],
-      entrada: ['ENTRADA_CH'],
-      sobrante: ['SOBRANTE_CH'],
-      pEmpaq: ['P_EMPAQ_CH'],
-      diferencia: ['DIFERENCIA_CH'],
-      fallados: ['FALLADOS_CH'],
-      devoluciones: ['DEVOLUCIONES_CH']
-    },
-
-    moronGrandeInterna: {
-      totalBase: ['TOTAL_BASE_GR'],
-      entrada: ['ENTRADA_GR'],
-      sobrante: ['SOBRANTE_GR'],
-      pEmpaq: ['P_EMPAQ_GR'],
-      diferencia: ['DIFERENCIA_GR'],
-      fallados: ['FALLADOS_GR'],
-      devoluciones: ['DEVOLUCIONES_GR']
-    }
-  }
+  alvear: { alv: ['ALV'], cajaChica: { alvPlus: ['ALV_PLUS_CH'], alvMinus: ['ALV_MINUS_CH'], dif: ['DIF_CH'] }, cajaGrandeAlv: { alvPlus: ['ALV_PLUS_GR'], alvMinus: ['ALV_MINUS_GR'], dif: ['DIF_GR'] } },
+  banado: { banadoChica: { banadoPlus: ['BANADO_PLUS_CH'], secando: ['SECANDO_CH'], cosecha: ['COSECHA_CH'], salida: ['SALIDA_CH'], dif: ['DIF_CH'] }, banadoGrande: { banadoPlus: ['BANADO_PLUS_GR'], secando: ['SECANDO_GR'], cosecha: ['COSECHA_GR'], salida: ['SALIDA_GR'], dif: ['DIF_GR'] } },
+  moron: { moronChicaInterna: { totalBase: ['TOTAL_BASE_CH'], entrada: ['ENTRADA_CH'], sobrante: ['SOBRANTE_CH'], pEmpaq: ['P_EMPAQ_CH'], diferencia: ['DIFERENCIA_CH'], fallados: ['FALLADOS_CH'], devoluciones: ['DEVOLUCIONES_CH'] }, moronGrandeInterna: { totalBase: ['TOTAL_BASE_GR'], entrada: ['ENTRADA_GR'], sobrante: ['SOBRANTE_GR'], pEmpaq: ['P_EMPAQ_GR'], diferencia: ['DIFERENCIA_GR'], fallados: ['FALLADOS_GR'], devoluciones: ['DEVOLUCIONES_GR'] } }
 };
 
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-function normalizeHeader(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
-}
-
-function normalizeProduct(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-}
-
-function numExcel(v) {
-  if (v === '' || v === null || v === undefined) return 0;
-  const n = Number(String(v).replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function findHeader(headers, aliases = []) {
-  const normalized = headers.map(normalizeHeader);
-
-  for (const alias of aliases) {
-    const idx = normalized.indexOf(normalizeHeader(alias));
-    if (idx >= 0) return idx;
-  }
-
-  return -1;
-}
-
-function getCurrentFactory() {
-  let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-  }
-
-  return fabrica;
-}
-
-
-/* =========================================================
-   CREAR BORRADOR SI NO EXISTE
-========================================================= */
+function normalizeHeader(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase(); }
+function normalizeProduct(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+function numExcel(v) { if (v === '' || v == null) return 0; const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) ? n : 0; }
+function findHeader(headers, aliases = []) { const normalized = headers.map(normalizeHeader); for (const alias of aliases) { const idx = normalized.indexOf(normalizeHeader(alias)); if (idx >= 0) return idx; } return -1; }
+function getCurrentFactory() { let f = $('cargaFabrica')?.value; if (!f && state.perfil?.fabrica) f = state.perfil.fabrica; return f; }
 
 function ensureMassiveDraft() {
   const fecha = $('cargaFecha')?.value;
   const fabrica = getCurrentFactory();
-
-  if (!fecha || !fabrica) {
-    toast('Seleccioná fecha y fábrica.');
-    return false;
-  }
-
-  if (!state.reporteActual) {
-    state.reporteActual = {
-      id: `${fecha}_${fabrica}`,
-      fecha,
-      fabrica,
-      estado: 'borrador',
-      rows: buildDefaultRows(fabrica)
-    };
-  }
-
+  if (!fecha || !fabrica) { toast('Seleccioná fecha y fábrica.'); return false; }
+  if (!state.reporteActual) { state.reporteActual = { id: `${fecha}_${fabrica}`, fecha, fabrica, estado: 'borrador', rows: buildDefaultRows(fabrica) }; }
   return true;
 }
 
-
-/* =========================================================
-   DESCARGAR PLANTILLA
-========================================================= */
-
 function getTemplateHeaders(fabrica) {
-
-  if (fabrica === 'alvear') {
-    return [
-      'PRODUCTO',
-      'ALV',
-      'ALV_PLUS_CH',
-      'ALV_MINUS_CH',
-      'DIF_CH',
-      'ALV_PLUS_GR',
-      'ALV_MINUS_GR',
-      'DIF_GR'
-    ];
-  }
-
-  if (fabrica === 'banado') {
-    return [
-      'PRODUCTO',
-      'BANADO_PLUS_CH',
-      'SECANDO_CH',
-      'COSECHA_CH',
-      'SALIDA_CH',
-      'DIF_CH',
-      'BANADO_PLUS_GR',
-      'SECANDO_GR',
-      'COSECHA_GR',
-      'SALIDA_GR',
-      'DIF_GR'
-    ];
-  }
-
-  if (fabrica === 'moron') {
-    return [
-      'PRODUCTO',
-      'TOTAL_BASE_CH',
-      'ENTRADA_CH',
-      'SOBRANTE_CH',
-      'P_EMPAQ_CH',
-      'DIFERENCIA_CH',
-      'FALLADOS_CH',
-      'DEVOLUCIONES_CH',
-      'TOTAL_BASE_GR',
-      'ENTRADA_GR',
-      'SOBRANTE_GR',
-      'P_EMPAQ_GR',
-      'DIFERENCIA_GR',
-      'FALLADOS_GR',
-      'DEVOLUCIONES_GR'
-    ];
-  }
-
+  if (fabrica === 'alvear') return ['PRODUCTO','ALV','ALV_PLUS_CH','ALV_MINUS_CH','DIF_CH','ALV_PLUS_GR','ALV_MINUS_GR','DIF_GR'];
+  if (fabrica === 'banado') return ['PRODUCTO','BANADO_PLUS_CH','SECANDO_CH','COSECHA_CH','SALIDA_CH','DIF_CH','BANADO_PLUS_GR','SECANDO_GR','COSECHA_GR','SALIDA_GR','DIF_GR'];
+  if (fabrica === 'moron') return ['PRODUCTO','TOTAL_BASE_CH','ENTRADA_CH','SOBRANTE_CH','P_EMPAQ_CH','DIFERENCIA_CH','FALLADOS_CH','DEVOLUCIONES_CH','TOTAL_BASE_GR','ENTRADA_GR','SOBRANTE_GR','P_EMPAQ_GR','DIFERENCIA_GR','FALLADOS_GR','DEVOLUCIONES_GR'];
   return ['PRODUCTO'];
 }
 
 function descargarPlantillaCargaMasiva() {
-
   const fabrica = getCurrentFactory();
-
-  if (!fabrica) {
-    toast('Seleccioná fábrica.');
-    return;
-  }
-
+  if (!fabrica) { toast('Seleccioná fábrica.'); return; }
   const headers = getTemplateHeaders(fabrica);
-
   const productos = getProductosParaFabrica(fabrica);
-
-  const rows = [
-    headers,
-    ...productos.map(p => {
-      const row = new Array(headers.length).fill('');
-      row[0] = p.nombre;
-      return row;
-    })
-  ];
-
+  const rows = [headers, ...productos.map((p) => { const r = new Array(headers.length).fill(''); r[0] = p.nombre; return r; })];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-
   XLSX.utils.book_append_sheet(wb, ws, 'Carga');
-
   XLSX.writeFile(wb, `plantilla_${fabrica}.xlsx`);
 }
 
-
-/* =========================================================
-   IMPORTAR EXCEL
-========================================================= */
-
 function procesarCargaMasivaExcel() {
-
   const file = $('fileCargaMasiva')?.files?.[0];
   const fabrica = getCurrentFactory();
-
-  if (!file) {
-    toast('Seleccioná archivo.');
-    return;
-  }
-
+  if (!file) { toast('Seleccioná archivo.'); return; }
   if (!ensureMassiveDraft()) return;
 
   const reader = new FileReader();
-
   reader.onload = function(e) {
-
-    const data = new Uint8Array(e.target.result);
-
-    const workbook = XLSX.read(data, { type: 'array' });
-
+    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
     const ws = workbook.Sheets[workbook.SheetNames[0]];
-
-    const rows = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: ''
-    });
-
-    if (rows.length < 2) {
-      toast('Excel vacío.');
-      return;
-    }
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (rows.length < 2) { toast('Excel vacío.'); return; }
 
     const headers = rows[0];
-
     const idxProducto = findHeader(headers, ['PRODUCTO']);
-
-    if (idxProducto < 0) {
-      toast('Debe existir columna PRODUCTO.');
-      return;
-    }
+    if (idxProducto < 0) { toast('Debe existir columna PRODUCTO.'); return; }
 
     const mapRows = new Map();
-
-    state.reporteActual.rows.forEach((r, i) => {
-      mapRows.set(normalizeProduct(r.productoNombre), i);
-    });
+    state.reporteActual.rows.forEach((r, i) => { mapRows.set(normalizeProduct(r.productoNombre), i); });
 
     let cargados = 0;
-
     for (let i = 1; i < rows.length; i++) {
-
       const row = rows[i];
-
       const producto = normalizeProduct(row[idxProducto]);
-
       if (!producto) continue;
-
       const targetIndex = mapRows.get(producto);
-
       if (targetIndex === undefined) continue;
-
       const target = state.reporteActual.rows[targetIndex];
 
       if (fabrica === 'alvear') {
-
-        const idxAlv = findHeader(headers, ['ALV']);
-        if (idxAlv >= 0) target.groups.alvear.alv = numExcel(row[idxAlv]);
-
-        target.groups.cajaChica.alvPlus =
-          numExcel(row[findHeader(headers, ['ALV_PLUS_CH'])]);
-
-        target.groups.cajaChica.alvMinus =
-          numExcel(row[findHeader(headers, ['ALV_MINUS_CH'])]);
-
-        target.groups.cajaChica.dif =
-          numExcel(row[findHeader(headers, ['DIF_CH'])]);
-
-        target.groups.cajaGrandeAlv.alvPlus =
-          numExcel(row[findHeader(headers, ['ALV_PLUS_GR'])]);
-
-        target.groups.cajaGrandeAlv.alvMinus =
-          numExcel(row[findHeader(headers, ['ALV_MINUS_GR'])]);
-
-        target.groups.cajaGrandeAlv.dif =
-          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+        const idxAlv = findHeader(headers, ['ALV']); if (idxAlv >= 0) target.groups.alvear.alv = numExcel(row[idxAlv]);
+        target.groups.cajaChica.alvPlus = numExcel(row[findHeader(headers, ['ALV_PLUS_CH'])]);
+        target.groups.cajaChica.alvMinus = numExcel(row[findHeader(headers, ['ALV_MINUS_CH'])]);
+        target.groups.cajaChica.dif = numExcel(row[findHeader(headers, ['DIF_CH'])]);
+        target.groups.cajaGrandeAlv.alvPlus = numExcel(row[findHeader(headers, ['ALV_PLUS_GR'])]);
+        target.groups.cajaGrandeAlv.alvMinus = numExcel(row[findHeader(headers, ['ALV_MINUS_GR'])]);
+        target.groups.cajaGrandeAlv.dif = numExcel(row[findHeader(headers, ['DIF_GR'])]);
       }
-
       if (fabrica === 'banado') {
-
-        target.groups.banadoChica.banadoPlus =
-          numExcel(row[findHeader(headers, ['BANADO_PLUS_CH'])]);
-
-        target.groups.banadoChica.secando =
-          numExcel(row[findHeader(headers, ['SECANDO_CH'])]);
-
-        target.groups.banadoChica.cosecha =
-          numExcel(row[findHeader(headers, ['COSECHA_CH'])]);
-
-        target.groups.banadoChica.salida =
-          numExcel(row[findHeader(headers, ['SALIDA_CH'])]);
-
-        target.groups.banadoChica.dif =
-          numExcel(row[findHeader(headers, ['DIF_CH'])]);
-
-        target.groups.banadoGrande.banadoPlus =
-          numExcel(row[findHeader(headers, ['BANADO_PLUS_GR'])]);
-
-        target.groups.banadoGrande.secando =
-          numExcel(row[findHeader(headers, ['SECANDO_GR'])]);
-
-        target.groups.banadoGrande.cosecha =
-          numExcel(row[findHeader(headers, ['COSECHA_GR'])]);
-
-        target.groups.banadoGrande.salida =
-          numExcel(row[findHeader(headers, ['SALIDA_GR'])]);
-
-        target.groups.banadoGrande.dif =
-          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+        target.groups.banadoChica.banadoPlus = numExcel(row[findHeader(headers, ['BANADO_PLUS_CH'])]);
+        target.groups.banadoChica.secando = numExcel(row[findHeader(headers, ['SECANDO_CH'])]);
+        target.groups.banadoChica.cosecha = numExcel(row[findHeader(headers, ['COSECHA_CH'])]);
+        target.groups.banadoChica.salida = numExcel(row[findHeader(headers, ['SALIDA_CH'])]);
+        target.groups.banadoChica.dif = numExcel(row[findHeader(headers, ['DIF_CH'])]);
+        target.groups.banadoGrande.banadoPlus = numExcel(row[findHeader(headers, ['BANADO_PLUS_GR'])]);
+        target.groups.banadoGrande.secando = numExcel(row[findHeader(headers, ['SECANDO_GR'])]);
+        target.groups.banadoGrande.cosecha = numExcel(row[findHeader(headers, ['COSECHA_GR'])]);
+        target.groups.banadoGrande.salida = numExcel(row[findHeader(headers, ['SALIDA_GR'])]);
+        target.groups.banadoGrande.dif = numExcel(row[findHeader(headers, ['DIF_GR'])]);
       }
-
       if (fabrica === 'moron') {
-
-        target.groups.moronChicaInterna.totalBase =
-          numExcel(row[findHeader(headers, ['TOTAL_BASE_CH'])]);
-
-        target.groups.moronChicaInterna.entrada =
-          numExcel(row[findHeader(headers, ['ENTRADA_CH'])]);
-
-        target.groups.moronChicaInterna.sobrante =
-          numExcel(row[findHeader(headers, ['SOBRANTE_CH'])]);
-
-        target.groups.moronChicaInterna.pEmpaq =
-          numExcel(row[findHeader(headers, ['P_EMPAQ_CH'])]);
-
-        target.groups.moronChicaInterna.diferencia =
-          numExcel(row[findHeader(headers, ['DIFERENCIA_CH'])]);
-
-        target.groups.moronGrandeInterna.totalBase =
-          numExcel(row[findHeader(headers, ['TOTAL_BASE_GR'])]);
-
-        target.groups.moronGrandeInterna.entrada =
-          numExcel(row[findHeader(headers, ['ENTRADA_GR'])]);
-
-        target.groups.moronGrandeInterna.sobrante =
-          numExcel(row[findHeader(headers, ['SOBRANTE_GR'])]);
-
-        target.groups.moronGrandeInterna.pEmpaq =
-          numExcel(row[findHeader(headers, ['P_EMPAQ_GR'])]);
-
-        target.groups.moronGrandeInterna.diferencia =
-          numExcel(row[findHeader(headers, ['DIFERENCIA_GR'])]);
+        target.groups.moronChicaInterna.totalBase = numExcel(row[findHeader(headers, ['TOTAL_BASE_CH'])]);
+        target.groups.moronChicaInterna.entrada = numExcel(row[findHeader(headers, ['ENTRADA_CH'])]);
+        target.groups.moronChicaInterna.sobrante = numExcel(row[findHeader(headers, ['SOBRANTE_CH'])]);
+        target.groups.moronChicaInterna.pEmpaq = numExcel(row[findHeader(headers, ['P_EMPAQ_CH'])]);
+        target.groups.moronChicaInterna.diferencia = numExcel(row[findHeader(headers, ['DIFERENCIA_CH'])]);
+        target.groups.moronGrandeInterna.totalBase = numExcel(row[findHeader(headers, ['TOTAL_BASE_GR'])]);
+        target.groups.moronGrandeInterna.entrada = numExcel(row[findHeader(headers, ['ENTRADA_GR'])]);
+        target.groups.moronGrandeInterna.sobrante = numExcel(row[findHeader(headers, ['SOBRANTE_GR'])]);
+        target.groups.moronGrandeInterna.pEmpaq = numExcel(row[findHeader(headers, ['P_EMPAQ_GR'])]);
+        target.groups.moronGrandeInterna.diferencia = numExcel(row[findHeader(headers, ['DIFERENCIA_GR'])]);
       }
-
       cargados++;
     }
 
     renderCargaDiaria();
-
-    $('estadoCargaMasiva').textContent =
-      `Importación correcta. ${cargados} productos cargados.`;
-
+    if ($('estadoCargaMasiva')) $('estadoCargaMasiva').textContent = `Importación correcta. ${cargados} productos cargados.`;
     toast('Carga masiva completada.');
   };
-
   reader.readAsArrayBuffer(file);
 }
 
-
-/* =========================================================
-   EVENTOS
-========================================================= */
-
 document.addEventListener('DOMContentLoaded', () => {
-
-  $('btnDescargarPlantillaCarga')
-    ?.addEventListener('click', descargarPlantillaCargaMasiva);
-
-  $('btnProcesarCargaMasiva')
-    ?.addEventListener('click', procesarCargaMasivaExcel);
-
+  $('btnDescargarPlantillaCarga')?.addEventListener('click', descargarPlantillaCargaMasiva);
+  $('btnProcesarCargaMasiva')?.addEventListener('click', procesarCargaMasivaExcel);
 });
