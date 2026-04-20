@@ -448,3 +448,72 @@ input[type="number"]{
 #pedidoSemanalHistorial{
   min-height:120px;
 }
+
+/* =====================================================
+   FIX: texto visible en select oscuro (semanas)
+===================================================== */
+select option {
+  background: #1a2540;
+  color: #eef2ff;
+}
+
+/* =====================================================
+   TABLA PEDIDO SEMANAL — ajustes generales
+===================================================== */
+#tablaPedidoSemanal {
+  min-width: 700px;
+}
+
+#tablaPedidoSemanal textarea.pedido-textarea,
+#tablaPedidoSemanal textarea {
+  min-width: 160px;
+  resize: vertical;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255,255,255,.04);
+  color: #fff;
+  font-size: 12px;
+  width: 100%;
+}
+
+/* =====================================================
+   MOTIVOS checkboxes
+===================================================== */
+.motivos-list label,
+#tablaPedidoSemanal label {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#tablaPedidoSemanal input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 3px;
+}
+
+/* =====================================================
+   BOTÓN CONFIRMAR ALVEAR
+===================================================== */
+#btnConfirmarAlvear {
+  margin-top: 12px;
+}
+
+/* =====================================================
+   SECCIÓN REPORTES
+===================================================== */
+#section-reportes .data-table td,
+#section-reportes .data-table th {
+  font-size: 13px;
+  padding: 9px 12px;
+}
+
+/* =====================================================
+   DASHBOARD — panel productividad
+===================================================== */
+#dashMotivosContent > div {
+  font-size: 13px;
+}
