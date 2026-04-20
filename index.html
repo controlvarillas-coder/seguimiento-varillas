@@ -56,9 +56,10 @@
           <button class="nav-link active" data-section="dashboard">Dashboard</button>
           <button class="nav-link gerencia-only" data-section="productos">Productos</button>
           <button class="nav-link" data-section="carga">Carga diaria</button>
-          <button class="nav-link" data-section="pedido-semanal">Pedido semanal</button>
+          <button class="nav-link" data-section="pedido-semanal">Orden de fabricación</button>
           <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
           <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
+          <button class="nav-link gerencia-only" data-section="reportes">Reportes</button>
         </nav>
 
         <div class="sidebar-bottom">
@@ -213,6 +214,26 @@
               </div>
             </div>
           </div>
+
+          <!-- Panel productividad Alvear — solo gerencia -->
+          <div class="content-grid two-col mt-20 gerencia-only">
+            <div class="panel-card">
+              <div class="panel-header"><h3>Productividad Alvear</h3></div>
+              <div class="summary-boxes">
+                <div class="mini-stat"><span>Total pedido (semanas)</span><strong id="statTotalPedido">0</strong></div>
+                <div class="mini-stat"><span>Total entregado</span><strong id="statTotalEntregado">0</strong></div>
+                <div class="mini-stat"><span>% cumplimiento global</span><strong id="statPorcentaje">0%</strong></div>
+                <div class="mini-stat"><span>Semanas completas</span><strong id="statSemanasCompletas">—</strong></div>
+              </div>
+            </div>
+            <div class="panel-card">
+              <div class="panel-header"><h3>Principales motivos de incumplimiento</h3></div>
+              <div id="dashMotivosContent" style="min-height:60px;">
+                <div style="color:var(--muted);font-size:13px;">Sin datos aún.</div>
+              </div>
+            </div>
+          </div>
+
         </section>
 
         <section id="section-productos" class="section">
@@ -356,7 +377,7 @@
         <section id="section-pedido-semanal" class="section">
           <div class="panel-card">
             <div class="panel-header">
-              <h3>Pedido semanal</h3>
+              <h3>Orden de fabricación</h3>
             </div>
 
             <div class="toolbar-grid">
@@ -384,7 +405,19 @@
             </div>
 
             <div class="hint-box">
-              Morón carga lo que necesita para la semana siguiente. Una vez guardado por Morón, queda bloqueado para Morón. Alvear y Gerencia pueden seguir editando. Los cambios de Alvear y Gerencia deben conservar historial.
+              Morón carga lo que necesita. Una vez que confirma, el pedido se envía a Alvear. Alvear ve solo los productos pedidos y puede cargar fecha de entrega y cantidad entregada. Al confirmar Alvear se cierra la semana.
+            </div>
+            <div id="btnConfirmarAlvear" style="display:none;margin-top:12px;">
+              <button id="btnConfirmarPedidoAlvear" class="btn btn-primary" type="button">
+                ✅ Confirmar entrega de la semana (cerrar)
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-card mt-20 gerencia-only">
+            <div class="panel-header"><h3>Calendario de semanas</h3></div>
+            <div id="pedidoCalendario" style="padding:4px 0;">
+              Seleccioná un mes para ver el calendario.
             </div>
           </div>
 
@@ -454,6 +487,71 @@
             </div>
           </div>
         </section>
+        <section id="section-reportes" class="section">
+
+          <!-- Filtros -->
+          <div class="panel-card">
+            <div class="panel-header"><h3>Reportes de pedidos semanales</h3></div>
+            <div class="toolbar-grid">
+              <div class="field">
+                <label for="reporteCategoria">Categoría</label>
+                <select id="reporteCategoria">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="reporteMes">Mes</label>
+                <input id="reporteMes" type="month" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button id="btnGenerarReporte" class="btn btn-primary" type="button">Generar reporte</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Productividad y motivos — solo gerencia -->
+          <div class="content-grid two-col mt-20 gerencia-only">
+            <div class="panel-card">
+              <div class="panel-header"><h3>Productividad Alvear</h3></div>
+              <div id="productividadContent">
+                <div style="color:var(--muted);font-size:13px;">Generá un reporte para ver datos.</div>
+              </div>
+            </div>
+            <div class="panel-card">
+              <div class="panel-header"><h3>Motivos de incumplimiento</h3></div>
+              <div id="motivosContent">
+                <div style="color:var(--muted);font-size:13px;">Sin datos.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla detalle -->
+          <div class="panel-card mt-20">
+            <div class="panel-header"><h3>Detalle de pedidos</h3></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Semana</th>
+                    <th>Aroma</th>
+                    <th>Categoría</th>
+                    <th>Cant. pedida</th>
+                    <th>Cant. entregada</th>
+                    <th>% cumplimiento</th>
+                    <th>Motivos</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaReportesBody">
+                  <tr><td colspan="8">Generá un reporte para ver datos.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
       </main>
     </div>
   </section>
