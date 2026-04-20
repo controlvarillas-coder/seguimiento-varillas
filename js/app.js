@@ -6,10 +6,14 @@ import {
   getWeekDocId,
   buildDefaultWeeklyRows,
   normalizeWeeklyRows,
-  pushWeeklyHistory
+  pushWeeklyHistory,
+  evaluateWeekCompletion,
+  computeProductividadAlvear,
+  MOTIVOS_PREDEFINIDOS
 } from './modules/pedido-semanal/pedido-semanal.service.js';
 import {
   renderWeekOptions,
+  renderWeekCalendar,
   renderPedidoSemanalTable,
   renderPedidoSemanalHistory
 } from './modules/pedido-semanal/pedido-semanal.ui.js';
@@ -47,7 +51,8 @@ const state = {
   alertas: [],
   pedidoSemanas: [],
   pedidoSemanalActual: null,
-  pedidoSemanalSelectedRow: null
+  pedidoSemanalSelectedRow: null,
+  pedidosSemanalesCache: {}
 };
 
 const FABRICAS = {
@@ -199,11 +204,12 @@ const INPUT_GROUP_BY_FABRICA = {
 };
 
 const PEDIDO_FIELDS = {
-  CANTIDAD_SOLICITADA: 'cantidadSolicitada',
-  FECHA_ENTREGA: 'fechaEntrega',
-  CANTIDAD_ENTREGADA: 'cantidadEntregada',
-  MOTIVO: 'motivoIncumplimiento',
-  MOTIVO_OTRO: 'motivoOtro'
+  MORON_CHICA: 'moronPedidoChica',
+  MORON_GRANDE: 'moronPedidoGrande',
+  MORON_OBS: 'moronObservacion',
+  ALVEAR_DIA: 'alvearDiaProduccion',
+  ALVEAR_OBS: 'alvearObservacion',
+  GERENCIA_OBS: 'gerenciaObservacion'
 };
 
 const els = {
@@ -244,8 +250,8 @@ function setSection(sectionId) {
     gerencia: 'Excel gerencia',
     carga: 'Carga diaria',
     usuarios: 'Usuarios',
-    'pedido-semanal': 'ORDEN DE FABRICACION',
-    reporte: 'Reporte'
+    'pedido-semanal': 'Orden de fabricación',
+    reportes: 'Reportes'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
@@ -254,7 +260,12 @@ function setSection(sectionId) {
     refreshPedidoWeeks();
     renderPedidoSemanal();
   }
+
+  if (sectionId === 'reportes') {
+    renderReportesFiltros();
+  }
 }
+
 function mountNavigation() {
   document.querySelectorAll('.nav-link').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -514,6 +525,7 @@ function setMonthlyDefault() {
   if ($('mesGerencia')) $('mesGerencia').value = ym;
   if ($('cargaFecha')) $('cargaFecha').value = new Date().toISOString().slice(0, 10);
   if ($('pedidoMes')) $('pedidoMes').value = ym;
+  if ($('reporteMes')) $('reporteMes').value = ym;
   state.pedidoSemanas = buildWeeksForMonth(ym);
   renderWeekOptions($('pedidoSemana'), state.pedidoSemanas);
 }
@@ -642,6 +654,11 @@ function renderDashboard() {
           <td>${a.diferencia || 0}</td>
         </tr>
       `).join('') || '<tr><td colspan="4">Sin alertas.</td></tr>';
+  }
+
+  // Panel productividad Alvear — solo gerencia
+  if (state.perfil?.rol === 'gerencia') {
+    renderDashboardProductividad();
   }
 }
 
@@ -1657,22 +1674,22 @@ function canEditPedidoField(fieldKey) {
   const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
   const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
   const moronLocked = !!state.pedidoSemanalActual?.moronLocked;
-  const alvearLocked = !!state.pedidoSemanalActual?.alvearLocked;
+  const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
 
   if (isGerencia) return true;
 
   if (isMoron) {
     if (moronLocked) return false;
-    return [PEDIDO_FIELDS.CANTIDAD_SOLICITADA].includes(fieldKey);
+    return ['moronCantidad', 'moronObservacion'].includes(fieldKey);
   }
 
   if (isAlvear) {
-    if (alvearLocked) return false;
+    if (alvearConfirmado) return false;
     return [
-      PEDIDO_FIELDS.FECHA_ENTREGA,
-      PEDIDO_FIELDS.CANTIDAD_ENTREGADA,
-      PEDIDO_FIELDS.MOTIVO,
-      PEDIDO_FIELDS.MOTIVO_OTRO
+      'alvearFechaEntrega',
+      'alvearCantidadEntregada',
+      'alvearMotivos',
+      'alvearObservacion'
     ].includes(fieldKey);
   }
 
@@ -1682,12 +1699,11 @@ function canEditPedidoField(fieldKey) {
 function getPedidoEstadoText() {
   if (!state.pedidoSemanalActual) return 'Sin cargar';
   const moronLocked = !!state.pedidoSemanalActual.moronLocked;
+  const alvearConfirmado = !!state.pedidoSemanalActual.alvearConfirmado;
 
-  if (moronLocked) {
-    return 'Morón ya guardó su pedido. Morón bloqueado.';
-  }
-
-  return 'Borrador editable';
+  if (alvearConfirmado) return '✅ Semana cerrada — Alvear confirmó la entrega';
+  if (moronLocked) return '⏳ Pedido enviado por Morón — Alvear cargando entregas';
+  return '📝 Borrador — Morón puede editar';
 }
 
 function getPedidoSemanalViewMode() {
@@ -1704,7 +1720,8 @@ function getPedidoSemanalRowsForView(rows = []) {
   if (viewMode === 'moron') return rows;
 
   if (viewMode === 'alvear') {
-    return rows.filter((row) => num(row.cantidadSolicitada) > 0);
+    // Alvear solo ve productos donde Morón haya pedido algo
+    return rows.filter((row) => num(row.moronCantidad) > 0);
   }
 
   return [];
@@ -1754,6 +1771,7 @@ function ensurePedidoDraft() {
     weekStart: weekMeta.start,
     weekEnd: weekMeta.end,
     moronLocked: false,
+    alvearConfirmado: false,
     rows: buildDefaultWeeklyRows(getWeeklyProducts())
   };
 }
@@ -1788,6 +1806,7 @@ async function cargarPedidoSemanal() {
       weekStart: weekMeta.start,
       weekEnd: weekMeta.end,
       moronLocked: false,
+      alvearConfirmado: false,
       rows: buildDefaultWeeklyRows(getWeeklyProducts())
     };
     toast('Nueva semana preparada.');
@@ -1817,12 +1836,12 @@ async function guardarPedidoSemanal() {
   const isGerencia = state.perfil?.rol === 'gerencia';
 
   if (isMoron && state.pedidoSemanalActual.moronLocked) {
-    toast('Morón ya confirmó esta semana.');
+    toast('Morón ya confirmó esta semana y no puede modificarla.');
     return;
   }
 
-  if (isAlvear && state.pedidoSemanalActual.alvearLocked) {
-    toast('Alvear ya cerró esta semana.');
+  if (isAlvear && state.pedidoSemanalActual.alvearConfirmado) {
+    toast('La semana ya está cerrada.');
     return;
   }
 
@@ -1837,7 +1856,7 @@ async function guardarPedidoSemanal() {
     weekStart: weekMeta.start,
     weekEnd: weekMeta.end,
     moronLocked: isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
-    alvearLocked: isGerencia ? !!state.pedidoSemanalActual.alvearLocked : (isAlvear ? true : !!state.pedidoSemanalActual.alvearLocked),
+    alvearConfirmado: !!state.pedidoSemanalActual.alvearConfirmado,
     updatedBy: state.currentUser?.email || '',
     updatedAtText: new Date().toISOString(),
     updatedAt: serverTimestamp(),
@@ -1860,7 +1879,9 @@ async function guardarPedidoSemanal() {
     ...payload
   };
 
-  toast('Orden de fabricación guardada.');
+  if (isMoron) toast('✅ Pedido confirmado y enviado a Alvear.');
+  else toast('Pedido semanal guardado.');
+  await refreshAll();
   renderPedidoSemanal();
 }
 
@@ -1880,8 +1901,20 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
 
   let normalizedNewValue = newValue;
 
-  if ([PEDIDO_FIELDS.CANTIDAD_SOLICITADA, PEDIDO_FIELDS.CANTIDAD_ENTREGADA].includes(fieldKey)) {
+  if ([
+    'moronPedidoChica',
+    'moronPedidoGrande',
+    'moronCantidad',
+    'alvearCantidadEntregada'
+  ].includes(fieldKey)) {
     normalizedNewValue = num(newValue);
+  } else if ([
+    'entregadoChica',
+    'entregadoGrande'
+  ].includes(fieldKey)) {
+    normalizedNewValue = !!newValue;
+  } else if (fieldKey === 'alvearMotivos') {
+    normalizedNewValue = Array.isArray(newValue) ? newValue : [];
   } else {
     normalizedNewValue = String(newValue || '');
   }
@@ -1913,17 +1946,28 @@ function renderPedidoSemanal() {
   const allRows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
   const rows = getPedidoSemanalRowsForView(allRows);
   const viewMode = getPedidoSemanalViewMode();
+  const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
+
+  // Botón confirmar Alvear
+  const btnConfirmarContainer = $('btnConfirmarAlvear');
+  if (btnConfirmarContainer) {
+    const mostrar = (viewMode === 'alvear' || viewMode === 'gerencia')
+      && !!state.pedidoSemanalActual?.moronLocked
+      && !alvearConfirmado;
+    btnConfirmarContainer.style.display = mostrar ? 'block' : 'none';
+  }
 
   renderPedidoSemanalTable(table, {
     rows,
     viewMode,
-    canEditField,
+    canEditField: canEditPedidoField,
     selectedRowIndex: state.pedidoSemanalSelectedRow,
     onFieldChange: handlePedidoFieldChange,
     onSelectHistory: (rowIndex) => {
       state.pedidoSemanalSelectedRow = rowIndex;
       renderPedidoSemanal();
-    }
+    },
+    alvearConfirmado
   });
 
   const selectedRow = typeof state.pedidoSemanalSelectedRow === 'number'
@@ -1931,6 +1975,185 @@ function renderPedidoSemanal() {
     : null;
 
   renderPedidoSemanalHistory(historyBox, selectedRow);
+
+  // Calendario semanal
+  const calendario = $('pedidoCalendario');
+  if (calendario) {
+    const monthValue = $('pedidoMes')?.value || '';
+    renderWeekCalendar(calendario, state.pedidoSemanas, state.pedidosSemanalesCache || {}, monthValue);
+  }
+}
+
+
+/* ================================================================
+   PRODUCTIVIDAD ALVEAR — panel en dashboard (gerencia only)
+================================================================ */
+
+function renderDashboardProductividad() {
+  const prod = computeProductividadAlvear(state.pedidosSemanalesCache || {});
+
+  if ($('statTotalPedido')) $('statTotalPedido').textContent = prod.totalPedido;
+  if ($('statTotalEntregado')) $('statTotalEntregado').textContent = prod.totalEntregado;
+  if ($('statPorcentaje')) $('statPorcentaje').textContent = `${prod.porcentajeGlobal}%`;
+  if ($('statSemanasCompletas')) $('statSemanasCompletas').textContent = `${prod.semanasCompletas} / ${prod.semanasCerradas}`;
+
+  const motivosEl = $('dashMotivosContent');
+  if (motivosEl) {
+    const motivos = Object.entries(prod.motivosTotales).sort((a, b) => b[1] - a[1]);
+    if (!motivos.length) {
+      motivosEl.innerHTML = '<div style="color:var(--muted);font-size:13px;">Sin motivos registrados.</div>';
+    } else {
+      motivosEl.innerHTML = motivos.map(([motivo, count]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);">
+          <span style="font-size:13px;">${motivo}</span>
+          <span style="font-weight:700;color:#ff5a5a;">${count}</span>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+/* ================================================================
+   CONFIRMAR ENTREGA ALVEAR — cierra la semana
+================================================================ */
+
+async function confirmarEntregaAlvear() {
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
+
+  ensurePedidoDraft();
+  if (!state.pedidoSemanalActual) { toast('Primero cargá la semana.'); return; }
+
+  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
+  const isGerencia = state.perfil?.rol === 'gerencia';
+  if (!isAlvear && !isGerencia) { toast('Solo Alvear puede confirmar la entrega.'); return; }
+
+  if (!confirm('¿Confirmás la entrega de esta semana? Una vez confirmada no podrás modificar los datos.')) return;
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+
+  const payload = {
+    ...state.pedidoSemanalActual,
+    alvearConfirmado: true,
+    alvearConfirmadoPor: state.currentUser?.email || '',
+    alvearConfirmadoEn: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+    rows: currentRows
+  };
+
+  // Eliminar campos no serializables
+  delete payload.id;
+
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, payload);
+  } else {
+    await setDoc(ref, { ...payload, createdAt: serverTimestamp() });
+  }
+
+  state.pedidoSemanalActual = { id, ...payload };
+  toast('✅ Semana cerrada. El calendario se actualizará.');
+  await refreshAll();
+  renderPedidoSemanal();
+}
+
+/* ================================================================
+   REPORTES — filtros y tabla
+================================================================ */
+
+function renderReportesFiltros() {
+  const selectCat = $('reporteCategoria');
+  if (selectCat) {
+    const categorias = [...new Set(
+      state.productos.filter((p) => p.categoria).map((p) => p.categoria)
+    )].sort();
+    const current = selectCat.value;
+    selectCat.innerHTML = '<option value="">Todas las categorías</option>' +
+      categorias.map((c) => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
+  }
+}
+
+function renderReportes() {
+  const categoria = $('reporteCategoria')?.value || '';
+  const mes = $('reporteMes')?.value || '';
+
+  const docs = Object.values(state.pedidosSemanalesCache || {});
+  const filteredDocs = docs.filter((d) => !mes || (d.monthValue || d.id || '').startsWith(mes));
+
+  const filas = [];
+
+  filteredDocs
+    .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+    .forEach((docData) => {
+      (docData.rows || []).forEach((row) => {
+        const ped = num(row.moronCantidad ?? row.moronPedidoChica ?? 0);
+        if (ped === 0) return;
+        if (categoria && row.categoria !== categoria) return;
+
+        const ent = num(row.alvearCantidadEntregada ?? 0);
+        const pct = ped > 0 ? Math.round((ent / ped) * 100) : 0;
+        const motivos = Array.isArray(row.alvearMotivos) ? row.alvearMotivos.join(', ') : '';
+
+        let estadoLabel = '📝 Sin confirmar';
+        let estadoColor = 'var(--muted)';
+        if (docData.alvearConfirmado) {
+          if (ent >= ped) { estadoLabel = '✅ Completo'; estadoColor = '#3ddc97'; }
+          else { estadoLabel = '❌ Incompleto'; estadoColor = '#ff5a5a'; }
+        } else if (docData.moronLocked) {
+          estadoLabel = '⏳ En proceso'; estadoColor = '#ffd166';
+        }
+
+        filas.push({ docData, row, ped, ent, pct, motivos, estadoLabel, estadoColor });
+      });
+    });
+
+  const tbody = $('tablaReportesBody');
+  if (tbody) {
+    tbody.innerHTML = filas.map((f) => `
+      <tr>
+        <td>${f.docData.weekLabel || f.docData.weekKey || f.docData.id}</td>
+        <td style="font-weight:600;">${f.row.productoNombre || '-'}</td>
+        <td style="color:var(--muted);">${f.row.categoria || '-'}</td>
+        <td style="text-align:center;font-weight:700;">${f.ped}</td>
+        <td style="text-align:center;">${f.ent}</td>
+        <td style="text-align:center;font-weight:700;color:${f.pct >= 100 ? '#3ddc97' : f.pct >= 50 ? '#ffd166' : '#ff5a5a'};">${f.pct}%</td>
+        <td style="font-size:12px;color:var(--muted);">${f.motivos || '—'}</td>
+        <td style="font-weight:600;color:${f.estadoColor};">${f.estadoLabel}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="8" style="color:var(--muted);">Sin datos para los filtros seleccionados.</td></tr>';
+  }
+
+  // Productividad en sección reportes (gerencia)
+  if (state.perfil?.rol === 'gerencia') {
+    const prod = computeProductividadAlvear(state.pedidosSemanalesCache || {});
+
+    const prodContent = $('productividadContent');
+    if (prodContent) {
+      prodContent.innerHTML = `
+        <div class="summary-boxes">
+          <div class="mini-stat"><span>Total pedido</span><strong>${prod.totalPedido}</strong></div>
+          <div class="mini-stat"><span>Total entregado</span><strong>${prod.totalEntregado}</strong></div>
+          <div class="mini-stat"><span>% cumplimiento</span><strong style="color:${prod.porcentajeGlobal >= 90 ? '#3ddc97' : prod.porcentajeGlobal >= 60 ? '#ffd166' : '#ff5a5a'}">${prod.porcentajeGlobal}%</strong></div>
+          <div class="mini-stat"><span>Semanas completas</span><strong>${prod.semanasCompletas} / ${prod.semanasCerradas}</strong></div>
+        </div>
+      `;
+    }
+
+    const motivosContent = $('motivosContent');
+    if (motivosContent) {
+      const motivos = Object.entries(prod.motivosTotales).sort((a, b) => b[1] - a[1]);
+      motivosContent.innerHTML = motivos.length
+        ? motivos.map(([m, c]) => `
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
+            <span style="font-size:13px;">${m}</span>
+            <span style="font-weight:700;color:#ff5a5a;">${c}</span>
+          </div>`).join('')
+        : '<div style="color:var(--muted);font-size:13px;">Sin motivos registrados.</div>';
+    }
+  }
 }
 
 async function seedBaseData() {
@@ -1964,6 +2187,7 @@ async function refreshAll() {
 
   renderGerenciaMenuBadge(state.alertas);
   renderGerenciaAlertsPanel(state.alertas);
+  renderReportesFiltros();
 }
 
 function bindEvents() {
@@ -2027,6 +2251,15 @@ function bindEvents() {
   $('btnCargarPedidoSemanal')?.addEventListener('click', cargarPedidoSemanal);
   $('btnGuardarPedidoSemanal')?.addEventListener('click', guardarPedidoSemanal);
 
+  // Botón confirmar Alvear — se inserta dinámicamente en el HTML
+  document.addEventListener('click', (e) => {
+    if (e.target?.id === 'btnConfirmarPedidoAlvear') confirmarEntregaAlvear();
+  });
+
+  $('btnGenerarReporte')?.addEventListener('click', renderReportes);
+  $('reporteCategoria')?.addEventListener('change', renderReportes);
+  $('reporteMes')?.addEventListener('change', renderReportes);
+
   els.menuBtn?.addEventListener('click', () => {
     els.sidebar?.classList.toggle('open');
   });
@@ -2041,6 +2274,7 @@ onAuthStateChanged(auth, async (user) => {
     state.pedidoSemanas = [];
     state.pedidoSemanalActual = null;
     state.pedidoSemanalSelectedRow = null;
+    state.pedidosSemanalesCache = {};
     setLoggedUI(false);
     return;
   }
