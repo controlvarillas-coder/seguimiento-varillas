@@ -1,26 +1,33 @@
 /**
  * alertas.service.js
  *
- * Reglas vigentes:
+ * Lee la estructura REAL de Firestore:
+ *   reporte.fabrica  → 'caja_chica' | 'caja_grande' | 'neutro' | 'banado'
+ *   reporte.rows[]   → cada row tiene groups{}
  *
- * 1) Producción Alvear:
- *    alvear.alv del día D debe ingresar en cajaChica.alvPlus o cajaGrandeAlv.alvPlus
- *    entre el día D y el día D+1.
+ *   groups.cajaChica      → { lin, alv }
+ *   groups.cajaGrandeAlv  → { alvPlus, alvMinus, dif }
+ *   groups.cajaChicaMor   → { morPlus, morMinus, dif }
+ *   groups.cajaGrandeMor  → { morPlus, morMinus, dif }
+ *   groups.neutro         → { banaPlus, masMenos }
+ *   groups.banado         → { secando, totalSecando, cosech, salida, dif, banadoPlus }
  *
- * 2) Transferencia hacia Morón:
- *    La ENTRADA interna de Morón debe coincidir con lo que sale desde:
- *    - Alvear caja chica + Bañado caja chica
- *    - Alvear caja grande + Bañado caja grande
+ * Regla etapa 1 — Alvear ↔ Morón:
+ *   CAJA CHICA  → sale Alvear: cajaChica.alv          | entra Morón: cajaChicaMor.morPlus
+ *   CAJA GRANDE → sale Alvear: cajaGrandeAlv.alvMinus  | entra Morón: cajaGrandeMor.morPlus
+ *   NEUTRO / BAÑADO → etapa 2
  *
- *    Se controla por producto y por fecha.
+ * Nota: NO existen reportes separados con fabrica='alvear' o fabrica='moron'.
+ * Alvear y Morón son columnas dentro del mismo reporte, en el mismo groups{}.
  */
 
 function num(v) {
   return Number(v || 0);
 }
 
-function hasAnyNonZeroValue(obj = {}) {
-  return Object.values(obj || {}).some((value) => num(value) !== 0);
+function findRowByProduct(reporte, productoId) {
+  if (!reporte || !Array.isArray(reporte.rows)) return null;
+  return reporte.rows.find((r) => r.productoId === productoId) || null;
 }
 
 function getProductName(productos, productoId, fallbackRow = null) {
@@ -29,224 +36,128 @@ function getProductName(productos, productoId, fallbackRow = null) {
 }
 
 function getAllDates(reportes) {
-  return [...new Set((reportes || []).map((r) => r.fecha).filter(Boolean))].sort();
+  return [...new Set((reportes || []).map((r) => r.fecha).filter(Boolean))].sort().reverse();
 }
 
 function getAllProductIdsForDate(reportesDelDia, productos = []) {
   const ids = new Set();
-
   reportesDelDia.forEach((rep) => {
-    (rep.rows || []).forEach((row) => {
-      if (row.productoId) ids.add(row.productoId);
-    });
+    (rep.rows || []).forEach((r) => r.productoId && ids.add(r.productoId));
   });
-
-  productos.forEach((p) => {
-    if (p.id) ids.add(p.id);
-  });
-
+  productos.forEach((p) => p.id && ids.add(p.id));
   return [...ids];
 }
 
-function getRowsForProduct(reportesDelDia = [], productoId) {
-  const rows = [];
-
-  reportesDelDia.forEach((reporte) => {
-    const row = reporte?.rows?.find((item) => item.productoId === productoId);
-    if (row) rows.push(row);
-  });
-
-  return rows;
-}
-
-function getGroupDataForProduct(reportesDelDia = [], productoId, groupKey) {
-  const rows = getRowsForProduct(reportesDelDia, productoId);
-  let fallback = null;
-
-  for (const row of rows) {
-    const groupData = row?.groups?.[groupKey];
-    if (!groupData) continue;
-
-    if (!fallback) fallback = groupData;
-    if (hasAnyNonZeroValue(groupData)) return groupData;
+/**
+ * Extrae la salida de Alvear de una row según el bloque lógico.
+ * Alvear y Morón están en la misma row dentro de groups distintos.
+ */
+function getAlvearSalida(row, boxKey) {
+  if (!row?.groups) return 0;
+  switch (boxKey) {
+    case 'cajaChica':
+      // cajaChica.alv = columna Alvear dentro del bloque caja chica
+      return num(row.groups.cajaChica?.alv);
+    case 'cajaGrande':
+      // cajaGrandeAlv.alvMinus = salida de Alvear en caja grande
+      return num(row.groups.cajaGrandeAlv?.alvMinus);
+    case 'neutro':
+    case 'banado':
+    default:
+      return 0; // etapa 2
   }
-
-  return fallback || {};
 }
 
-function getFallbackRow(reportesDelDia = [], productoId) {
-  for (const reporte of reportesDelDia) {
-    const row = reporte?.rows?.find((item) => item.productoId === productoId);
-    if (row) return row;
+/**
+ * Extrae el ingreso a Morón de una row según el bloque lógico.
+ */
+function getMoronIngreso(row, boxKey) {
+  if (!row?.groups) return 0;
+  switch (boxKey) {
+    case 'cajaChica':
+      // cajaChicaMor.morPlus = ingreso Morón en caja chica
+      return num(row.groups.cajaChicaMor?.morPlus);
+    case 'cajaGrande':
+      // cajaGrandeMor.morPlus = ingreso Morón en caja grande
+      return num(row.groups.cajaGrandeMor?.morPlus);
+    case 'neutro':
+    case 'banado':
+    default:
+      return 0; // etapa 2
   }
-  return null;
 }
 
-function shiftDate(dateStr, daysToAdd) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + daysToAdd);
-  return d.toISOString().slice(0, 10);
-}
-
-function getBoxLabel(boxKey) {
-  const map = {
-    alvearProduccion: 'Producción Alvear',
-    cajaChica: 'Caja Chica',
-    cajaGrande: 'Caja Grande'
-  };
-
-  return map[boxKey] || boxKey;
-}
-
-function createAlert({
-  id,
-  fecha,
-  productoId,
-  productoNombre,
-  boxKey,
-  origen,
-  destino,
-  origenLabel,
-  destinoLabel,
-  tipo
-}) {
+function createAlert({ fecha, productoId, productoNombre, boxKey, salidaAlvear, ingresoMoron }) {
   return {
-    id,
+    id: `${fecha}_${productoId}_${boxKey}`,
     fecha,
     productoId,
     productoNombre,
     boxKey,
     bloque: getBoxLabel(boxKey),
-    origen,
-    destino,
-    origenLabel,
-    destinoLabel,
-    diferencia: origen - destino,
-    tipo,
+    salidaAlvear,
+    ingresoMoron,
+    diferencia: salidaAlvear - ingresoMoron,
+    tipo: 'alvear_vs_moron',
     severity: 'high'
   };
 }
 
-function computeProduccionAlerts(reportes = [], productos = []) {
-  const fechas = getAllDates(reportes);
-  const alerts = [];
+// Bloques activos en etapa 1 — Alvear ↔ Morón
+const BOX_KEYS_ETAPA1 = ['cajaChica', 'cajaGrande'];
 
-  fechas.forEach((fecha) => {
-    const reportesDelDia = reportes.filter((r) => r.fecha === fecha);
-    if (!reportesDelDia.length) return;
-
-    const fechaSiguiente = shiftDate(fecha, 1);
-    const reportesDiaSiguiente = reportes.filter((r) => r.fecha === fechaSiguiente);
-
-    const productoIds = getAllProductIdsForDate(reportesDelDia, productos);
-
-    productoIds.forEach((productoId) => {
-      const fallbackRow = getFallbackRow(reportesDelDia, productoId);
-      const productoNombre = getProductName(productos, productoId, fallbackRow);
-
-      const producido = num(getGroupDataForProduct(reportesDelDia, productoId, 'alvear')?.alv);
-
-      if (producido === 0) return;
-
-      const ingresoMismoDia =
-        num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaChica')?.alvPlus) +
-        num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaGrandeAlv')?.alvPlus);
-
-      const ingresoDiaSiguiente =
-        num(getGroupDataForProduct(reportesDiaSiguiente, productoId, 'cajaChica')?.alvPlus) +
-        num(getGroupDataForProduct(reportesDiaSiguiente, productoId, 'cajaGrandeAlv')?.alvPlus);
-
-      const ingresoPermitido = ingresoMismoDia + ingresoDiaSiguiente;
-
-      if (producido !== ingresoPermitido) {
-        alerts.push(createAlert({
-          id: `prod_${fecha}_${productoId}`,
-          fecha,
-          productoId,
-          productoNombre,
-          boxKey: 'alvearProduccion',
-          origen: producido,
-          destino: ingresoPermitido,
-          origenLabel: 'Fabricado en ALV',
-          destinoLabel: 'Ingresado en ALVE+ (día actual + siguiente)',
-          tipo: 'produccion_alvear'
-        }));
-      }
-    });
-  });
-
-  return alerts;
-}
-
-function computeTransferAlerts(reportes = [], productos = []) {
-  const fechas = getAllDates(reportes);
-  const alerts = [];
-
-  fechas.forEach((fecha) => {
-    const reportesDelDia = reportes.filter((r) => r.fecha === fecha);
-    if (!reportesDelDia.length) return;
-
-    const productoIds = getAllProductIdsForDate(reportesDelDia, productos);
-
-    productoIds.forEach((productoId) => {
-      const fallbackRow = getFallbackRow(reportesDelDia, productoId);
-      const productoNombre = getProductName(productos, productoId, fallbackRow);
-
-      const salidaAlvearChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaChica')?.alvMinus);
-      const salidaBanadoChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'banadoChica')?.salida);
-      const entradaMoronChica = num(getGroupDataForProduct(reportesDelDia, productoId, 'moronChicaInterna')?.entrada);
-
-      const esperadoMoronChica = salidaAlvearChica + salidaBanadoChica;
-
-      if (!(esperadoMoronChica === 0 && entradaMoronChica === 0) && esperadoMoronChica !== entradaMoronChica) {
-        alerts.push(createAlert({
-          id: `transf_chica_${fecha}_${productoId}`,
-          fecha,
-          productoId,
-          productoNombre,
-          boxKey: 'cajaChica',
-          origen: esperadoMoronChica,
-          destino: entradaMoronChica,
-          origenLabel: 'Sale de Alvear + Bañado',
-          destinoLabel: 'Entra a Morón',
-          tipo: 'origenes_vs_moron'
-        }));
-      }
-
-      const salidaAlvearGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'cajaGrandeAlv')?.alvMinus);
-      const salidaBanadoGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'banadoGrande')?.salida);
-      const entradaMoronGrande = num(getGroupDataForProduct(reportesDelDia, productoId, 'moronGrandeInterna')?.entrada);
-
-      const esperadoMoronGrande = salidaAlvearGrande + salidaBanadoGrande;
-
-      if (!(esperadoMoronGrande === 0 && entradaMoronGrande === 0) && esperadoMoronGrande !== entradaMoronGrande) {
-        alerts.push(createAlert({
-          id: `transf_grande_${fecha}_${productoId}`,
-          fecha,
-          productoId,
-          productoNombre,
-          boxKey: 'cajaGrande',
-          origen: esperadoMoronGrande,
-          destino: entradaMoronGrande,
-          origenLabel: 'Sale de Alvear + Bañado',
-          destinoLabel: 'Entra a Morón',
-          tipo: 'origenes_vs_moron'
-        }));
-      }
-    });
-  });
-
-  return alerts;
-}
-
+/**
+ * Analiza todos los reportes y devuelve alertas donde
+ * la salida de Alvear no coincide con el ingreso a Morón.
+ *
+ * @param {Array} reportes - state.reportes
+ * @param {Array} productos - state.productos
+ * @returns {Array} alertas
+ */
 export function computeAlvearMoronAlerts(reportes = [], productos = []) {
-  const produccion = computeProduccionAlerts(reportes, productos);
-  const transferencias = computeTransferAlerts(reportes, productos);
+  const fechas = getAllDates(reportes);
+  const alerts = [];
 
-  return [...produccion, ...transferencias].sort((a, b) => {
-    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
-    return String(a.productoNombre || '').localeCompare(String(b.productoNombre || ''), 'es');
+  fechas.forEach((fecha) => {
+    const reportesDelDia = reportes.filter((r) => r.fecha === fecha);
+    if (!reportesDelDia.length) return;
+
+    const productoIds = getAllProductIdsForDate(reportesDelDia, productos);
+
+    productoIds.forEach((productoId) => {
+      // Buscamos la row en cualquier reporte del día
+      let row = null;
+      for (const rep of reportesDelDia) {
+        const found = findRowByProduct(rep, productoId);
+        if (found) { row = found; break; }
+      }
+      if (!row) return;
+
+      const productoNombre = getProductName(productos, productoId, row);
+
+      BOX_KEYS_ETAPA1.forEach((boxKey) => {
+        const salidaAlvear = getAlvearSalida(row, boxKey);
+        const ingresoMoron = getMoronIngreso(row, boxKey);
+
+        // Ignorar filas completamente vacías
+        if (salidaAlvear === 0 && ingresoMoron === 0) return;
+
+        if (salidaAlvear !== ingresoMoron) {
+          alerts.push(createAlert({ fecha, productoId, productoNombre, boxKey, salidaAlvear, ingresoMoron }));
+        }
+      });
+    });
   });
+
+  return alerts.sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+    return a.productoNombre.localeCompare(b.productoNombre, 'es');
+  });
+}
+
+export function getBoxLabel(boxKey) {
+  const map = { cajaChica: 'Caja Chica', cajaGrande: 'Caja Grande', neutro: 'Neutro', banado: 'Bañado' };
+  return map[boxKey] || boxKey;
 }
 
 export function getAlertCount(alerts = []) {
