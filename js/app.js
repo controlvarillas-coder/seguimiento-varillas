@@ -52,7 +52,8 @@ const state = {
   pedidoSemanas: [],
   pedidoSemanalActual: null,
   pedidoSemanalSelectedRow: null,
-  pedidosSemanalesCache: {}
+  pedidosSemanalesCache: {},
+  cargaCategoriaFilter: ''
 };
 
 const FABRICAS = {
@@ -675,17 +676,36 @@ function renderProductos() {
     return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
   });
 
-  $('productosList').innerHTML = productosOrdenados.map((p) => {
+  const container = $('productosList');
+
+  container.innerHTML = productosOrdenados.map((p) => {
     const visibles = p.visiblePara || [];
 
     return `
-      <div class="product-row">
-        <div class="product-main">
+      <div class="product-row" draggable="true" data-product-id="${p.id}" data-orden="${p.orden || 0}"
+        style="cursor:grab;position:relative;">
+        <div class="product-drag-handle" title="Arrastrar para reordenar"
+          style="position:absolute;left:0;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;user-select:none;">
+          ⠿
+        </div>
+        <div class="product-main" style="margin-left:28px;">
           <div class="product-title">${p.nombre || '-'}</div>
-          <div class="product-sub">
-            Código: ${p.codigo || '-'} · Categoría: ${p.categoria || '-'}
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+            <div class="product-sub">Código: ${p.codigo || '-'}</div>
+            <input
+              type="text"
+              class="categoria-input"
+              data-id="${p.id}"
+              value="${p.categoria || ''}"
+              placeholder="Categoría"
+              style="
+                border:1px solid var(--line);border-radius:8px;padding:4px 8px;
+                background:rgba(255,255,255,.05);color:#fff;font-size:12px;
+                width:140px;
+              "
+            />
           </div>
-          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
             <label>
               <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="alvear" ${visibles.includes('alvear') ? 'checked' : ''}>
               Alvear
@@ -701,10 +721,8 @@ function renderProductos() {
           </div>
         </div>
 
-        <div class="product-actions" style="display:flex; flex-direction:column; gap:8px;">
-          <button class="btn btn-primary btn-sm" data-save="${p.id}">
-            Guardar
-          </button>
+        <div class="product-actions" style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary btn-sm" data-save="${p.id}">Guardar</button>
           <button class="btn btn-outline btn-sm" data-toggle-producto="${p.id}">
             ${p.activo === false ? 'Activar' : 'Desactivar'}
           </button>
@@ -713,34 +731,86 @@ function renderProductos() {
     `;
   }).join('') || '<div class="empty-state">Sin productos.</div>';
 
+  // ── Drag & drop para reordenar ──────────────────────────────
+  let dragSrc = null;
+
+  container.querySelectorAll('.product-row[draggable]').forEach((row) => {
+    row.addEventListener('dragstart', (e) => {
+      dragSrc = row;
+      row.style.opacity = '0.45';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    row.addEventListener('dragend', () => {
+      row.style.opacity = '';
+      container.querySelectorAll('.product-row').forEach((r) => r.classList.remove('drag-over'));
+    });
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.product-row').forEach((r) => r.classList.remove('drag-over'));
+      if (row !== dragSrc) row.classList.add('drag-over');
+    });
+
+    row.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === row) return;
+
+      // Reordenar en el DOM
+      const rows = [...container.querySelectorAll('.product-row')];
+      const srcIdx = rows.indexOf(dragSrc);
+      const dstIdx = rows.indexOf(row);
+
+      if (srcIdx < dstIdx) {
+        row.after(dragSrc);
+      } else {
+        row.before(dragSrc);
+      }
+
+      // Guardar nuevo orden en Firestore
+      const newOrder = [...container.querySelectorAll('.product-row')];
+      const updates = newOrder.map((r, i) => ({
+        id: r.dataset.productId,
+        orden: i + 1
+      }));
+
+      try {
+        await Promise.all(updates.map(({ id, orden }) =>
+          updateDoc(doc(db, 'productos', id), { orden })
+        ));
+        toast('Orden guardado.');
+        await refreshAll();
+      } catch (err) {
+        toast('Error al guardar orden.');
+        console.error(err);
+      }
+    });
+  });
+
+  // ── Toggle activo/inactivo ────────────────────────────────
   document.querySelectorAll('[data-toggle-producto]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.toggleProducto;
       const item = state.productos.find((p) => p.id === id);
       if (!item) return;
-
-      await updateDoc(doc(db, 'productos', id), {
-        activo: item.activo === false ? true : false
-      });
-
+      await updateDoc(doc(db, 'productos', id), { activo: item.activo === false ? true : false });
       toast('Producto actualizado.');
       await refreshAll();
     });
   });
 
+  // ── Guardar: visibilidad + categoría ─────────────────────
   document.querySelectorAll('[data-save]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.save;
-      const checks = Array.from(
-        document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`)
-      );
+      const checks = Array.from(document.querySelectorAll(`.visibilidad-check[data-id="${id}"]:checked`));
       const visiblePara = checks.map((c) => c.value);
+      const catInput = document.querySelector(`.categoria-input[data-id="${id}"]`);
+      const categoria = catInput ? catInput.value.trim() : '';
 
-      await updateDoc(doc(db, 'productos', id), {
-        visiblePara
-      });
-
-      toast('Visibilidad guardada.');
+      await updateDoc(doc(db, 'productos', id), { visiblePara, categoria });
+      toast('Producto guardado.');
       await refreshAll();
     });
   });
@@ -1173,7 +1243,14 @@ function renderCargaDiaria() {
     if ($('cargaFabrica')) $('cargaFabrica').value = fabrica;
   }
 
-  const rows = state.reporteActual?.rows || buildDefaultRows(fabrica);
+  const rows = (() => {
+    const base = state.reporteActual?.rows || buildDefaultRows(fabrica);
+    const isMoronUser = (fabrica === 'moron') && state.perfil?.rol !== 'gerencia';
+    if (isMoronUser && state.cargaCategoriaFilter) {
+      return base.filter((r) => (r.categoria || '') === state.cargaCategoriaFilter);
+    }
+    return base;
+  })();
   const editableGroups = getEditableGroupsForCurrentUser();
   const visibleGroups = getVisibleGroupsForCurrentView();
   const locked = currentReporteIsLocked();
@@ -1483,6 +1560,7 @@ async function cargarReporteDiario() {
   }
 
   renderCargaDiaria();
+  _actualizarSelectCategoriaCarga();
 }
 
 async function guardarReporte(estado = 'borrador') {
@@ -1569,12 +1647,12 @@ function renderGerenciaExcel() {
   });
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const dayColspan = 1 + [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].reduce((acc, g) => acc + g.columns.length, 0);
+    const dayColspan = 1 + DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
     header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
 
     header2 += `<th class="stock-head" rowspan="2">AROMA</th>`;
 
-    [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
+    DAY_GROUPS.forEach((group) => {
       header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
       group.columns.forEach((col) => {
         header3 += `<th class="${group.colorClass}">${col.label}</th>`;
@@ -1603,7 +1681,7 @@ function renderGerenciaExcel() {
 
       row += `<td class="product-name-cell">${producto.nombre}</td>`;
 
-      [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].forEach((group) => {
+      DAY_GROUPS.forEach((group) => {
         const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
 
         group.columns.forEach((col) => {
@@ -2156,6 +2234,93 @@ function renderReportes() {
   }
 }
 
+
+/* ================================================================
+   FILTRO CATEGORÍA EN CARGA DIARIA — solo visible para Morón
+================================================================ */
+
+function _actualizarSelectCategoriaCarga() {
+  const sel = $('cargaCategoriaFilter');
+  if (!sel) return;
+
+  const fabrica = $('cargaFabrica')?.value || state.perfil?.fabrica || '';
+  const isMoronUser = (fabrica === 'moron') && state.perfil?.rol !== 'gerencia';
+
+  const wrapper = $('cargaCategoriaWrapper');
+  if (wrapper) wrapper.style.display = isMoronUser ? '' : 'none';
+
+  if (!isMoronUser) return;
+
+  const categorias = [...new Set(
+    getProductosParaFabrica(fabrica)
+      .filter((p) => p.categoria)
+      .map((p) => p.categoria)
+  )].sort();
+
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    categorias.map((c) => `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`).join('');
+}
+
+/* ================================================================
+   CARGA MASIVA DE CATEGORÍAS EN PRODUCTOS
+================================================================ */
+
+function procesarCargaMasivaCategorias() {
+  const file = $('fileCargaCategorias')?.files?.[0];
+  if (!file) { toast('Seleccioná un archivo.'); return; }
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+    const ws = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    if (rows.length < 2) { toast('Excel vacío.'); return; }
+
+    const headers = rows[0].map((h) =>
+      String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+    );
+
+    const idxProducto = headers.indexOf('PRODUCTO');
+    const idxCategoria = headers.indexOf('CATEGORIA');
+
+    if (idxProducto < 0 || idxCategoria < 0) {
+      toast('El Excel debe tener columnas PRODUCTO y CATEGORIA.');
+      return;
+    }
+
+    let actualizados = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const nombreExcel = String(rows[i][idxProducto] || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+      const categoriaExcel = String(rows[i][idxCategoria] || '').trim();
+
+      if (!nombreExcel) continue;
+
+      const producto = state.productos.find((p) =>
+        String(p.nombre || '')
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase() === nombreExcel
+      );
+
+      if (!producto) continue;
+
+      try {
+        await updateDoc(doc(db, 'productos', producto.id), { categoria: categoriaExcel });
+        actualizados++;
+      } catch (err) {
+        console.error('Error actualizando', producto.nombre, err);
+      }
+    }
+
+    toast(`${actualizados} categorías actualizadas.`);
+    await refreshAll();
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
 async function seedBaseData() {
   return;
 }
@@ -2182,6 +2347,7 @@ async function refreshAll() {
   renderProductos();
   renderUsuarios();
   renderCargaDiaria();
+  _actualizarSelectCategoriaCarga();
   renderGerenciaExcel();
   renderPedidoSemanal();
 
@@ -2228,11 +2394,23 @@ function bindEvents() {
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
     renderCargaDiaria();
+    _actualizarSelectCategoriaCarga();
   });
 
   $('cargaFabrica')?.addEventListener('change', () => {
     state.reporteActual = null;
+    state.cargaCategoriaFilter = '';
+    const sel = $('cargaCategoriaFilter');
+    if (sel) sel.value = '';
     renderCargaDiaria();
+    _actualizarSelectCategoriaCarga();
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target?.id === 'cargaCategoriaFilter') {
+      state.cargaCategoriaFilter = e.target.value;
+      renderCargaDiaria();
+    }
   });
 
   $('pedidoMes')?.addEventListener('change', () => {
@@ -2734,5 +2912,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btnProcesarCargaMasiva')
     ?.addEventListener('click', procesarCargaMasivaExcel);
+
+  $('btnProcesarCargaCategorias')
+    ?.addEventListener('click', procesarCargaMasivaCategorias);
 
 });
