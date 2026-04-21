@@ -286,7 +286,29 @@
 
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Listado maestro respetando orden del Excel</h3>
+              <h3>Carga masiva de categorías</h3>
+            </div>
+            <div class="toolbar-grid">
+              <div class="field field-grow">
+                <label for="fileCargaCategorias">Excel (columnas: PRODUCTO · CATEGORIA)</label>
+                <input id="fileCargaCategorias" type="file" accept=".xlsx,.xls" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button id="btnProcesarCargaCategorias" class="btn btn-primary" type="button">
+                  Actualizar categorías
+                </button>
+              </div>
+            </div>
+            <div class="hint-box" style="margin-top:10px;">
+              El Excel debe tener dos columnas: <strong>PRODUCTO</strong> (nombre exacto) y <strong>CATEGORIA</strong>.
+              Actualiza la categoría de todos los productos que encuentre en la lista.
+            </div>
+          </div>
+
+          <div class="panel-card mt-20">
+            <div class="panel-header">
+              <h3>Listado maestro — arrastrá para reordenar</h3>
             </div>
             <div id="productosList" class="products-list"></div>
           </div>
@@ -309,6 +331,13 @@
                   <option value="alvear">Alvear</option>
                   <option value="moron">Morón</option>
                   <option value="banado">Bañado</option>
+                </select>
+              </div>
+
+              <div id="cargaCategoriaWrapper" style="display:none;">
+                <label for="cargaCategoriaFilter">Categoría</label>
+                <select id="cargaCategoriaFilter">
+                  <option value="">Todas las categorías</option>
                 </select>
               </div>
 
