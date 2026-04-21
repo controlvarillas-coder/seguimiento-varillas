@@ -458,7 +458,7 @@ select option {
 }
 
 /* =====================================================
-   TABLA PEDIDO SEMANAL — ajustes generales
+   TABLA PEDIDO SEMANAL
 ===================================================== */
 #tablaPedidoSemanal {
   min-width: 700px;
@@ -480,13 +480,6 @@ select option {
 /* =====================================================
    MOTIVOS checkboxes
 ===================================================== */
-.motivos-list label,
-#tablaPedidoSemanal label {
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 #tablaPedidoSemanal input[type="checkbox"] {
   width: auto;
   min-width: 0;
@@ -500,6 +493,44 @@ select option {
 ===================================================== */
 #btnConfirmarAlvear {
   margin-top: 12px;
+}
+
+/* =====================================================
+   DRAG & DROP — reordenar productos
+===================================================== */
+.product-row[draggable="true"] {
+  transition: opacity .15s ease, box-shadow .15s ease;
+  position: relative;
+}
+
+.product-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.product-row.drag-over {
+  box-shadow: 0 0 0 2px var(--primary), 0 4px 20px rgba(110,168,255,.25);
+  background: rgba(110,168,255,.08) !important;
+  border-radius: var(--radius);
+}
+
+/* =====================================================
+   CATEGORÍA EDITABLE EN LISTA DE PRODUCTOS
+===================================================== */
+.categoria-input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,.05);
+  color: #fff;
+  font-size: 12px;
+  width: 140px;
+  transition: border-color .2s ease;
+}
+
+.categoria-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: rgba(110,168,255,.08);
 }
 
 /* =====================================================
