@@ -71,8 +71,8 @@ const DAY_GROUPS = [
     title: 'ALVEAR',
     colorClass: 'group-alvear',
     columns: [
-      { key: 'alv', label: 'Alv' },
-      { key: 'total', label: 'Total', readonly: true }
+      { key: 'alv', label: 'ALVEAR ENTRADA' },
+      { key: 'total', label: 'ALVEAR TOTAL', readonly: true }
     ]
   },
   {
@@ -80,10 +80,10 @@ const DAY_GROUPS = [
     title: 'CAJA CHICA',
     colorClass: 'group-caja-chica',
     columns: [
-      { key: 'alvPlus', label: 'Alve +' },
-      { key: 'alvMinus', label: 'Alve -' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'Total', readonly: true }
+      { key: 'alvPlus', label: 'ALVEAR ENTRADA' },
+      { key: 'alvMinus', label: 'ALVEAR SALIDA' },
+      { key: 'dif', label: 'ALVEAR DIFERENCIA' },
+      { key: 'total', label: 'ALVEAR TOTAL', readonly: true }
     ]
   },
   {
@@ -91,10 +91,10 @@ const DAY_GROUPS = [
     title: 'CAJA GRANDE',
     colorClass: 'group-caja-grande',
     columns: [
-      { key: 'alvPlus', label: 'Alve +' },
-      { key: 'alvMinus', label: 'Alve -' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'Total', readonly: true }
+      { key: 'alvPlus', label: 'ALVEAR ENTRADA' },
+      { key: 'alvMinus', label: 'ALVEAR SALIDA' },
+      { key: 'dif', label: 'ALVEAR DIFERENCIA' },
+      { key: 'total', label: 'ALVEAR TOTAL', readonly: true }
     ]
   },
   {
@@ -102,10 +102,10 @@ const DAY_GROUPS = [
     title: 'CAJA CHICA',
     colorClass: 'group-caja-chica-2',
     columns: [
-      { key: 'morPlus', label: 'MOR+' },
-      { key: 'morMinus', label: 'MOR-' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'TOTAL', readonly: true }
+      { key: 'morPlus', label: 'MORÓN ENTRADA' },
+      { key: 'morMinus', label: 'MORÓN SALIDA' },
+      { key: 'dif', label: 'MORÓN DIFERENCIA' },
+      { key: 'total', label: 'MORÓN TOTAL', readonly: true }
     ]
   },
   {
@@ -113,10 +113,10 @@ const DAY_GROUPS = [
     title: 'CAJA GRANDE',
     colorClass: 'group-caja-grande-2',
     columns: [
-      { key: 'morPlus', label: 'MOR+' },
-      { key: 'morMinus', label: 'MOR-' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'TOTAL', readonly: true }
+      { key: 'morPlus', label: 'MORÓN ENTRADA' },
+      { key: 'morMinus', label: 'MORÓN SALIDA' },
+      { key: 'dif', label: 'MORÓN DIFERENCIA' },
+      { key: 'total', label: 'MORÓN TOTAL', readonly: true }
     ]
   },
   {
@@ -124,13 +124,13 @@ const DAY_GROUPS = [
     title: 'BAÑADO CAJA CHICA',
     colorClass: 'group-banado-chica',
     columns: [
-      { key: 'banadoPlus', label: 'BAÑADO+' },
+      { key: 'banadoPlus', label: 'BAÑADO ENTRADA' },
       { key: 'secando', label: 'SECANDO' },
       { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
-      { key: 'salida', label: 'SALIDA' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'TOTAL', readonly: true }
+      { key: 'salida', label: 'BAÑADO SALIDA' },
+      { key: 'dif', label: 'BAÑADO DIFERENCIA' },
+      { key: 'total', label: 'BAÑADO TOTAL', readonly: true }
     ]
   },
   {
@@ -138,13 +138,13 @@ const DAY_GROUPS = [
     title: 'BAÑADO CAJA GRANDE',
     colorClass: 'group-banado-grande',
     columns: [
-      { key: 'banadoPlus', label: 'BAÑADO+' },
+      { key: 'banadoPlus', label: 'BAÑADO ENTRADA' },
       { key: 'secando', label: 'SECANDO' },
       { key: 'totalSecando', label: 'TOTAL SECANDO', readonly: true },
       { key: 'cosecha', label: 'COSECHA' },
-      { key: 'salida', label: 'SALIDA' },
-      { key: 'dif', label: 'DIF' },
-      { key: 'total', label: 'TOTAL', readonly: true }
+      { key: 'salida', label: 'BAÑADO SALIDA' },
+      { key: 'dif', label: 'BAÑADO DIFERENCIA' },
+      { key: 'total', label: 'BAÑADO TOTAL', readonly: true }
     ]
   }
 ];
@@ -1316,16 +1316,22 @@ function renderCargaDiaria() {
 
     INITIAL_STOCK_COLUMNS.forEach((col) => {
       const value = num(row.stockInicial?.[col.key]);
-      const canEdit = state.perfil?.rol === 'gerencia';
+      const isGerencia = state.perfil?.rol === 'gerencia';
 
-      rowHtml += `<td>${renderCellInput({
-        rowIndex,
-        area: 'stockInicial',
-        key: col.key,
-        value,
-        canEdit,
-        extraClass: 'stock-input'
-      })}</td>`;
+      if (isGerencia) {
+        // Gerencia: input editable siempre
+        rowHtml += `<td>${renderCellInput({
+          rowIndex,
+          area: 'stockInicial',
+          key: col.key,
+          value,
+          canEdit: true,
+          extraClass: 'stock-input'
+        })}</td>`;
+      } else {
+        // Operativo: solo muestra el valor (readonly, sin input)
+        rowHtml += `<td class="readonly-cell stock-readonly">${value}</td>`;
+      }
 
       columnTotals[`stock_${col.key}`] += value;
     });
