@@ -53,7 +53,10 @@ const state = {
   pedidoSemanalActual: null,
   pedidoSemanalSelectedRow: null,
   pedidosSemanalesCache: {},
-  cargaCategoriaFilter: ''
+  cargaCategoriaFilter: '',
+  cargaAromaFilter: '',
+  productoFiltroCategoria: '',
+  productoFiltroNombre: ''
 };
 
 const FABRICAS = {
@@ -594,6 +597,8 @@ function renderDashboard() {
   if ($('statBorradores')) $('statBorradores').textContent = state.reportes.filter((r) => r.estado === 'borrador').length;
   if ($('statEnviados')) $('statEnviados').textContent = state.reportes.filter((r) => r.estado === 'enviada').length;
   if ($('statAlertas')) $('statAlertas').textContent = state.alertas.length;
+  if ($('badgeAlertas')) $('badgeAlertas').textContent = state.alertas.length;
+  if ($('badgeReportes')) $('badgeReportes').textContent = state.reportes.length;
   if ($('statHoyCargadas')) $('statHoyCargadas').textContent = reportesHoy.length;
   if ($('statPendientesHoy')) $('statPendientesHoy').textContent = pendientesHoy.length;
   if ($('statUsuariosActivos')) $('statUsuariosActivos').textContent = usuariosActivos.length;
@@ -625,11 +630,21 @@ function renderDashboard() {
 
       const estadoHoy = fabricasHoy.has(f) ? 'Cargó' : 'Pendiente';
 
+      const cargó = fabricasHoy.has(f);
       return `
         <tr>
-          <td>${FABRICAS[f] || f}</td>
-          <td>${estadoHoy}</td>
-          <td>${ultimo?.fecha || '-'}</td>
+          <td style="font-weight:600;">${FABRICAS[f] || f}</td>
+          <td>
+            <span style="
+              display:inline-flex;align-items:center;gap:5px;
+              padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;
+              background:${cargó ? 'rgba(61,220,151,.15)' : 'rgba(255,90,90,.15)'};
+              color:${cargó ? '#3ddc97' : '#ff5a5a'};
+            ">
+              ${cargó ? '✅' : '⏳'} ${cargó ? 'Cargó' : 'Pendiente'}
+            </span>
+          </td>
+          <td style="color:var(--muted);font-size:13px;">${ultimo?.fecha || '-'}</td>
         </tr>
       `;
     }).join('') || '<tr><td colspan="3">Sin datos.</td></tr>';
@@ -652,9 +667,9 @@ function renderDashboard() {
           <td>${a.fecha || '-'}</td>
           <td>${a.productoNombre || '-'}</td>
           <td>${a.bloque || '-'}</td>
-          <td>${a.diferencia || 0}</td>
+          <td style="font-weight:700;color:#ff5a5a;">${a.diferencia || 0}</td>
         </tr>
-      `).join('') || '<tr><td colspan="4">Sin alertas.</td></tr>';
+      `).join('') || '<tr><td colspan="4" style="color:var(--muted);">Sin alertas.</td></tr>';
   }
 
   // Panel productividad Alvear — solo gerencia
@@ -676,9 +691,31 @@ function renderProductos() {
     return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
   });
 
+  // Aplicar filtros
+  const productosFiltrados = productosOrdenados.filter((p) => {
+    if (state.productoFiltroCategoria && (p.categoria || '') !== state.productoFiltroCategoria) return false;
+    if (state.productoFiltroNombre) {
+      const q = state.productoFiltroNombre.trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const nombre = String(p.nombre || '').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '');
+      if (!nombre.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Actualizar select de categorías del filtro
+  const selectFiltro = $('filtroCategoriaProd');
+  if (selectFiltro) {
+    const cats = [...new Set(productosOrdenados.filter((p) => p.categoria).map((p) => p.categoria))].sort();
+    const cur = selectFiltro.value;
+    selectFiltro.innerHTML = '<option value="">Todas las categorías</option>' +
+      cats.map((c) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
+  }
+
   const container = $('productosList');
 
-  container.innerHTML = productosOrdenados.map((p) => {
+  container.innerHTML = productosFiltrados.map((p) => {
     const visibles = p.visiblePara || [];
 
     return `
@@ -1246,10 +1283,25 @@ function renderCargaDiaria() {
   const rows = (() => {
     const base = state.reporteActual?.rows || buildDefaultRows(fabrica);
     const isMoronUser = (fabrica === 'moron') && state.perfil?.rol !== 'gerencia';
+    let filtered = base;
+
+    // Filtro categoría (solo Morón operativo)
     if (isMoronUser && state.cargaCategoriaFilter) {
-      return base.filter((r) => (r.categoria || '') === state.cargaCategoriaFilter);
+      filtered = filtered.filter((r) => (r.categoria || '') === state.cargaCategoriaFilter);
     }
-    return base;
+
+    // Filtro aroma — disponible para todos
+    if (state.cargaAromaFilter) {
+      const q = state.cargaAromaFilter.trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '');
+      filtered = filtered.filter((r) => {
+        const nombre = String(r.productoNombre || '')
+          .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        return nombre.includes(q);
+      });
+    }
+
+    return filtered;
   })();
   const editableGroups = getEditableGroupsForCurrentUser();
   const visibleGroups = getVisibleGroupsForCurrentView();
@@ -2403,11 +2455,22 @@ function bindEvents() {
     _actualizarSelectCategoriaCarga();
   });
 
+  // Búsqueda de aroma en carga diaria
+  document.addEventListener('input', (e) => {
+    if (e.target?.id === 'cargaAromaSearch') {
+      state.cargaAromaFilter = e.target.value;
+      renderCargaDiaria();
+    }
+  });
+
   $('cargaFabrica')?.addEventListener('change', () => {
     state.reporteActual = null;
     state.cargaCategoriaFilter = '';
+    state.cargaAromaFilter = '';
     const sel = $('cargaCategoriaFilter');
     if (sel) sel.value = '';
+    const inp = $('cargaAromaSearch');
+    if (inp) inp.value = '';
     renderCargaDiaria();
     _actualizarSelectCategoriaCarga();
   });
@@ -2921,5 +2984,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btnProcesarCargaCategorias')
     ?.addEventListener('click', procesarCargaMasivaCategorias);
+
+  // Filtros de la lista de productos
+  document.addEventListener('change', (e) => {
+    if (e.target?.id === 'filtroCategoriaProd') {
+      state.productoFiltroCategoria = e.target.value;
+      renderProductos();
+    }
+  });
+  document.addEventListener('input', (e) => {
+    if (e.target?.id === 'filtroNombreProd') {
+      state.productoFiltroNombre = e.target.value;
+      renderProductos();
+    }
+  });
 
 });
