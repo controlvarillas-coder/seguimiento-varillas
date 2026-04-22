@@ -54,6 +54,128 @@ body{min-height:100vh}
 .section{display:none}
 .section.active{display:block}
 
+/* ─── KPI CARDS PREMIUM ─────────────────────────────── */
+.dash-kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+  margin-bottom:0;
+}
+
+.kpi-card{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:20px 18px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  backdrop-filter:blur(14px);
+  transition:.2s ease;
+  position:relative;
+  overflow:hidden;
+}
+
+.kpi-card::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:20px;
+  opacity:.08;
+  pointer-events:none;
+}
+
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.3)}
+
+.kpi-icon{font-size:28px;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
+.kpi-body{display:flex;flex-direction:column;gap:2px}
+.kpi-value{font-size:32px;font-weight:900;line-height:1;letter-spacing:-.02em}
+.kpi-label{font-size:12px;color:var(--muted);font-weight:500;line-height:1.3}
+
+.kpi-large .kpi-value{font-size:36px}
+
+/* Variantes de color */
+.kpi-blue  {border-color:rgba(110,168,255,.28)}.kpi-blue  .kpi-value{color:#6ea8ff}
+.kpi-purple{border-color:rgba(143,123,255,.28)}.kpi-purple.kpi-value,.kpi-purple .kpi-value{color:#a78bfa}
+.kpi-red   {border-color:rgba(255,90,90,.28)}  .kpi-red   .kpi-value{color:#f87171}
+.kpi-orange{border-color:rgba(251,146,60,.28)} .kpi-orange.kpi-value,.kpi-orange .kpi-value{color:#fb923c}
+.kpi-green {border-color:rgba(52,211,153,.28)} .kpi-green .kpi-value{color:#34d399}
+.kpi-teal  {border-color:rgba(45,212,191,.28)} .kpi-teal  .kpi-value{color:#2dd4bf}
+.kpi-indigo{border-color:rgba(99,102,241,.28)} .kpi-indigo.kpi-value,.kpi-indigo .kpi-value{color:#818cf8}
+.kpi-slate {border-color:rgba(148,163,184,.18)}.kpi-slate .kpi-value{color:#94a3b8}
+
+/* ─── PANEL CARD PREMIUM ─────────────────────────────── */
+.dash-panel{
+  border:1px solid var(--line);
+  transition:.15s ease;
+}
+.dash-panel:hover{border-color:rgba(110,168,255,.18)}
+
+.dash-panel-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:16px;
+}
+.dash-panel-header h3{margin:0;font-size:16px;font-weight:700}
+
+/* ─── BADGES ─────────────────────────────────────────── */
+.dash-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+  background:rgba(255,255,255,.08);color:var(--muted);
+  border:1px solid var(--line);
+  white-space:nowrap;
+}
+.dash-badge-green{background:rgba(52,211,153,.14);color:#34d399;border-color:rgba(52,211,153,.3)}
+.dash-badge-red  {background:rgba(248,113,113,.14);color:#f87171;border-color:rgba(248,113,113,.3)}
+.dash-badge-blue {background:rgba(110,168,255,.14);color:#6ea8ff;border-color:rgba(110,168,255,.3)}
+.dash-badge-orange{background:rgba(251,146,60,.14);color:#fb923c;border-color:rgba(251,146,60,.3)}
+
+/* ─── TABLA DASHBOARD ────────────────────────────────── */
+.dash-table{width:100%}
+.dash-table th{background:rgba(255,255,255,.04);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 10px}
+.dash-table td{padding:9px 10px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
+.dash-table tbody tr:last-child td{border-bottom:none}
+.dash-table tbody tr:hover td{background:rgba(255,255,255,.03)}
+
+/* ─── LOGÍSTICA GRID ─────────────────────────────────── */
+.dash-logistica-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+.logistica-item{
+  padding:16px;
+  border-radius:16px;
+  border:1px solid var(--line);
+}
+.logistica-expected{background:rgba(110,168,255,.07);border-color:rgba(110,168,255,.18)}
+.logistica-received{background:rgba(52,211,153,.07);border-color:rgba(52,211,153,.18)}
+
+.logistica-label{font-size:12px;color:var(--muted);margin-bottom:6px}
+.logistica-value{font-size:28px;font-weight:900;color:var(--text)}
+.logistica-expected .logistica-value{color:#6ea8ff}
+.logistica-received .logistica-value{color:#34d399}
+
+/* ─── SECCIÓN TÍTULO ─────────────────────────────────── */
+.dash-section-title{
+  display:flex;align-items:center;gap:14px;
+  font-size:13px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.08em;
+  margin-bottom:4px;
+}
+.dash-divider{flex:1;height:1px;background:var(--line)}
+
+/* ─── MOTIVOS DASHBOARD ──────────────────────────────── */
+#dashMotivosContent > div{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;
+}
+#dashMotivosContent > div:last-child{border-bottom:none}
+
+/* ─── GRIDS GENERALES ────────────────────────────────── */
 .cards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:20px}
 .content-grid{display:grid;gap:20px}
 .content-grid.two-col{grid-template-columns:1.1fr .9fr}
@@ -81,6 +203,8 @@ input,select,textarea{
   outline:none
 }
 
+select option{background:#1a2540;color:#eef2ff}
+
 .stack-form{display:grid;gap:16px}
 .toolbar-grid{display:flex;gap:14px;align-items:end;flex-wrap:wrap}
 .actions-row{display:flex;gap:10px;flex-wrap:wrap}
@@ -96,37 +220,13 @@ input,select,textarea{
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff}
 .btn-outline{background:rgba(255,255,255,.03);color:var(--text);border:1px solid var(--line)}
 
-.table-wrap,
-.excel-wrap{
-  overflow:auto;
-  position:relative;
-}
+.table-wrap,.excel-wrap{overflow:auto;position:relative}
 
-.data-table{
-  border-collapse:collapse;
-  width:100%;
-}
+.data-table{border-collapse:collapse;width:100%}
+.excel-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:2800px;font-size:12px}
 
-.excel-table{
-  border-collapse:separate;
-  border-spacing:0;
-  width:max-content;
-  min-width:2800px;
-  font-size:12px;
-}
-
-.data-table th,
-.data-table td,
-.excel-table th,
-.excel-table td{
-  border:1px solid rgba(255,255,255,.08);
-  padding:8px;
-  text-align:center;
-}
-
-.data-table th{
-  background:rgba(255,255,255,.06);
-}
+.data-table th,.data-table td,.excel-table th,.excel-table td{border:1px solid rgba(255,255,255,.08);padding:8px;text-align:center}
+.data-table th{background:rgba(255,255,255,.06)}
 
 .summary-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .mini-stat{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:16px;padding:18px}
@@ -134,290 +234,157 @@ input,select,textarea{
 .mini-stat strong{display:block;margin-top:8px;font-size:30px}
 
 .products-list{display:grid;gap:14px}
-.category-block{border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden;background:rgba(255,255,255,.02)}
-.category-title{padding:14px 16px;font-weight:800;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08)}
-.product-row{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:14px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.05)}
+.product-row{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:14px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.05);border-radius:12px}
 .product-row:last-child{border-bottom:none}
 .product-title{font-size:16px;font-weight:800;margin-bottom:6px}
 .product-sub{color:var(--muted);line-height:1.4}
 .empty-state{padding:20px;border-radius:18px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12);color:var(--muted)}
 
-.excel-table thead th{
-  white-space:nowrap;
-}
+.excel-table thead th{white-space:nowrap}
 
 .sticky-col{
-  position:sticky;
-  left:0;
-  z-index:50;
-  min-width:260px;
-  max-width:260px;
-  width:260px;
-  white-space:normal;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  line-height:1.2;
-  vertical-align:top;
-  text-align:left !important;
-  background:#15203a !important;
-  box-shadow:10px 0 16px rgba(0,0,0,.22);
+  position:sticky;left:0;z-index:50;
+  min-width:260px;max-width:260px;width:260px;
+  white-space:normal;word-break:break-word;overflow-wrap:anywhere;
+  line-height:1.2;vertical-align:top;text-align:left !important;
+  background:#15203a !important;box-shadow:10px 0 16px rgba(0,0,0,.22);
 }
 
-#tablaGerenciaExcel th.sticky-col,
-#tablaGerenciaExcel td.sticky-col{
-  position:sticky;
-  left:0;
-  background:#15203a !important;
-}
+#tablaGerenciaExcel th.sticky-col,#tablaGerenciaExcel td.sticky-col{position:sticky;left:0;background:#15203a !important}
+#tablaGerenciaExcel thead th.sticky-col{z-index:70}
+#tablaGerenciaExcel tbody td.sticky-col{z-index:60}
 
-#tablaGerenciaExcel thead th.sticky-col{
-  z-index:70;
-}
+.product-name-cell{font-weight:700;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.2;vertical-align:top}
+#tablaGerenciaExcel td.product-name-cell,#tablaGerenciaExcel td.sticky-col.product-name-cell{min-width:220px;max-width:220px}
+#tablaCargaDiaria td.product-name-cell,#tablaCargaDiaria td.sticky-col.product-name-cell{min-width:220px;max-width:220px}
 
-#tablaGerenciaExcel tbody td.sticky-col{
-  z-index:60;
-}
+.stock-head{background:#d6d6d6;color:#000}
+.day-block{background:#efefef;color:#000;font-weight:800}
 
-.product-name-cell{
-  font-weight:700;
-  white-space:normal;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  line-height:1.2;
-  vertical-align:top;
-}
-
-#tablaGerenciaExcel td.product-name-cell,
-#tablaGerenciaExcel td.sticky-col.product-name-cell{
-  min-width:220px;
-  max-width:220px;
-}
-
-#tablaCargaDiaria td.product-name-cell,
-#tablaCargaDiaria td.sticky-col.product-name-cell{
-  min-width:220px;
-  max-width:220px;
-}
-
-.stock-head{
-  background:#d6d6d6;
-  color:#000;
-}
-
-.day-block{
-  background:#efefef;
-  color:#000;
-  font-weight:800;
-}
-
-/* COLORES DE BLOQUES */
-/* Colores de grupos — paleta suave sobre fondo oscuro */
-.group-alvear{background:rgba(255,171,100,.18);color:#ffd4a8;border-color:rgba(255,171,100,.25)}
-.group-caja-chica{background:rgba(250,210,120,.16);color:#fce8a0;border-color:rgba(250,210,120,.22)}
-.group-caja-grande{background:rgba(160,100,220,.20);color:#d8b4fe;border-color:rgba(160,100,220,.28)}
-.group-caja-chica-2{background:rgba(120,180,255,.16);color:#bfdbfe;border-color:rgba(120,180,255,.24)}
-.group-caja-grande-2{background:rgba(90,140,255,.18);color:#a5b4fc;border-color:rgba(90,140,255,.26)}
-.group-banado-chica{background:rgba(80,200,130,.16);color:#a7f3d0;border-color:rgba(80,200,130,.24)}
-.group-banado-grande{background:rgba(50,180,200,.16);color:#99f6e4;border-color:rgba(50,180,200,.24)}
+/* ─── COLORES DE BLOQUES — paleta suave ──────────────── */
+.group-alvear    {background:rgba(255,171,100,.18);color:#ffd4a8}
+.group-caja-chica{background:rgba(250,210,120,.16);color:#fce8a0}
+.group-caja-grande{background:rgba(160,100,220,.20);color:#d8b4fe}
+.group-caja-chica-2{background:rgba(120,180,255,.16);color:#bfdbfe}
+.group-caja-grande-2{background:rgba(90,140,255,.18);color:#a5b4fc}
+.group-banado-chica{background:rgba(80,200,130,.16);color:#a7f3d0}
+.group-banado-grande{background:rgba(50,180,200,.16);color:#99f6e4}
 
 .readonly-cell{font-weight:700}
 .total-cell,.total-head{background:rgba(255,255,255,.06);font-weight:800}
 .stock-input{background:rgba(255,255,255,.07)}
 .excel-input{width:100%;min-width:58px;padding:6px;border-radius:8px;font-size:12px;text-align:center;border:1px solid rgba(255,255,255,.08)}
 
-/* BAÑADO CAJA CHICA - VERDE */
+/* ─── BAÑADO OVERRIDES ───────────────────────────────── */
 #tablaCargaDiaria th.group-banado-chica,
 #tablaCargaDiaria td.group-banado-chica,
 #tablaGerenciaExcel th.group-banado-chica,
 #tablaGerenciaExcel td.group-banado-chica{
-  background:rgba(80,200,130,.16) !important;
-  color:#a7f3d0 !important;
+  background:rgba(80,200,130,.16) !important;color:#a7f3d0 !important;
   border-color:rgba(80,200,130,.22) !important;
 }
-
 #tablaCargaDiaria input.group-banado-chica,
 #tablaGerenciaExcel input.group-banado-chica{
-  background:rgba(80,200,130,.12) !important;
-  color:#d1fae5 !important;
-  border:1px solid rgba(80,200,130,.28) !important;
+  background:rgba(80,200,130,.10) !important;color:#d1fae5 !important;
+  border:1px solid rgba(80,200,130,.26) !important;
 }
-
 #tablaCargaDiaria .readonly-cell.group-banado-chica,
 #tablaGerenciaExcel .readonly-cell.group-banado-chica{
-  background:rgba(80,200,130,.24) !important;
-  color:#6ee7b7 !important;
-  font-weight:700;
+  background:rgba(80,200,130,.24) !important;color:#6ee7b7 !important;font-weight:700;
 }
 
-/* BAÑADO CAJA GRANDE - AZUL */
 #tablaCargaDiaria th.group-banado-grande,
 #tablaCargaDiaria td.group-banado-grande,
 #tablaGerenciaExcel th.group-banado-grande,
 #tablaGerenciaExcel td.group-banado-grande{
-  background:rgba(50,180,200,.16) !important;
-  color:#99f6e4 !important;
+  background:rgba(50,180,200,.16) !important;color:#99f6e4 !important;
   border-color:rgba(50,180,200,.22) !important;
 }
-
 #tablaCargaDiaria input.group-banado-grande,
 #tablaGerenciaExcel input.group-banado-grande{
-  background:rgba(50,180,200,.12) !important;
-  color:#ccfbf1 !important;
-  border:1px solid rgba(50,180,200,.28) !important;
+  background:rgba(50,180,200,.10) !important;color:#ccfbf1 !important;
+  border:1px solid rgba(50,180,200,.26) !important;
 }
-
 #tablaCargaDiaria .readonly-cell.group-banado-grande,
 #tablaGerenciaExcel .readonly-cell.group-banado-grande{
-  background:rgba(50,180,200,.24) !important;
-  color:#5eead4 !important;
-  font-weight:700;
+  background:rgba(50,180,200,.24) !important;color:#5eead4 !important;font-weight:700;
 }
 
-/* PEDIDO SEMANAL */
-#tablaPedidoSemanal{
-  min-width:2200px;
+/* ─── PEDIDO SEMANAL ─────────────────────────────────── */
+#tablaPedidoSemanal{min-width:700px}
+#tablaPedidoSemanal th{white-space:nowrap}
+#tablaPedidoSemanal td{vertical-align:top}
+#tablaPedidoSemanal textarea,#tablaPedidoSemanal textarea.pedido-textarea{
+  min-width:160px;resize:vertical;
+  border:1px solid rgba(255,255,255,.08);border-radius:10px;
+  padding:8px;background:rgba(255,255,255,.04);color:#fff;font-size:12px;width:100%;
 }
+#tablaPedidoSemanal input[type="checkbox"]{width:auto;min-width:0;height:auto;padding:0;border-radius:3px}
 
-#tablaPedidoSemanal th{
-  white-space:nowrap;
-}
+.week-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(110,168,255,.12);border:1px solid rgba(110,168,255,.22);color:#dbe7ff;font-size:12px;font-weight:700}
+.pedido-col-moron{background:rgba(111,168,255,.10) !important}
+.pedido-col-alvear{background:rgba(143,123,255,.10) !important}
+.pedido-col-gerencia{background:rgba(61,220,151,.10) !important}
+.pedido-readonly{background:rgba(255,255,255,.06) !important;font-weight:700}
+.pedido-history-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffd166;margin-left:6px;vertical-align:middle;box-shadow:0 0 0 4px rgba(255,209,102,.14)}
 
-#tablaPedidoSemanal td{
-  vertical-align:top;
-}
+.history-box{display:grid;gap:10px}
+.history-item{border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.03)}
+.history-meta{font-size:12px;color:var(--muted);margin-bottom:6px}
+.history-value{font-size:14px;color:var(--text);line-height:1.4}
 
-.week-badge{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:8px 12px;
-  border-radius:999px;
-  background:rgba(110,168,255,.12);
-  border:1px solid rgba(110,168,255,.22);
-  color:#dbe7ff;
-  font-size:12px;
-  font-weight:700;
-}
+.week-selector-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.week-option{border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.03);cursor:pointer;transition:.2s ease;text-align:left}
+.week-option:hover,.week-option.active{background:rgba(110,168,255,.12);border-color:rgba(110,168,255,.22)}
+.pedido-lock{color:#ffd5d5;background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.24);padding:10px 12px;border-radius:12px}
+.pedido-row-selected{box-shadow:inset 0 0 0 1px rgba(110,168,255,.28)}
+#pedidoSemanalHistorial{min-height:120px}
 
-.pedido-col-moron{
-  background:rgba(111,168,255,.10) !important;
-}
-
-.pedido-col-alvear{
-  background:rgba(143,123,255,.10) !important;
-}
-
-.pedido-col-gerencia{
-  background:rgba(61,220,151,.10) !important;
-}
-
-.pedido-readonly{
-  background:rgba(255,255,255,.06) !important;
-  font-weight:700;
-}
-
-.pedido-history-dot{
-  display:inline-block;
-  width:8px;
-  height:8px;
-  border-radius:50%;
-  background:#ffd166;
-  margin-left:6px;
-  vertical-align:middle;
-  box-shadow:0 0 0 4px rgba(255,209,102,.14);
-}
-
-.history-box{
-  display:grid;
-  gap:10px;
-}
-
-.history-item{
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:14px;
-  padding:12px 14px;
-  background:rgba(255,255,255,.03);
-}
-
-.history-meta{
-  font-size:12px;
-  color:var(--muted);
-  margin-bottom:6px;
-}
-
-.history-value{
-  font-size:14px;
-  color:var(--text);
-  line-height:1.4;
-}
-
-.week-selector-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:10px;
-}
-
-.week-option{
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:14px;
-  padding:12px 14px;
-  background:rgba(255,255,255,.03);
-  cursor:pointer;
-  transition:.2s ease;
-  text-align:left;
-}
-
-.week-option:hover,
-.week-option.active{
-  background:rgba(110,168,255,.12);
-  border-color:rgba(110,168,255,.22);
-}
-
-.pedido-lock{
-  color:#ffd5d5;
-  background:rgba(255,90,90,.12);
-  border:1px solid rgba(255,90,90,.24);
-  padding:10px 12px;
-  border-radius:12px;
-}
-
+/* ─── TOAST ──────────────────────────────────────────── */
 .toast{
-  position:fixed;
-  top:18px;
-  right:18px;
-  z-index:9999;
-  min-width:260px;
-  max-width:360px;
-  padding:14px 16px;
-  border-radius:16px;
-  background:rgba(15,22,43,.96);
-  border:1px solid var(--line);
-  color:#fff;
-  opacity:0;
-  pointer-events:none;
-  transform:translateY(-10px);
-  transition:.2s ease
+  position:fixed;top:18px;right:18px;z-index:9999;
+  min-width:260px;max-width:360px;padding:14px 16px;
+  border-radius:16px;background:rgba(15,22,43,.96);border:1px solid var(--line);
+  color:#fff;opacity:0;pointer-events:none;transform:translateY(-10px);transition:.2s ease
 }
 .toast.show{opacity:1;transform:translateY(0)}
 
-input[type="text"].excel-input{
-  appearance:textfield;
+input[type="text"].excel-input{appearance:textfield}
+input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type="number"]{-moz-appearance:textfield;appearance:textfield}
+
+/* ─── STOCK INICIAL — solo lectura operativos ────────── */
+.stock-readonly{
+  font-weight:700;color:var(--muted);text-align:center;
+  background:rgba(255,255,255,.03);font-size:13px;letter-spacing:.02em;
 }
 
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{
-  -webkit-appearance:none;
-  margin:0;
+/* ─── DRAG & DROP ────────────────────────────────────── */
+.product-row[draggable="true"]{transition:opacity .15s ease,box-shadow .15s ease;position:relative}
+.product-row[draggable="true"]:active{cursor:grabbing}
+.product-row.drag-over{
+  box-shadow:0 0 0 2px var(--primary),0 4px 20px rgba(110,168,255,.25);
+  background:rgba(110,168,255,.08) !important;border-radius:var(--radius);
 }
 
-input[type="number"]{
-  -moz-appearance:textfield;
-  appearance:textfield;
+/* ─── CATEGORÍA EDITABLE ─────────────────────────────── */
+.categoria-input{
+  border:1px solid var(--line);border-radius:8px;padding:4px 8px;
+  background:rgba(255,255,255,.05);color:#fff;font-size:12px;width:140px;transition:border-color .2s ease;
 }
+.categoria-input:focus{outline:none;border-color:var(--primary);background:rgba(110,168,255,.08)}
 
+/* ─── CONFIRMAR ALVEAR ───────────────────────────────── */
+#btnConfirmarAlvear{margin-top:12px}
+
+/* ─── SECCIÓN REPORTES ───────────────────────────────── */
+#section-reportes .data-table td,#section-reportes .data-table th{font-size:13px;padding:9px 12px}
+
+/* ─── RESPONSIVE ─────────────────────────────────────── */
 @media (max-width:1100px){
   .cards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .content-grid.two-col{grid-template-columns:1fr}
+  .dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 @media (max-width:860px){
@@ -427,134 +394,6 @@ input[type="number"]{
   .menu-btn{display:inline-grid;place-items:center}
   .main-content{padding:18px}
   .toolbar-grid{display:grid;grid-template-columns:1fr}
-}
-#tablaPedidoSemanal{
-  min-width:2400px;
-}
-
-#tablaPedidoSemanal textarea{
-  min-width:220px;
-  resize:vertical;
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;
-  padding:8px;
-  background:rgba(255,255,255,.04);
-  color:#fff;
-}
-
-.pedido-row-selected{
-  box-shadow: inset 0 0 0 1px rgba(110,168,255,.28);
-}
-
-#pedidoSemanalHistorial{
-  min-height:120px;
-}
-
-/* =====================================================
-   FIX: texto visible en select oscuro (semanas)
-===================================================== */
-select option {
-  background: #1a2540;
-  color: #eef2ff;
-}
-
-/* =====================================================
-   TABLA PEDIDO SEMANAL
-===================================================== */
-#tablaPedidoSemanal {
-  min-width: 700px;
-}
-
-#tablaPedidoSemanal textarea.pedido-textarea,
-#tablaPedidoSemanal textarea {
-  min-width: 160px;
-  resize: vertical;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 10px;
-  padding: 8px;
-  background: rgba(255,255,255,.04);
-  color: #fff;
-  font-size: 12px;
-  width: 100%;
-}
-
-#tablaPedidoSemanal input[type="checkbox"] {
-  width: auto;
-  min-width: 0;
-  height: auto;
-  padding: 0;
-  border-radius: 3px;
-}
-
-/* =====================================================
-   BOTÓN CONFIRMAR ALVEAR
-===================================================== */
-#btnConfirmarAlvear {
-  margin-top: 12px;
-}
-
-/* =====================================================
-   STOCK INICIAL — solo lectura para operativos
-===================================================== */
-.stock-readonly {
-  font-weight: 700;
-  color: var(--muted);
-  text-align: center;
-  background: rgba(255,255,255,.03);
-  font-size: 13px;
-  letter-spacing: .02em;
-}
-
-/* =====================================================
-   DRAG & DROP — reordenar productos
-===================================================== */
-.product-row[draggable="true"] {
-  transition: opacity .15s ease, box-shadow .15s ease;
-  position: relative;
-}
-
-.product-row[draggable="true"]:active {
-  cursor: grabbing;
-}
-
-.product-row.drag-over {
-  box-shadow: 0 0 0 2px var(--primary), 0 4px 20px rgba(110,168,255,.25);
-  background: rgba(110,168,255,.08) !important;
-  border-radius: var(--radius);
-}
-
-/* =====================================================
-   CATEGORÍA EDITABLE EN LISTA DE PRODUCTOS
-===================================================== */
-.categoria-input {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 4px 8px;
-  background: rgba(255,255,255,.05);
-  color: #fff;
-  font-size: 12px;
-  width: 140px;
-  transition: border-color .2s ease;
-}
-
-.categoria-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  background: rgba(110,168,255,.08);
-}
-
-/* =====================================================
-   SECCIÓN REPORTES
-===================================================== */
-#section-reportes .data-table td,
-#section-reportes .data-table th {
-  font-size: 13px;
-  padding: 9px 12px;
-}
-
-/* =====================================================
-   DASHBOARD — panel productividad
-===================================================== */
-#dashMotivosContent > div {
-  font-size: 13px;
+  .dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-logistica-grid{grid-template-columns:1fr}
 }
