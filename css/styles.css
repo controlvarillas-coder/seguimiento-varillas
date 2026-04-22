@@ -211,13 +211,14 @@ input,select,textarea{
 }
 
 /* COLORES DE BLOQUES */
-.group-alvear{background:#f4b183;color:#000}
-.group-caja-chica{background:#ead7a4;color:#000}
-.group-caja-grande{background:#b94b8d;color:#fff}
-.group-caja-chica-2{background:#e7d4dd;color:#000}
-.group-caja-grande-2{background:#6a42c2;color:#fff}
-.group-banado-chica{background:#93c47d;color:#000}
-.group-banado-grande{background:#9fc5e8;color:#000}
+/* Colores de grupos — paleta suave sobre fondo oscuro */
+.group-alvear{background:rgba(255,171,100,.18);color:#ffd4a8;border-color:rgba(255,171,100,.25)}
+.group-caja-chica{background:rgba(250,210,120,.16);color:#fce8a0;border-color:rgba(250,210,120,.22)}
+.group-caja-grande{background:rgba(160,100,220,.20);color:#d8b4fe;border-color:rgba(160,100,220,.28)}
+.group-caja-chica-2{background:rgba(120,180,255,.16);color:#bfdbfe;border-color:rgba(120,180,255,.24)}
+.group-caja-grande-2{background:rgba(90,140,255,.18);color:#a5b4fc;border-color:rgba(90,140,255,.26)}
+.group-banado-chica{background:rgba(80,200,130,.16);color:#a7f3d0;border-color:rgba(80,200,130,.24)}
+.group-banado-grande{background:rgba(50,180,200,.16);color:#99f6e4;border-color:rgba(50,180,200,.24)}
 
 .readonly-cell{font-weight:700}
 .total-cell,.total-head{background:rgba(255,255,255,.06);font-weight:800}
@@ -229,22 +230,22 @@ input,select,textarea{
 #tablaCargaDiaria td.group-banado-chica,
 #tablaGerenciaExcel th.group-banado-chica,
 #tablaGerenciaExcel td.group-banado-chica{
-  background:#93c47d !important;
-  color:#000 !important;
-  border-color:rgba(0,0,0,.15) !important;
+  background:rgba(80,200,130,.16) !important;
+  color:#a7f3d0 !important;
+  border-color:rgba(80,200,130,.22) !important;
 }
 
 #tablaCargaDiaria input.group-banado-chica,
 #tablaGerenciaExcel input.group-banado-chica{
-  background:#b6d7a8 !important;
-  color:#000 !important;
-  border:1px solid rgba(0,0,0,.18) !important;
+  background:rgba(80,200,130,.12) !important;
+  color:#d1fae5 !important;
+  border:1px solid rgba(80,200,130,.28) !important;
 }
 
 #tablaCargaDiaria .readonly-cell.group-banado-chica,
 #tablaGerenciaExcel .readonly-cell.group-banado-chica{
-  background:#7fb36a !important;
-  color:#000 !important;
+  background:rgba(80,200,130,.24) !important;
+  color:#6ee7b7 !important;
   font-weight:700;
 }
 
@@ -253,22 +254,22 @@ input,select,textarea{
 #tablaCargaDiaria td.group-banado-grande,
 #tablaGerenciaExcel th.group-banado-grande,
 #tablaGerenciaExcel td.group-banado-grande{
-  background:#9fc5e8 !important;
-  color:#000 !important;
-  border-color:rgba(0,0,0,.15) !important;
+  background:rgba(50,180,200,.16) !important;
+  color:#99f6e4 !important;
+  border-color:rgba(50,180,200,.22) !important;
 }
 
 #tablaCargaDiaria input.group-banado-grande,
 #tablaGerenciaExcel input.group-banado-grande{
-  background:#cfe2f3 !important;
-  color:#000 !important;
-  border:1px solid rgba(0,0,0,.18) !important;
+  background:rgba(50,180,200,.12) !important;
+  color:#ccfbf1 !important;
+  border:1px solid rgba(50,180,200,.28) !important;
 }
 
 #tablaCargaDiaria .readonly-cell.group-banado-grande,
 #tablaGerenciaExcel .readonly-cell.group-banado-grande{
-  background:#6fa8dc !important;
-  color:#000 !important;
+  background:rgba(50,180,200,.24) !important;
+  color:#5eead4 !important;
   font-weight:700;
 }
 
@@ -477,9 +478,6 @@ select option {
   width: 100%;
 }
 
-/* =====================================================
-   MOTIVOS checkboxes
-===================================================== */
 #tablaPedidoSemanal input[type="checkbox"] {
   width: auto;
   min-width: 0;
@@ -493,6 +491,18 @@ select option {
 ===================================================== */
 #btnConfirmarAlvear {
   margin-top: 12px;
+}
+
+/* =====================================================
+   STOCK INICIAL — solo lectura para operativos
+===================================================== */
+.stock-readonly {
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+  background: rgba(255,255,255,.03);
+  font-size: 13px;
+  letter-spacing: .02em;
 }
 
 /* =====================================================
