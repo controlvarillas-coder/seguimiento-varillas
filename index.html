@@ -79,62 +79,78 @@
         </header>
 
         <section id="section-dashboard" class="section active">
-          <div class="cards-grid">
-            <div class="stat-card">
-              <div class="stat-label">Productos activos</div>
-              <div class="stat-value" id="statProductos">0</div>
-            </div>
 
-            <div class="stat-card">
-              <div class="stat-label">Reportes cargados</div>
-              <div class="stat-value" id="statReportes">0</div>
+          <!-- KPIs premium -->
+          <div class="dash-kpi-grid">
+            <div class="kpi-card kpi-blue">
+              <div class="kpi-icon">📦</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statProductos">0</div>
+                <div class="kpi-label">Productos activos</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Alertas activas</div>
-              <div class="stat-value" id="statAlertas">0</div>
+            <div class="kpi-card kpi-purple">
+              <div class="kpi-icon">📋</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statReportes">0</div>
+                <div class="kpi-label">Reportes cargados</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Fábricas pendientes hoy</div>
-              <div class="stat-value" id="statPendientesHoy">0</div>
+            <div class="kpi-card kpi-red">
+              <div class="kpi-icon">⚠️</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statAlertas">0</div>
+                <div class="kpi-label">Alertas activas</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Planillas cargadas hoy</div>
-              <div class="stat-value" id="statHoyCargadas">0</div>
+            <div class="kpi-card kpi-orange">
+              <div class="kpi-icon">🏭</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statPendientesHoy">0</div>
+                <div class="kpi-label">Fábricas pendientes hoy</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Reportes enviados</div>
-              <div class="stat-value" id="statEnviados">0</div>
+            <div class="kpi-card kpi-green">
+              <div class="kpi-icon">✅</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statHoyCargadas">0</div>
+                <div class="kpi-label">Planillas cargadas hoy</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Reportes en borrador</div>
-              <div class="stat-value" id="statBorradores">0</div>
+            <div class="kpi-card kpi-teal">
+              <div class="kpi-icon">📤</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statEnviados">0</div>
+                <div class="kpi-label">Enviadas</div>
+              </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-label">Usuarios activos</div>
-              <div class="stat-value" id="statUsuariosActivos">0</div>
+            <div class="kpi-card kpi-indigo">
+              <div class="kpi-icon">📝</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statBorradores">0</div>
+                <div class="kpi-label">En borrador</div>
+              </div>
+            </div>
+            <div class="kpi-card kpi-slate">
+              <div class="kpi-icon">👤</div>
+              <div class="kpi-body">
+                <div class="kpi-value" id="statUsuariosActivos">0</div>
+                <div class="kpi-label">Usuarios activos</div>
+              </div>
             </div>
           </div>
 
-          <div class="content-grid two-col">
-            <div class="panel-card">
-              <div class="panel-header">
+          <!-- Reportes + fábricas -->
+          <div class="content-grid two-col mt-20">
+            <div class="panel-card dash-panel">
+              <div class="panel-header dash-panel-header">
                 <h3>Últimos reportes</h3>
+                <span class="dash-badge" id="badgeReportes">—</span>
               </div>
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table dash-table">
                   <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Fábrica</th>
-                      <th>Estado</th>
-                      <th>Usuario</th>
-                    </tr>
+                    <tr><th>Fecha</th><th>Fábrica</th><th>Estado</th><th>Usuario</th></tr>
                   </thead>
                   <tbody id="tablaDashboardReportes">
                     <tr><td colspan="4">Sin reportes.</td></tr>
@@ -142,19 +158,15 @@
                 </table>
               </div>
             </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
+            <div class="panel-card dash-panel">
+              <div class="panel-header dash-panel-header">
                 <h3>Estado por fábrica</h3>
+                <span class="dash-badge dash-badge-green">HOY</span>
               </div>
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table dash-table">
                   <thead>
-                    <tr>
-                      <th>Fábrica</th>
-                      <th>Estado hoy</th>
-                      <th>Última carga</th>
-                    </tr>
+                    <tr><th>Fábrica</th><th>Estado hoy</th><th>Última carga</th></tr>
                   </thead>
                   <tbody id="tablaDashboardFabricas">
                     <tr><td colspan="3">Sin datos.</td></tr>
@@ -164,48 +176,41 @@
             </div>
           </div>
 
+          <!-- Logística + alertas -->
           <div class="content-grid two-col mt-20">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3>Resumen logístico</h3>
+            <div class="panel-card dash-panel">
+              <div class="panel-header dash-panel-header">
+                <h3>Resumen logístico · hoy</h3>
+                <span class="dash-badge dash-badge-blue">Morón</span>
               </div>
-
-              <div class="summary-boxes">
-                <div class="mini-stat">
-                  <span>Esperado Morón caja chica</span>
-                  <strong id="statEsperadoChica">0</strong>
+              <div class="dash-logistica-grid">
+                <div class="logistica-item logistica-expected">
+                  <div class="logistica-label">Esperado caja chica</div>
+                  <div class="logistica-value" id="statEsperadoChica">0</div>
                 </div>
-
-                <div class="mini-stat">
-                  <span>Ingresó Morón caja chica</span>
-                  <strong id="statIngresadoChica">0</strong>
+                <div class="logistica-item logistica-received">
+                  <div class="logistica-label">Ingresó caja chica</div>
+                  <div class="logistica-value" id="statIngresadoChica">0</div>
                 </div>
-
-                <div class="mini-stat">
-                  <span>Esperado Morón caja grande</span>
-                  <strong id="statEsperadoGrande">0</strong>
+                <div class="logistica-item logistica-expected">
+                  <div class="logistica-label">Esperado caja grande</div>
+                  <div class="logistica-value" id="statEsperadoGrande">0</div>
                 </div>
-
-                <div class="mini-stat">
-                  <span>Ingresó Morón caja grande</span>
-                  <strong id="statIngresadoGrande">0</strong>
+                <div class="logistica-item logistica-received">
+                  <div class="logistica-label">Ingresó caja grande</div>
+                  <div class="logistica-value" id="statIngresadoGrande">0</div>
                 </div>
               </div>
             </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
+            <div class="panel-card dash-panel">
+              <div class="panel-header dash-panel-header">
                 <h3>Últimas alertas</h3>
+                <span class="dash-badge dash-badge-red" id="badgeAlertas">0</span>
               </div>
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table dash-table">
                   <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Producto</th>
-                      <th>Bloque</th>
-                      <th>Diferencia</th>
-                    </tr>
+                    <tr><th>Fecha</th><th>Producto</th><th>Bloque</th><th>Diferencia</th></tr>
                   </thead>
                   <tbody id="tablaDashboardAlertas">
                     <tr><td colspan="4">Sin alertas.</td></tr>
@@ -215,21 +220,49 @@
             </div>
           </div>
 
-          <!-- Panel productividad Alvear — solo gerencia -->
-          <div class="content-grid two-col mt-20 gerencia-only">
-            <div class="panel-card">
-              <div class="panel-header"><h3>Productividad Alvear</h3></div>
-              <div class="summary-boxes">
-                <div class="mini-stat"><span>Total pedido (semanas)</span><strong id="statTotalPedido">0</strong></div>
-                <div class="mini-stat"><span>Total entregado</span><strong id="statTotalEntregado">0</strong></div>
-                <div class="mini-stat"><span>% cumplimiento global</span><strong id="statPorcentaje">0%</strong></div>
-                <div class="mini-stat"><span>Semanas completas</span><strong id="statSemanasCompletas">—</strong></div>
+          <!-- Productividad Alvear — solo gerencia -->
+          <div class="mt-20 gerencia-only">
+            <div class="dash-section-title">
+              <span>Productividad Alvear</span>
+              <div class="dash-divider"></div>
+            </div>
+            <div class="dash-kpi-grid mt-20">
+              <div class="kpi-card kpi-green kpi-large">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-body">
+                  <div class="kpi-value" id="statPorcentaje">0%</div>
+                  <div class="kpi-label">Cumplimiento global</div>
+                </div>
+              </div>
+              <div class="kpi-card kpi-blue kpi-large">
+                <div class="kpi-icon">📦</div>
+                <div class="kpi-body">
+                  <div class="kpi-value" id="statTotalPedido">0</div>
+                  <div class="kpi-label">Total pedido</div>
+                </div>
+              </div>
+              <div class="kpi-card kpi-teal kpi-large">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-body">
+                  <div class="kpi-value" id="statTotalEntregado">0</div>
+                  <div class="kpi-label">Total entregado</div>
+                </div>
+              </div>
+              <div class="kpi-card kpi-purple kpi-large">
+                <div class="kpi-icon">📅</div>
+                <div class="kpi-body">
+                  <div class="kpi-value" id="statSemanasCompletas">—</div>
+                  <div class="kpi-label">Semanas completas</div>
+                </div>
               </div>
             </div>
-            <div class="panel-card">
-              <div class="panel-header"><h3>Principales motivos de incumplimiento</h3></div>
+            <div class="panel-card dash-panel mt-20">
+              <div class="panel-header dash-panel-header">
+                <h3>Principales motivos de incumplimiento</h3>
+                <span class="dash-badge dash-badge-orange">Alvear</span>
+              </div>
               <div id="dashMotivosContent" style="min-height:60px;">
-                <div style="color:var(--muted);font-size:13px;">Sin datos aún.</div>
+                <div style="color:var(--muted);font-size:13px;padding:12px 0;">Sin datos aún.</div>
               </div>
             </div>
           </div>
@@ -310,6 +343,18 @@
             <div class="panel-header">
               <h3>Listado maestro — arrastrá para reordenar</h3>
             </div>
+            <div class="toolbar-grid" style="margin-bottom:16px;">
+              <div class="field">
+                <label for="filtroCategoriaProd">Filtrar por categoría</label>
+                <select id="filtroCategoriaProd">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </div>
+              <div class="field field-grow">
+                <label for="filtroNombreProd">Buscar por nombre</label>
+                <input id="filtroNombreProd" type="text" placeholder="Ej: palo santo..." autocomplete="off" />
+              </div>
+            </div>
             <div id="productosList" class="products-list"></div>
           </div>
         </section>
@@ -339,6 +384,12 @@
                 <select id="cargaCategoriaFilter">
                   <option value="">Todas las categorías</option>
                 </select>
+              </div>
+
+              <div class="field">
+                <label for="cargaAromaSearch">Buscar aroma</label>
+                <input id="cargaAromaSearch" type="text" placeholder="Ej: palo santo..."
+                  autocomplete="off" style="min-width:180px;" />
               </div>
 
               <div class="field field-grow">
