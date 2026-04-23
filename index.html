@@ -360,10 +360,14 @@
         </section>
 
         <section id="section-carga" class="section">
-          <div class="panel-card">
-            <div class="panel-header">
+
+          <!-- Panel principal: fecha, fábrica, estado, acciones -->
+          <div class="panel-card carga-header-card">
+            <div class="panel-header dash-panel-header">
               <h3>Carga diaria por fábrica</h3>
+              <div id="estadoCarga" class="status-box estado-box-inline">Sin cargar</div>
             </div>
+
             <div class="toolbar-grid">
               <div class="field">
                 <label for="cargaFecha">Fecha</label>
@@ -379,7 +383,7 @@
                 </select>
               </div>
 
-              <div id="cargaCategoriaWrapper" style="display:none;">
+              <div id="cargaCategoriaWrapper" style="display:none;" class="field">
                 <label for="cargaCategoriaFilter">Categoría</label>
                 <select id="cargaCategoriaFilter">
                   <option value="">Todas las categorías</option>
@@ -392,45 +396,35 @@
                   autocomplete="off" style="min-width:180px;" />
               </div>
 
-              <div class="field field-grow">
-                <label>Estado</label>
-                <div id="estadoCarga" class="status-box">Sin cargar</div>
-              </div>
-
-              <div class="actions-row">
-                <button id="btnCargarReporte" class="btn btn-outline" type="button">Cargar</button>
-                <button id="btnGuardarReporte" class="btn btn-primary" type="button">Guardar borrador</button>
-                <button id="btnEnviarReporte" class="btn btn-primary" type="button">Enviar</button>
+              <div class="actions-row" style="align-self:end;">
+                <button id="btnCargarReporte" class="btn btn-outline" type="button">📂 Cargar</button>
+                <button id="btnGuardarReporte" class="btn btn-outline" type="button">💾 Guardar</button>
+                <button id="btnEnviarReporte" class="btn btn-primary" type="button">✅ Publicar</button>
               </div>
             </div>
 
-            <div class="hint-box">
-              Los usuarios operativos solo pueden cargar una planilla por fecha y por fábrica. Una vez enviada, queda bloqueada para ellos. Gerencia sí puede editarla.
+            <div class="carga-hint-row">
+              <span class="hint-icon">💡</span>
+              <span>Los datos se guardan automáticamente mientras escribís. Al publicar la planilla queda validada y solo lectura. Gerencia puede volver a borrador para editar.</span>
             </div>
           </div>
 
+          <!-- Panel carga masiva de datos operativos -->
           <div class="panel-card mt-20">
             <div class="panel-header">
-              <h3>Carga masiva por Excel</h3>
+              <h3>Carga masiva operativa · Excel</h3>
             </div>
-
             <div class="toolbar-grid">
               <div class="field">
                 <label>Plantilla</label>
                 <button id="btnDescargarPlantillaCarga" class="btn btn-outline" type="button">
-                  Descargar plantilla
+                  ⬇ Descargar plantilla
                 </button>
               </div>
-
               <div class="field field-grow">
                 <label for="fileCargaMasiva">Archivo Excel</label>
-                <input
-                  id="fileCargaMasiva"
-                  type="file"
-                  accept=".xlsx,.xls"
-                />
+                <input id="fileCargaMasiva" type="file" accept=".xlsx,.xls" />
               </div>
-
               <div class="field">
                 <label>&nbsp;</label>
                 <button id="btnProcesarCargaMasiva" class="btn btn-primary" type="button">
@@ -438,12 +432,41 @@
                 </button>
               </div>
             </div>
-
             <div id="estadoCargaMasiva" class="hint-box">
-              Subí un Excel simple con la primera columna PRODUCTO y luego solo las columnas de la fábrica seleccionada.
+              Subí un Excel con columna PRODUCTO y luego las columnas de la fábrica seleccionada.
             </div>
           </div>
 
+          <!-- Panel carga masiva de stock inicial — solo gerencia -->
+          <div class="panel-card mt-20 gerencia-only">
+            <div class="panel-header dash-panel-header">
+              <h3>Stock inicial · Carga masiva</h3>
+              <span class="dash-badge dash-badge-blue">Solo gerencia</span>
+            </div>
+            <div class="toolbar-grid">
+              <div class="field">
+                <label>Plantilla stock inicial</label>
+                <button id="btnDescargarStockInicial" class="btn btn-outline" type="button">
+                  ⬇ Descargar plantilla
+                </button>
+              </div>
+              <div class="field field-grow">
+                <label for="fileStockInicial">Archivo Excel (PRODUCTO + columnas de stock)</label>
+                <input id="fileStockInicial" type="file" accept=".xlsx,.xls" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button id="btnProcesarStockInicial" class="btn btn-primary" type="button">
+                  Cargar stock inicial
+                </button>
+              </div>
+            </div>
+            <div id="estadoStockInicial" class="hint-box">
+              La plantilla incluye una fila por producto con columnas: alvearChica, alvearGrande, moronChica, moronGrande, secandoChica, secandoGrande, banadoChica, banadoGrande.
+            </div>
+          </div>
+
+          <!-- Planilla operativa -->
           <div class="panel-card mt-20">
             <div class="panel-header">
               <h3>Planilla operativa</h3>
@@ -452,6 +475,7 @@
               <table id="tablaCargaDiaria" class="excel-table"></table>
             </div>
           </div>
+
         </section>
 
         <section id="section-pedido-semanal" class="section">
