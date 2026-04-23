@@ -56,7 +56,8 @@ const state = {
   cargaCategoriaFilter: '',
   cargaAromaFilter: '',
   productoFiltroCategoria: '',
-  productoFiltroNombre: ''
+  productoFiltroNombre: '',
+  autoSaveTimer: null
 };
 
 const FABRICAS = {
@@ -188,14 +189,14 @@ const MORON_INTERNAL_GROUPS = [
 ];
 
 const INITIAL_STOCK_COLUMNS = [
-  { key: 'alvearChica', label: 'ALV CH' },
-  { key: 'alvearGrande', label: 'ALV GR' },
-  { key: 'moronChica', label: 'MOR CH' },
-  { key: 'moronGrande', label: 'MOR GR' },
-  { key: 'secandoChica', label: 'SEC CH' },
-  { key: 'secandoGrande', label: 'SEC GR' },
-  { key: 'banadoChica', label: 'BAÑ CH' },
-  { key: 'banadoGrande', label: 'BAÑ GR' }
+  { key: 'alvearChica', label: 'ALVEAR CAJA CHICA' },
+  { key: 'alvearGrande', label: 'ALVEAR CAJA GRANDE' },
+  { key: 'moronChica', label: 'MORÓN CAJA CHICA' },
+  { key: 'moronGrande', label: 'MORÓN CAJA GRANDE' },
+  { key: 'secandoChica', label: 'SECANDO CAJA CHICA' },
+  { key: 'secandoGrande', label: 'SECANDO CAJA GRANDE' },
+  { key: 'banadoChica', label: 'BAÑADO CAJA CHICA' },
+  { key: 'banadoGrande', label: 'BAÑADO CAJA GRANDE' }
 ];
 
 const INPUT_GROUP_BY_FABRICA = {
@@ -943,7 +944,8 @@ function getEditableGroupsForCurrentUser() {
 function currentReporteIsLocked() {
   if (!state.reporteActual) return false;
   if (state.perfil?.rol === 'gerencia') return false;
-  return !!state.reporteActual.idYaExistia;
+  // Para operativos: bloqueado si fue publicada (estado 'enviada')
+  return state.reporteActual.estado === 'enviada';
 }
 
 function renderCellInput({
@@ -1321,13 +1323,26 @@ function renderCargaDiaria() {
     if (btnCargarReporte) btnCargarReporte.disabled = locked;
   }
 
-  if ($('estadoCarga')) {
-    if (state.reporteActual?.idYaExistia && state.perfil?.rol !== 'gerencia') {
-      $('estadoCarga').textContent = `Planilla ya cargada para ${fecha || ''} - solo lectura`;
+  // Estado visual con color y texto descriptivo
+  const estadoEl = $('estadoCarga');
+  if (estadoEl) {
+    if (!state.reporteActual) {
+      estadoEl.innerHTML = `<span class="estado-pill estado-nueva">✦ Nueva planilla ${fecha || ''}</span>`;
     } else {
-      $('estadoCarga').textContent = state.reporteActual
-        ? `Estado: ${state.reporteActual.estado || 'borrador'}`
-        : `Nueva planilla ${fecha || ''}`;
+      const est = state.reporteActual.estado || 'borrador';
+      const isLocked = locked;
+      if (est === 'enviada') {
+        estadoEl.innerHTML = `<span class="estado-pill estado-enviada">✅ Publicada · Solo lectura${state.perfil?.rol === 'gerencia' ? ' · <button class="btn-volver-borrador" id="btnVolverBorrador">Volver a borrador</button>' : ''}</span>`;
+      } else if (est === 'borrador') {
+        estadoEl.innerHTML = `<span class="estado-pill estado-borrador">📝 Borrador · Guardando automáticamente</span>`;
+      } else {
+        estadoEl.innerHTML = `<span class="estado-pill estado-nueva">✦ ${est}</span>`;
+      }
+    }
+    // Bind botón volver a borrador si existe
+    const btnVolver = document.getElementById('btnVolverBorrador');
+    if (btnVolver) {
+      btnVolver.addEventListener('click', () => volverABorrador());
     }
   }
 
@@ -2379,6 +2394,196 @@ function procesarCargaMasivaCategorias() {
   reader.readAsArrayBuffer(file);
 }
 
+
+/* ================================================================
+   AUTO-SAVE — guarda silenciosamente como borrador
+================================================================ */
+async function _autoGuardarReporte() {
+  if (!state.reporteActual || currentReporteIsLocked()) return;
+
+  const fecha = $('cargaFecha')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+  if (!fecha || !fabrica) return;
+
+  const id = getReporteId(fecha, fabrica);
+  const ref = doc(db, 'reportes_diarios', id);
+  const snap = await getDoc(ref);
+
+  // No auto-save si ya fue publicada y el usuario no es gerencia
+  if (snap.exists()) {
+    const data = snap.data();
+    if (data.estado === 'enviada' && state.perfil?.rol !== 'gerencia') return;
+  }
+
+  const payload = {
+    fecha,
+    fabrica,
+    estado: 'borrador',
+    creadoPor: state.currentUser?.email || '',
+    actualizadoEnTexto: new Date().toISOString(),
+    actualizadoEn: serverTimestamp(),
+    rows: state.reporteActual.rows.map(normalizeExistingRow)
+  };
+
+  if (!snap.exists()) {
+    await setDoc(ref, { ...payload, creadoEn: serverTimestamp() });
+  } else {
+    await updateDoc(ref, payload);
+  }
+
+  state.reporteActual.estado = 'borrador';
+  state.reporteActual.idYaExistia = true;
+
+  // Indicador visual silencioso
+  const estadoEl = $('estadoCarga');
+  if (estadoEl) {
+    const orig = estadoEl.innerHTML;
+    estadoEl.innerHTML = `<span class="estado-pill estado-guardando">💾 Guardando…</span>`;
+    setTimeout(() => { renderCargaDiaria(); }, 800);
+  }
+}
+
+/* ================================================================
+   VOLVER A BORRADOR — solo gerencia
+================================================================ */
+async function volverABorrador() {
+  if (state.perfil?.rol !== 'gerencia') {
+    toast('Solo gerencia puede volver a borrador.');
+    return;
+  }
+  if (!state.reporteActual) {
+    toast('Cargá primero la planilla.');
+    return;
+  }
+
+  const fecha = $('cargaFecha')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+
+  const id = getReporteId(fecha, fabrica);
+  const ref = doc(db, 'reportes_diarios', id);
+
+  await updateDoc(ref, {
+    estado: 'borrador',
+    actualizadoEnTexto: new Date().toISOString(),
+    actualizadoEn: serverTimestamp()
+  });
+
+  state.reporteActual.estado = 'borrador';
+  state.reporteActual.idYaExistia = true;
+
+  toast('Planilla vuelta a borrador. Ahora podés editarla.');
+  renderCargaDiaria();
+}
+
+/* ================================================================
+   STOCK INICIAL — plantilla y carga masiva
+================================================================ */
+function descargarPlantillaStockInicial() {
+  const fecha = $('cargaFecha')?.value;
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+
+  if (!fabrica) { toast('Seleccioná fábrica primero.'); return; }
+
+  const productos = getProductosParaFabrica(fabrica);
+
+  // Headers: PRODUCTO + las 8 columnas de stock inicial
+  const headers = ['PRODUCTO', ...INITIAL_STOCK_COLUMNS.map((c) => c.key)];
+  const rows = [
+    headers,
+    ...productos.map((p) => {
+      const row = new Array(headers.length).fill(0);
+      row[0] = p.nombre;
+      return row;
+    })
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'StockInicial');
+  XLSX.writeFile(wb, `stock_inicial_${fabrica}_${fecha || 'plantilla'}.xlsx`);
+}
+
+function procesarCargaMasivaStockInicial() {
+  const file = $('fileStockInicial')?.files?.[0];
+  if (!file) { toast('Seleccioná un archivo Excel.'); return; }
+
+  let fabrica = $('cargaFabrica')?.value;
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
+  const fecha = $('cargaFecha')?.value;
+
+  if (!fabrica || !fecha) { toast('Seleccioná fecha y fábrica primero.'); return; }
+
+  // Crear draft si no existe
+  if (!state.reporteActual) {
+    const monthValue = String(fecha).slice(0, 7);
+    let rows = buildDefaultRows(fabrica);
+    rows = applyPreviousMonthInitialStock(rows, monthValue);
+    state.reporteActual = {
+      id: getReporteId(fecha, fabrica),
+      fecha, fabrica,
+      estado: 'borrador',
+      creadoPor: state.currentUser?.email || '',
+      idYaExistia: false,
+      rows
+    };
+  }
+
+  const normalizeStr = (v) => String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+    const ws = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 });
+
+    if (rows.length < 2) { toast('Excel vacío.'); return; }
+
+    const headers = rows[0].map((h) => normalizeStr(h));
+    const idxProducto = headers.indexOf('PRODUCTO');
+    if (idxProducto < 0) { toast('Falta columna PRODUCTO.'); return; }
+
+    // Mapear columnas de stock
+    const colMap = {};
+    INITIAL_STOCK_COLUMNS.forEach((col) => {
+      const idx = headers.indexOf(normalizeStr(col.key));
+      if (idx >= 0) colMap[col.key] = idx;
+    });
+
+    const productoMap = new Map();
+    state.reporteActual.rows.forEach((r, i) => {
+      productoMap.set(normalizeStr(r.productoNombre), i);
+    });
+
+    let actualizados = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const nombre = normalizeStr(row[idxProducto]);
+      if (!nombre) continue;
+
+      const idx = productoMap.get(nombre);
+      if (idx === undefined) continue;
+
+      Object.entries(colMap).forEach(([key, colIdx]) => {
+        const val = Number(row[colIdx] || 0);
+        state.reporteActual.rows[idx].stockInicial[key] = val;
+      });
+
+      actualizados++;
+    }
+
+    renderCargaDiaria();
+    if ($('estadoStockInicial')) {
+      $('estadoStockInicial').textContent = `✅ ${actualizados} productos actualizados. Guardá la planilla para confirmar.`;
+    }
+    toast(`Stock inicial cargado para ${actualizados} productos.`);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 async function seedBaseData() {
   return;
 }
@@ -2984,6 +3189,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btnProcesarCargaCategorias')
     ?.addEventListener('click', procesarCargaMasivaCategorias);
+  $('btnDescargarStockInicial')
+    ?.addEventListener('click', descargarPlantillaStockInicial);
+  $('btnProcesarStockInicial')
+    ?.addEventListener('click', procesarCargaMasivaStockInicial);
 
   // Filtros de la lista de productos
   document.addEventListener('change', (e) => {
