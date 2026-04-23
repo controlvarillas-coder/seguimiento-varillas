@@ -397,3 +397,96 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   .dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dash-logistica-grid{grid-template-columns:1fr}
 }
+
+/* =====================================================
+   ESTADOS DE PLANILLA — pills visuales
+===================================================== */
+.estado-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.estado-nueva {
+  background: rgba(255,255,255,.07);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.estado-borrador {
+  background: rgba(251,191,36,.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,.28);
+}
+
+.estado-enviada {
+  background: rgba(52,211,153,.12);
+  color: #34d399;
+  border: 1px solid rgba(52,211,153,.28);
+}
+
+.estado-guardando {
+  background: rgba(110,168,255,.12);
+  color: #6ea8ff;
+  border: 1px solid rgba(110,168,255,.28);
+}
+
+/* Estado inline en el header de la card */
+.estado-box-inline {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+}
+
+/* Botón volver a borrador (inline dentro del pill) */
+.btn-volver-borrador {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(52,211,153,.4);
+  background: rgba(52,211,153,.1);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: .15s ease;
+}
+.btn-volver-borrador:hover {
+  background: rgba(52,211,153,.2);
+  transform: none;
+}
+
+/* =====================================================
+   CARGA DIARIA — header card
+===================================================== */
+.carga-header-card .panel-header {
+  align-items: flex-start;
+}
+
+.carga-hint-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(110,168,255,.06);
+  border: 1px solid rgba(110,168,255,.14);
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.carga-hint-row .hint-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
