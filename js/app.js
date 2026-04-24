@@ -1440,9 +1440,11 @@ function renderCargaDiaria() {
     if (fabricaSelect) fabricaSelect.disabled = false;
     if (btnCargarReporte) btnCargarReporte.disabled = false;
   } else {
+    // Operativo: fábrica siempre fija, fecha y cargar disponibles
+    // Solo se deshabilitan si la planilla está publicada (locked)
     if (fechaInput) fechaInput.disabled = locked;
     if (fabricaSelect) fabricaSelect.disabled = true;
-    if (btnCargarReporte) btnCargarReporte.disabled = locked;
+    if (btnCargarReporte) btnCargarReporte.disabled = false; // siempre puede cargar
   }
 
   // Estado visual con color y texto descriptivo
@@ -1730,7 +1732,8 @@ async function cargarReporteDiario() {
     } else if (bloqueado) {
       toast('Esta planilla ya fue publicada. Solo lectura.');
     } else {
-      toast('Planilla en borrador cargada. Podés editar y publicar.');
+      // borrador → operativo puede editar libremente
+      toast('Planilla en borrador. Podés modificar y publicar.');
     }
   } else {
     const monthValue = String(fecha).slice(0, 7);
@@ -1778,7 +1781,7 @@ async function guardarReporte(estado = 'borrador') {
   }
 
   if (currentReporteIsLocked()) {
-    toast('Esta fábrica ya cargó una planilla para esa fecha.');
+    toast('Esta planilla ya fue publicada. Solo lectura.');
     return;
   }
 
