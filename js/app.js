@@ -256,7 +256,8 @@ function setSection(sectionId) {
     carga: 'Carga diaria',
     usuarios: 'Usuarios',
     'pedido-semanal': 'Orden de fabricación',
-    reportes: 'Reportes'
+    reportes: 'Reportes',
+    backup: 'Copia de seguridad'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
@@ -268,6 +269,10 @@ function setSection(sectionId) {
 
   if (sectionId === 'reportes') {
     renderReportesFiltros();
+  }
+
+  if (sectionId === 'backup') {
+    renderBackupPanel();
   }
 }
 
@@ -581,8 +586,104 @@ function computeDashboardLogisticsSummary(reportes = [], productos = [], fecha =
   };
 }
 
+
+/* ================================================================
+   DASHBOARD OPERATIVO — vista simplificada para no-gerencia
+================================================================ */
+function _renderDashboardOperativo(hoy) {
+  const fabrica = state.perfil?.fabrica;
+  const nombre = state.perfil?.nombre || state.currentUser?.email || 'Usuario';
+
+  // Mis planillas (solo de mi fábrica)
+  const misPlanillas = state.reportes
+    .filter((r) => r.fabrica === fabrica)
+    .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+
+  const planillaHoy = misPlanillas.find((r) => r.fecha === hoy);
+  const totalEnviadas = misPlanillas.filter((r) => r.estado === 'enviada').length;
+  const totalBorradores = misPlanillas.filter((r) => r.estado === 'borrador').length;
+
+  const dashEl = document.getElementById('section-dashboard');
+  if (!dashEl) return;
+
+  const estadoHoy = planillaHoy
+    ? (planillaHoy.estado === 'enviada'
+        ? '<span class="estado-pill estado-enviada">✅ Publicada</span>'
+        : '<span class="estado-pill estado-borrador">📝 En borrador</span>')
+    : '<span class="estado-pill estado-nueva">— Sin cargar</span>';
+
+  dashEl.innerHTML = `
+    <div class="dash-kpi-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-icon">🏭</div>
+        <div class="kpi-body">
+          <div class="kpi-value" style="font-size:20px;">${(state.perfil?.fabrica || '').toUpperCase()}</div>
+          <div class="kpi-label">Mi fábrica</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-green">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-body">
+          <div class="kpi-value">${totalEnviadas}</div>
+          <div class="kpi-label">Planillas publicadas</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-orange">
+        <div class="kpi-icon">📝</div>
+        <div class="kpi-body">
+          <div class="kpi-value">${totalBorradores}</div>
+          <div class="kpi-label">En borrador</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-card dash-panel mt-20">
+      <div class="panel-header dash-panel-header">
+        <h3>Estado de hoy · ${hoy}</h3>
+        ${estadoHoy}
+      </div>
+      ${planillaHoy ? `
+        <div style="font-size:13px;color:var(--muted);">
+          Última actualización: ${planillaHoy.actualizadoEnTexto?.slice(0,16).replace('T',' ') || '-'}
+          &nbsp;·&nbsp; Cargado por: ${planillaHoy.creadoPor || '-'}
+        </div>
+      ` : `
+        <div class="carga-hint-row">
+          <span class="hint-icon">💡</span>
+          <span>Todavía no cargaste la planilla de hoy. Andá a <strong>Carga diaria</strong> para comenzar.</span>
+        </div>
+      `}
+    </div>
+
+    <div class="panel-card dash-panel mt-20">
+      <div class="panel-header"><h3>Mis últimas planillas</h3></div>
+      <div class="table-wrap">
+        <table class="data-table dash-table">
+          <thead>
+            <tr><th>Fecha</th><th>Estado</th><th>Actualizado</th></tr>
+          </thead>
+          <tbody>
+            ${misPlanillas.slice(0, 10).map((r) => `
+              <tr>
+                <td style="font-weight:600;">${r.fecha || '-'}</td>
+                <td>
+                  <span class="estado-pill ${r.estado === 'enviada' ? 'estado-enviada' : 'estado-borrador'}">
+                    ${r.estado === 'enviada' ? '✅ Publicada' : '📝 Borrador'}
+                  </span>
+                </td>
+                <td style="color:var(--muted);font-size:12px;">${(r.actualizadoEnTexto || r.fecha || '-').slice(0,16).replace('T',' ')}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="3" style="color:var(--muted);">Sin planillas aún.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboard() {
   const hoy = getTodayLocalISO();
+  const isGerencia = state.perfil?.rol === 'gerencia';
 
   const productosActivos = state.productos.filter((p) => p.activo !== false);
   const usuariosActivos = state.usuarios.filter((u) => u.activo !== false);
@@ -592,6 +693,12 @@ function renderDashboard() {
   const reportesHoy = state.reportes.filter((r) => r.fecha === hoy);
   const fabricasHoy = new Set(reportesHoy.map((r) => r.fabrica));
   const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
+
+  if (!isGerencia) {
+    // Vista simplificada para operativos
+    _renderDashboardOperativo(hoy);
+    return;
+  }
 
   if ($('statProductos')) $('statProductos').textContent = productosActivos.length;
   if ($('statReportes')) $('statReportes').textContent = state.reportes.length;
@@ -1239,21 +1346,36 @@ function applyPreviousMonthInitialStock(rows = [], monthValue = '') {
 }
 
 function getInitialStockForMonth(productoId, monthValue) {
-  const firstRow = getFirstRowForMonth(productoId, monthValue);
-  if (firstRow) return firstRow.stockInicial;
+  // Buscar el primer reporte del mes que tenga stock inicial no-cero
+  // ordenado por fecha ASC, sin filtrar por fábrica
+  const reportesDelMes = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (!row) continue;
+    const s = row.stockInicial;
+    if (!s) continue;
+    // Devolver si tiene al menos un valor no cero
+    const tieneStock = Object.values(s).some((v) => num(v) !== 0);
+    if (tieneStock) return normalizeExistingRow({ ...row }).stockInicial;
+  }
+
+  // Fallback: cualquier row del mes aunque sea todo cero
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (row?.stockInicial) return normalizeExistingRow({ ...row }).stockInicial;
+  }
 
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
   return {
-    alvearChica: 0,
-    alvearGrande: 0,
-    moronChica: 0,
-    moronGrande: 0,
-    secandoChica: 0,
-    secandoGrande: 0,
-    banadoChica: 0,
-    banadoGrande: 0
+    alvearChica: 0, alvearGrande: 0,
+    moronChica: 0, moronGrande: 0,
+    secandoChica: 0, secandoGrande: 0,
+    banadoChica: 0, banadoGrande: 0
   };
 }
 
@@ -1517,46 +1639,38 @@ function renderCargaDiaria() {
   bindCargaInputs();
 }
 
+function _parseDecimal(val) {
+  const str = String(val || '').trim().replace(',', '.');
+  const n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+}
+
 function bindCargaInputs() {
   document.querySelectorAll('#tablaCargaDiaria input').forEach((input) => {
     input.addEventListener('keydown', (e) => {
-      const allowed = [
-        'Backspace', 'Delete', 'Tab', 'Enter',
-        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'
-      ];
-
+      const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.',','];
       if (allowed.includes(e.key)) return;
       if (/^[0-9]$/.test(e.key)) return;
-
       e.preventDefault();
     });
 
     input.addEventListener('paste', (e) => {
       const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-      if (!/^\d*$/.test(pasted)) {
-        e.preventDefault();
-      }
+      if (!/^[0-9]*[.,]?[0-9]*$/.test(pasted.trim())) e.preventDefault();
     });
 
     input.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
-      const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
-      const numericValue = cleanValue === '' ? 0 : Number(cleanValue);
-
+      const numericValue = _parseDecimal(e.target.value);
       e.target.value = numericValue;
 
       if (!state.reporteActual) {
         let fabrica = $('cargaFabrica')?.value;
-        if (!fabrica && state.perfil?.fabrica) {
-          fabrica = state.perfil.fabrica;
-        }
-
+        if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
         state.reporteActual = {
           id: getReporteId($('cargaFecha')?.value, fabrica),
-          fecha: $('cargaFecha')?.value,
-          fabrica,
-          estado: 'borrador',
-          idYaExistia: false,
+          fecha: $('cargaFecha')?.value, fabrica,
+          estado: 'borrador', idYaExistia: false,
           rows: buildDefaultRows(fabrica)
         };
       }
@@ -1564,20 +1678,21 @@ function bindCargaInputs() {
       if (e.target.dataset.area === 'stockInicial') {
         state.reporteActual.rows[rowIndex].stockInicial[e.target.dataset.key] = numericValue;
       } else {
-        const group = e.target.dataset.group;
-        const key = e.target.dataset.key;
-        state.reporteActual.rows[rowIndex].groups[group][key] = numericValue;
+        state.reporteActual.rows[rowIndex].groups[e.target.dataset.group][e.target.dataset.key] = numericValue;
       }
 
       renderCargaDiaria();
+
+      if (!currentReporteIsLocked()) {
+        clearTimeout(state.autoSaveTimer);
+        state.autoSaveTimer = setTimeout(async () => { await _autoGuardarReporte(); }, 1500);
+      }
     });
 
-    input.addEventListener('blur', (e) => {
-      const cleanValue = String(e.target.value || '').replace(/[^\d]/g, '');
-      e.target.value = cleanValue === '' ? 0 : Number(cleanValue);
-    });
+    input.addEventListener('blur', (e) => { e.target.value = _parseDecimal(e.target.value); });
   });
 }
+
 
 async function cargarReporteDiario() {
   const fecha = $('cargaFecha')?.value;
@@ -1599,16 +1714,23 @@ async function cargarReporteDiario() {
 
   if (snap.exists()) {
     const loaded = { id: snap.id, ...snap.data() };
+    const estadoFirestore = loaded.estado || 'borrador';
+    const isOperativo = state.perfil?.rol !== 'gerencia';
+    const bloqueado = isOperativo && estadoFirestore === 'enviada';
+
     state.reporteActual = {
       ...loaded,
+      estado: estadoFirestore,
       idYaExistia: true,
       rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
     };
 
     if (state.perfil?.rol === 'gerencia') {
       toast('Reporte cargado.');
+    } else if (bloqueado) {
+      toast('Esta planilla ya fue publicada. Solo lectura.');
     } else {
-      toast('Esta fecha ya fue cargada para esta fábrica. Solo lectura.');
+      toast('Planilla en borrador cargada. Podés editar y publicar.');
     }
   } else {
     const monthValue = String(fecha).slice(0, 7);
@@ -1665,10 +1787,14 @@ async function guardarReporte(estado = 'borrador') {
   const snap = await getDoc(ref);
 
   if (snap.exists() && state.perfil?.rol !== 'gerencia') {
-    toast('Esta fábrica ya cargó una planilla para esa fecha.');
-    state.reporteActual.idYaExistia = true;
-    renderCargaDiaria();
-    return;
+    const snapEstado = snap.data()?.estado || 'borrador';
+    if (snapEstado === 'enviada') {
+      toast('Esta planilla ya fue publicada y no puede modificarse.');
+      state.reporteActual.idYaExistia = true;
+      state.reporteActual.estado = 'enviada';
+      renderCargaDiaria();
+      return;
+    }
   }
 
   const payload = {
@@ -2582,6 +2708,103 @@ function procesarCargaMasivaStockInicial() {
     toast(`Stock inicial cargado para ${actualizados} productos.`);
   };
   reader.readAsArrayBuffer(file);
+}
+
+
+/* ================================================================
+   BACKUP — PDF del Excel de gerencia
+================================================================ */
+function renderBackupPanel() {
+  const panel = $('backupPanel');
+  if (!panel) return;
+
+  const meses = [...new Set(state.reportes.map((r) => r.fecha?.slice(0,7)).filter(Boolean))].sort().reverse();
+
+  panel.innerHTML = `
+    <div style="display:grid;gap:14px;">
+      <div class="field">
+        <label for="backupMes">Mes a exportar</label>
+        <select id="backupMes" style="max-width:220px;">
+          ${meses.map((m) => `<option value="${m}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="actions-row">
+        <button id="btnGenerarPDF" class="btn btn-primary" type="button">⬇ Generar PDF</button>
+        <button id="btnDescargarJSON" class="btn btn-outline" type="button">⬇ Descargar JSON (respaldo completo)</button>
+      </div>
+      <div class="hint-box">
+        El PDF exporta la vista del Excel de gerencia del mes seleccionado.
+        El JSON incluye todos los datos de Firestore para restauración completa.
+      </div>
+    </div>
+  `;
+
+  $('btnGenerarPDF')?.addEventListener('click', () => generarPDFGerencia());
+  $('btnDescargarJSON')?.addEventListener('click', () => descargarJSONBackup());
+}
+
+function generarPDFGerencia() {
+  const mesEl = $('backupMes');
+  const mes = mesEl?.value || $('mesGerencia')?.value;
+
+  if (!mes) { toast('Seleccioná un mes.'); return; }
+
+  // Setear el mes en el select de gerencia y renderizar
+  if ($('mesGerencia')) $('mesGerencia').value = mes;
+  renderGerenciaExcel();
+
+  // Abrir ventana de impresión después de un tick
+  setTimeout(() => {
+    const tabla = $('tablaGerenciaExcel');
+    if (!tabla) { toast('No hay datos para exportar.'); return; }
+
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Excel Gerencia ${mes}</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 10px; color: #000; background: #fff; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; white-space: nowrap; }
+          th { background: #e8e8e8; font-weight: bold; }
+          .sticky-col { font-weight: bold; text-align: left; background: #f5f5f5; }
+          @page { size: landscape; margin: 10mm; }
+          @media print { body { -webkit-print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <h2 style="margin-bottom:8px;">Excel Gerencia · ${mes}</h2>
+        <p style="color:#666;margin-bottom:12px;font-size:11px;">Generado: ${new Date().toLocaleString('es-AR')}</p>
+        ${tabla.outerHTML}
+      </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+  }, 300);
+}
+
+function descargarJSONBackup() {
+  const backup = {
+    fecha: new Date().toISOString(),
+    productos: state.productos,
+    usuarios: state.usuarios.map((u) => ({ ...u, email: u.email })),
+    reportes: state.reportes,
+    pedidosSemanales: Object.values(state.pedidosSemanalesCache || {})
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup_varillas_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup JSON descargado.');
 }
 
 async function seedBaseData() {
