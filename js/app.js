@@ -1328,46 +1328,46 @@ function getClosingStockFromPreviousMonth(productoId, monthValue) {
   };
 }
 
-function applyPreviousMonthInitialStock(rows = [], monthValue = '') {
-  if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return rows;
+function applyPreviousMonthInitialStock(rows = [], monthValue = '', fecha = '') {
+  // Si es el mes manual inicial y no hay fecha → no tocar
+  if (!monthValue) return rows;
 
   return rows.map((row) => {
-    const closing = getClosingStockFromPreviousMonth(row.productoId, monthValue);
-    if (!closing) return row;
-
-    return {
-      ...row,
-      stockInicial: {
-        ...row.stockInicial,
-        ...closing
+    // Con fecha concreta: calcular stock acumulado hasta el día anterior
+    if (fecha && monthValue !== MANUAL_INITIAL_MONTH) {
+      const stock = getStockInitialAcumulado(fecha, row.productoId);
+      const tieneAlgo = Object.values(stock).some((v) => num(v) !== 0);
+      if (tieneAlgo) {
+        return { ...row, stockInicial: { ...row.stockInicial, ...stock } };
       }
-    };
+    }
+
+    // Sin fecha concreta o mismo mes inicial: usar cierre del mes anterior
+    if (monthValue !== MANUAL_INITIAL_MONTH) {
+      const closing = getClosingStockFromPreviousMonth(row.productoId, monthValue);
+      if (closing) {
+        return { ...row, stockInicial: { ...row.stockInicial, ...closing } };
+      }
+    }
+
+    return row;
   });
 }
 
 function getInitialStockForMonth(productoId, monthValue) {
   // Buscar el primer reporte del mes que tenga stock inicial no-cero
-  // ordenado por fecha ASC, sin filtrar por fábrica
   const reportesDelMes = state.reportes
     .filter((r) => r.fecha?.startsWith(monthValue))
     .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
 
   for (const reporte of reportesDelMes) {
     const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (!row) continue;
-    const s = row.stockInicial;
-    if (!s) continue;
-    // Devolver si tiene al menos un valor no cero
-    const tieneStock = Object.values(s).some((v) => num(v) !== 0);
+    if (!row?.stockInicial) continue;
+    const tieneStock = Object.values(row.stockInicial).some((v) => num(v) !== 0);
     if (tieneStock) return normalizeExistingRow({ ...row }).stockInicial;
   }
 
-  // Fallback: cualquier row del mes aunque sea todo cero
-  for (const reporte of reportesDelMes) {
-    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
-    if (row?.stockInicial) return normalizeExistingRow({ ...row }).stockInicial;
-  }
-
+  // Sin stock manual cargado → usar cierre del mes anterior
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
@@ -1390,6 +1390,56 @@ function getAlvearRunningTotal(dayStr, productoId) {
   }
 
   return total;
+}
+
+
+/* ================================================================
+   STOCK INICIAL ACUMULADO
+   Calcula el stock real al cierre del día anterior a `fecha`.
+   Busca el último reporte disponible antes de esa fecha
+   (en el mismo mes, o en el mes anterior si es el primer día del mes).
+   Esto garantiza que el stock de 27/04 arranque desde donde cerró 20/04.
+================================================================ */
+function getStockInitialAcumulado(fecha, productoId) {
+  const { year, month } = getDateParts(fecha);
+  const monthValue = `${year}-${String(month).padStart(2, '0')}`;
+
+  // Todos los reportes del mismo mes con fecha ANTERIOR a la solicitada
+  const reportesAnteriores = state.reportes
+    .filter((r) => r.fecha && r.fecha < fecha && r.fecha.startsWith(monthValue))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+  if (reportesAnteriores.length > 0) {
+    // Hay reportes del mismo mes anteriores → calcular running total al último día disponible
+    const ultimaFecha = reportesAnteriores[0].fecha;
+
+    // Necesitamos el stockInicial del mes (del primer reporte del mes)
+    const stockMes = getInitialStockForMonth(productoId, monthValue);
+
+    return {
+      alvearChica: getCajaChicaAlvearRunningTotal(ultimaFecha, productoId, stockMes),
+      alvearGrande: getCajaGrandeAlvearRunningTotal(ultimaFecha, productoId, stockMes),
+      moronChica: getCajaChicaMoronRunningTotal(ultimaFecha, productoId, stockMes),
+      moronGrande: getCajaGrandeMoronRunningTotal(ultimaFecha, productoId, stockMes),
+      secandoChica: getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
+      secandoGrande: getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes),
+      banadoChica: getBanadoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
+      banadoGrande: getBanadoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes)
+    };
+  }
+
+  // No hay reportes anteriores en el mismo mes →
+  // usar cierre del mes anterior (carryover entre meses)
+  const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
+  if (closing) return closing;
+
+  // Primer mes manual → stock 0
+  return {
+    alvearChica: 0, alvearGrande: 0,
+    moronChica: 0, moronGrande: 0,
+    secandoChica: 0, secandoGrande: 0,
+    banadoChica: 0, banadoGrande: 0
+  };
 }
 
 function renderCargaDiaria() {
@@ -1738,7 +1788,7 @@ async function cargarReporteDiario() {
   } else {
     const monthValue = String(fecha).slice(0, 7);
     let rows = buildDefaultRows(fabrica);
-    rows = applyPreviousMonthInitialStock(rows, monthValue);
+    rows = applyPreviousMonthInitialStock(rows, monthValue, fecha);
 
     state.reporteActual = {
       id,
