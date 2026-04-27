@@ -422,7 +422,7 @@ function buildDefaultRows(fabrica) {
   return getProductosParaFabrica(fabrica).map(createEmptyRow);
 }
 
-function normalizeRowsForCurrentProducts(rows = [], fabrica = '') {
+function normalizeRowsForCurrentProducts(rows = [], fabrica = '', fecha = '') {
   const allowedProducts = getProductosParaFabrica(fabrica);
   const byId = new Map();
 
@@ -436,6 +436,15 @@ function normalizeRowsForCurrentProducts(rows = [], fabrica = '') {
     if (existing) {
       existing.productoNombre = producto.nombre;
       existing.categoria = producto.categoria || '';
+
+      // Si el stock del documento guardado es todo cero, buscar en otros reportes del mes
+      const tieneStock = Object.values(existing.stockInicial || {}).some((v) => num(v) !== 0);
+      if (!tieneStock && fecha) {
+        const stockReal = getStockInitialAcumulado(fecha, producto.id);
+        const tieneStockReal = Object.values(stockReal).some((v) => num(v) !== 0);
+        if (tieneStockReal) existing.stockInicial = stockReal;
+      }
+
       return existing;
     }
     return createEmptyRow(producto);
@@ -1409,31 +1418,36 @@ function getStockInitialAcumulado(fecha, productoId) {
     .filter((r) => r.fecha && r.fecha < fecha && r.fecha.startsWith(monthValue))
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 
+  // stockMes = stock inicial del mes buscando en TODAS las fábricas
+  // getInitialStockForMonth ya itera todos los reportes del mes sin filtrar fábrica
+  const stockMes = getInitialStockForMonth(productoId, monthValue);
+
   if (reportesAnteriores.length > 0) {
-    // Hay reportes del mismo mes anteriores → calcular running total al último día disponible
+    // Hay reportes anteriores en el mismo mes → calcular running total acumulado
+    // Tomar la última fecha disponible (puede ser de cualquier fábrica)
     const ultimaFecha = reportesAnteriores[0].fecha;
 
-    // Necesitamos el stockInicial del mes (del primer reporte del mes)
-    const stockMes = getInitialStockForMonth(productoId, monthValue);
-
     return {
-      alvearChica: getCajaChicaAlvearRunningTotal(ultimaFecha, productoId, stockMes),
-      alvearGrande: getCajaGrandeAlvearRunningTotal(ultimaFecha, productoId, stockMes),
-      moronChica: getCajaChicaMoronRunningTotal(ultimaFecha, productoId, stockMes),
-      moronGrande: getCajaGrandeMoronRunningTotal(ultimaFecha, productoId, stockMes),
-      secandoChica: getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
+      alvearChica:   getCajaChicaAlvearRunningTotal(ultimaFecha, productoId, stockMes),
+      alvearGrande:  getCajaGrandeAlvearRunningTotal(ultimaFecha, productoId, stockMes),
+      moronChica:    getCajaChicaMoronRunningTotal(ultimaFecha, productoId, stockMes),
+      moronGrande:   getCajaGrandeMoronRunningTotal(ultimaFecha, productoId, stockMes),
+      secandoChica:  getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
       secandoGrande: getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes),
-      banadoChica: getBanadoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
-      banadoGrande: getBanadoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes)
+      banadoChica:   getBanadoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
+      banadoGrande:  getBanadoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes)
     };
   }
 
-  // No hay reportes anteriores en el mismo mes →
-  // usar cierre del mes anterior (carryover entre meses)
+  // No hay reportes anteriores en el mismo mes:
+  // Si stockMes ya tiene valores (cargados por gerencia en otra fábrica), devolverlos directo
+  const tieneStockMes = Object.values(stockMes).some((v) => num(v) !== 0);
+  if (tieneStockMes) return stockMes;
+
+  // Sin nada en el mes → usar cierre del mes anterior
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
-  // Primer mes manual → stock 0
   return {
     alvearChica: 0, alvearGrande: 0,
     moronChica: 0, moronGrande: 0,
@@ -1774,7 +1788,7 @@ async function cargarReporteDiario() {
       ...loaded,
       estado: estadoFirestore,
       idYaExistia: true,
-      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica)
+      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica, fecha)
     };
 
     if (state.perfil?.rol === 'gerencia') {
