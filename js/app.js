@@ -1424,10 +1424,9 @@ function getStockInitialAcumulado(fecha, productoId) {
 
   if (reportesAnteriores.length > 0) {
     // Hay reportes anteriores en el mismo mes → calcular running total acumulado
-    // Tomar la última fecha disponible (puede ser de cualquier fábrica)
     const ultimaFecha = reportesAnteriores[0].fecha;
 
-    return {
+    const result = {
       alvearChica:   getCajaChicaAlvearRunningTotal(ultimaFecha, productoId, stockMes),
       alvearGrande:  getCajaGrandeAlvearRunningTotal(ultimaFecha, productoId, stockMes),
       moronChica:    getCajaChicaMoronRunningTotal(ultimaFecha, productoId, stockMes),
@@ -1437,6 +1436,17 @@ function getStockInitialAcumulado(fecha, productoId) {
       banadoChica:   getBanadoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
       banadoGrande:  getBanadoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes)
     };
+
+    // Si el running total de una columna es 0 pero el stockMes tenía valor,
+    // significa que no hubo movimientos — el stock sigue siendo el inicial.
+    // Usar stockMes como fallback columna por columna.
+    Object.keys(result).forEach((key) => {
+      if (result[key] === 0 && num(stockMes[key]) !== 0) {
+        result[key] = num(stockMes[key]);
+      }
+    });
+
+    return result;
   }
 
   // No hay reportes anteriores en el mismo mes:
