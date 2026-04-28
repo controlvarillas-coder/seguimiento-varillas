@@ -57,7 +57,8 @@ const state = {
   cargaAromaFilter: '',
   productoFiltroCategoria: '',
   productoFiltroNombre: '',
-  autoSaveTimer: null
+  autoSaveTimer: null,
+  stockMensualCache: {}   // { "2026-04": { [productoId]: {alvearChica, ...} } }
 };
 
 const FABRICAS = {
@@ -1519,6 +1520,119 @@ async function _aplicarStockInicialDesdeFirestore(rows, monthValue, fecha) {
   }
 }
 
+
+/* ================================================================
+   STOCK MENSUAL — colección propia en Firestore
+   Doc ID: "2026-04"
+   Solo gerencia puede escribir. Todos pueden leer.
+================================================================ */
+
+const EMPTY_STOCK = () => ({
+  alvearChica: 0, alvearGrande: 0,
+  moronChica: 0, moronGrande: 0,
+  secandoChica: 0, secandoGrande: 0,
+  banadoChica: 0, banadoGrande: 0
+});
+
+// Lee el stock mensual de Firestore y lo guarda en cache
+async function loadStockMensual(monthValue) {
+  if (!monthValue) return;
+  try {
+    const snap = await getDoc(doc(db, 'stock_mensual', monthValue));
+    if (snap.exists()) {
+      state.stockMensualCache[monthValue] = snap.data().stocks || {};
+    } else {
+      state.stockMensualCache[monthValue] = {};
+    }
+  } catch (err) {
+    console.error('Error leyendo stock_mensual:', err);
+    state.stockMensualCache[monthValue] = {};
+  }
+}
+
+// Devuelve el stockInicial de un producto para un mes dado
+// Si no hay stock mensual cargado, devuelve ceros
+function getStockMensualForProduct(monthValue, productoId) {
+  const mesCache = state.stockMensualCache[monthValue];
+  if (!mesCache) return EMPTY_STOCK();
+  const s = mesCache[productoId];
+  if (!s) return EMPTY_STOCK();
+  return {
+    alvearChica:   Number(s.alvearChica   || 0),
+    alvearGrande:  Number(s.alvearGrande  || 0),
+    moronChica:    Number(s.moronChica    || 0),
+    moronGrande:   Number(s.moronGrande   || 0),
+    secandoChica:  Number(s.secandoChica  || 0),
+    secandoGrande: Number(s.secandoGrande || 0),
+    banadoChica:   Number(s.banadoChica   || 0),
+    banadoGrande:  Number(s.banadoGrande  || 0)
+  };
+}
+
+// Guarda el stock mensual completo en Firestore (solo gerencia)
+async function saveStockMensual(monthValue, stocksObj) {
+  if (state.perfil?.rol !== 'gerencia') return;
+  const ref = doc(db, 'stock_mensual', monthValue);
+  await setDoc(ref, {
+    monthValue,
+    stocks: stocksObj,
+    actualizadoPor: state.currentUser?.email || '',
+    actualizadoEn: serverTimestamp()
+  }, { merge: true });
+  state.stockMensualCache[monthValue] = stocksObj;
+}
+
+// Aplica el stock mensual a un array de rows
+function aplicarStockMensualARows(rows, monthValue) {
+  return rows.map((row) => ({
+    ...row,
+    stockInicial: getStockMensualForProduct(monthValue, row.productoId)
+  }));
+}
+
+// Calcula el stock de cierre de un mes usando running totals
+// y lo guarda como stock del mes siguiente
+async function generarStockProximoMes(monthValue) {
+  if (state.perfil?.rol !== 'gerencia') return;
+
+  const [year, month] = monthValue.split('-').map(Number);
+  const nextMonth = month === 12
+    ? `${year + 1}-01`
+    : `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // Verificar que ya existe un stock del próximo mes para no sobreescribir
+  const snapNext = await getDoc(doc(db, 'stock_mensual', nextMonth));
+  if (snapNext.exists()) {
+    toast(`Ya existe stock para ${nextMonth}. No se sobreescribió.`);
+    return;
+  }
+
+  // Último día del mes
+  const lastDay = new Date(year, month, 0).getDate();
+  const lastDate = `${monthValue}-${String(lastDay).padStart(2, '0')}`;
+
+  const stockActual = state.stockMensualCache[monthValue] || {};
+  const productos = state.productos.filter((p) => p.activo !== false);
+  const nuevoStock = {};
+
+  productos.forEach((producto) => {
+    const stockMes = stockActual[producto.id] || EMPTY_STOCK();
+    nuevoStock[producto.id] = {
+      alvearChica:   getCajaChicaAlvearRunningTotal(lastDate, producto.id, stockMes),
+      alvearGrande:  getCajaGrandeAlvearRunningTotal(lastDate, producto.id, stockMes),
+      moronChica:    getCajaChicaMoronRunningTotal(lastDate, producto.id, stockMes),
+      moronGrande:   getCajaGrandeMoronRunningTotal(lastDate, producto.id, stockMes),
+      secandoChica:  getBanadoSecandoRunningTotal(lastDate, producto.id, 'banadoChica', stockMes),
+      secandoGrande: getBanadoSecandoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes),
+      banadoChica:   getBanadoRunningTotal(lastDate, producto.id, 'banadoChica', stockMes),
+      banadoGrande:  getBanadoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes)
+    };
+  });
+
+  await saveStockMensual(nextMonth, nuevoStock);
+  toast(`✅ Stock de ${nextMonth} generado automáticamente desde el cierre de ${monthValue}.`);
+}
+
 function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
   if (!table) return;
@@ -1847,11 +1961,27 @@ async function cargarReporteDiario() {
     const isOperativo = state.perfil?.rol !== 'gerencia';
     const bloqueado = isOperativo && estadoFirestore === 'enviada';
 
+    // Cargar stock mensual si no está en cache
+    const monthValueLoaded = String(fecha).slice(0, 7);
+    if (!state.stockMensualCache[monthValueLoaded]) {
+      await loadStockMensual(monthValueLoaded);
+    }
+
+    let loadedRows = normalizeRowsForCurrentProducts(loaded.rows || [], fabrica, fecha);
+    // Si alguna row tiene stockInicial todo-cero, completar con stock mensual
+    loadedRows = loadedRows.map((row) => {
+      const tieneSt = Object.values(row.stockInicial || {}).some((v) => Number(v || 0) !== 0);
+      if (tieneSt) return row;
+      const stMensual = getStockMensualForProduct(monthValueLoaded, row.productoId);
+      const tieneStMensual = Object.values(stMensual).some((v) => Number(v || 0) !== 0);
+      return tieneStMensual ? { ...row, stockInicial: stMensual } : row;
+    });
+
     state.reporteActual = {
       ...loaded,
       estado: estadoFirestore,
       idYaExistia: true,
-      rows: normalizeRowsForCurrentProducts(loaded.rows || [], fabrica, fecha)
+      rows: loadedRows
     };
 
     if (state.perfil?.rol === 'gerencia') {
@@ -1864,10 +1994,14 @@ async function cargarReporteDiario() {
     }
   } else {
     const monthValue = String(fecha).slice(0, 7);
-    let rows = buildDefaultRows(fabrica);
 
-    // Buscar stock inicial del mes directo desde Firestore (más confiable que state.reportes)
-    rows = await _aplicarStockInicialDesdeFirestore(rows, monthValue, fecha);
+    // Cargar stock mensual si no está en cache
+    if (!state.stockMensualCache[monthValue]) {
+      await loadStockMensual(monthValue);
+    }
+
+    let rows = buildDefaultRows(fabrica);
+    rows = aplicarStockMensualARows(rows, monthValue);
 
     state.reporteActual = {
       id,
@@ -1879,11 +2013,7 @@ async function cargarReporteDiario() {
       rows
     };
 
-    toast(
-      monthValue === MANUAL_INITIAL_MONTH
-        ? 'Nueva planilla preparada. Este mes usa stock inicial manual.'
-        : 'Nueva planilla preparada.'
-    );
+    toast('Nueva planilla preparada.');
   }
 
   renderCargaDiaria();
@@ -1929,6 +2059,27 @@ async function guardarReporte(estado = 'borrador') {
     }
   }
 
+  const normalizedRows = state.reporteActual.rows.map(normalizeExistingRow);
+
+  // Si gerencia guarda, actualizar stock_mensual con los stockInicial de esta planilla
+  if (state.perfil?.rol === 'gerencia') {
+    const monthValue = String(fecha).slice(0, 7);
+    const stocksObj = state.stockMensualCache[monthValue] || {};
+    let changed = false;
+    normalizedRows.forEach((row) => {
+      const st = row.stockInicial;
+      if (!st) return;
+      const tieneStock = Object.values(st).some((v) => Number(v || 0) !== 0);
+      if (tieneStock) {
+        stocksObj[row.productoId] = { ...st };
+        changed = true;
+      }
+    });
+    if (changed) {
+      await saveStockMensual(monthValue, stocksObj);
+    }
+  }
+
   const payload = {
     fecha,
     fabrica,
@@ -1936,7 +2087,7 @@ async function guardarReporte(estado = 'borrador') {
     creadoPor: state.currentUser?.email || '',
     actualizadoEnTexto: new Date().toISOString(),
     actualizadoEn: serverTimestamp(),
-    rows: state.reporteActual.rows.map(normalizeExistingRow)
+    rows: normalizedRows
   };
 
   if (!snap.exists()) {
@@ -2873,6 +3024,21 @@ function renderBackupPanel() {
 
   $('btnGenerarPDF')?.addEventListener('click', () => generarPDFGerencia());
   $('btnDescargarJSON')?.addEventListener('click', () => descargarJSONBackup());
+
+  const selectMesBackup = document.getElementById('backupMes');
+  if (selectMesBackup) {
+    const btnProxMes = document.createElement('button');
+    btnProxMes.className = 'btn btn-outline';
+    btnProxMes.style.marginTop = '8px';
+    btnProxMes.textContent = '📅 Generar stock del próximo mes desde cierre de este mes';
+    btnProxMes.addEventListener('click', async () => {
+      const mes = selectMesBackup.value;
+      if (!mes) { toast('Seleccioná un mes.'); return; }
+      if (!state.stockMensualCache[mes]) await loadStockMensual(mes);
+      await generarStockProximoMes(mes);
+    });
+    document.querySelector('#backupPanel .actions-row')?.appendChild(btnProxMes);
+  }
 }
 
 function generarPDFGerencia() {
@@ -2948,6 +3114,17 @@ async function refreshAll() {
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
   state.usuarios = await loadCollection('usuarios');
+
+  // Cargar stock mensual del mes actual y del anterior
+  const now = new Date();
+  const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const mesAnterior = (() => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  await loadStockMensual(mesActual);
+  await loadStockMensual(mesAnterior);
+
   state.reportes = (await loadCollection('reportes_diarios')).map((reporte) => ({
     ...reporte,
     rows: (reporte.rows || []).map(normalizeExistingRow)
