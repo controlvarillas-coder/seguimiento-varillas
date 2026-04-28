@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Varillas Control</title>
   <link rel="stylesheet" href="css/styles.css?v=5" />
+  <link rel="stylesheet" href="css/tercerizados.css?v=1" />
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -57,6 +58,7 @@
           <button class="nav-link gerencia-only" data-section="productos">Productos</button>
           <button class="nav-link" data-section="carga">Carga diaria</button>
           <button class="nav-link" data-section="pedido-semanal">Orden de fabricación</button>
+          <button class="nav-link terc-nav-link" data-section="tercerizados">Tercerizados</button>
           <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
           <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
           <button class="nav-link gerencia-only" data-section="reportes">Reportes</button>
@@ -657,6 +659,14 @@
 
         </section>
 
+        <section id="section-tercerizados" class="section">
+          <!-- Módulo independiente: Seguimiento de Tercerizados -->
+          <!-- Roles con acceso: moron, control_calidad, gerencia -->
+          <div id="terc-root">
+            <div class="hint-box">Cargando módulo de tercerizados…</div>
+          </div>
+        </section>
+
         <section id="section-backup" class="section">
           <div class="panel-card">
             <div class="panel-header dash-panel-header">
@@ -675,5 +685,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script type="module" src="js/app.js?v=10"></script>
+  <script type="module" src="js/modules/tercerizados/tercerizados-init.js?v=1"></script>
 </body>
 </html>
