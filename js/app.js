@@ -1451,6 +1451,74 @@ function getStockInitialAcumulado(fecha, productoId) {
   };
 }
 
+
+/* ================================================================
+   APLICA STOCK INICIAL DESDE FIRESTORE
+   Busca en Firestore (no en state.reportes) todos los docs del mes,
+   extrae el stockInicial real por productoId y lo aplica a las rows.
+   Esto garantiza que siempre se lean los valores más actuales,
+   sin depender del cache local state.reportes.
+================================================================ */
+async function _aplicarStockInicialDesdeFirestore(rows, monthValue, fecha) {
+  if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return rows;
+
+  try {
+    // Buscar todos los docs del mes en Firestore
+    const snap = await getDocs(
+      query(collection(db, 'reportes_diarios'),
+        where('fecha', '>=', `${monthValue}-01`),
+        where('fecha', '<=', `${monthValue}-31`)
+      )
+    );
+
+    // Construir mapa productoId → stockInicial más completo (no-cero)
+    const stockMap = {};
+
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      (data.rows || []).forEach((row) => {
+        if (!row.productoId || !row.stockInicial) return;
+        const existing = stockMap[row.productoId];
+        const tieneStock = Object.values(row.stockInicial).some((v) => Number(v || 0) !== 0);
+        if (!tieneStock) return;
+        // Tomar el primero no-cero que encontremos (ordenado por fecha del doc)
+        if (!existing) stockMap[row.productoId] = row.stockInicial;
+      });
+    });
+
+    if (Object.keys(stockMap).length === 0) {
+      // Sin stock en el mes → intentar state.reportes como fallback
+      return applyPreviousMonthInitialStock(rows, monthValue, fecha);
+    }
+
+    // Aplicar el stock a cada row
+    return rows.map((row) => {
+      const stock = stockMap[row.productoId];
+      if (!stock) return row;
+      const tieneStock = Object.values(stock).some((v) => Number(v || 0) !== 0);
+      if (!tieneStock) return row;
+      return {
+        ...row,
+        stockInicial: {
+          alvearChica:  Number(stock.alvearChica  || 0),
+          alvearGrande: Number(stock.alvearGrande || 0),
+          moronChica:   Number(stock.moronChica   || 0),
+          moronGrande:  Number(stock.moronGrande  || 0),
+          secandoChica: Number(stock.secandoChica || 0),
+          secandoGrande:Number(stock.secandoGrande|| 0),
+          banadoChica:  Number(stock.banadoChica  || 0),
+          banadoGrande: Number(stock.banadoGrande || 0)
+        }
+      };
+    });
+
+  } catch (err) {
+    console.error('Error cargando stock inicial desde Firestore:', err);
+    // Fallback seguro: usar state.reportes
+    return applyPreviousMonthInitialStock(rows, monthValue, fecha);
+  }
+}
+
 function renderCargaDiaria() {
   const table = $('tablaCargaDiaria');
   if (!table) return;
@@ -1797,7 +1865,9 @@ async function cargarReporteDiario() {
   } else {
     const monthValue = String(fecha).slice(0, 7);
     let rows = buildDefaultRows(fabrica);
-    rows = applyPreviousMonthInitialStock(rows, monthValue, fecha);
+
+    // Buscar stock inicial del mes directo desde Firestore (más confiable que state.reportes)
+    rows = await _aplicarStockInicialDesdeFirestore(rows, monthValue, fecha);
 
     state.reporteActual = {
       id,
@@ -1812,7 +1882,7 @@ async function cargarReporteDiario() {
     toast(
       monthValue === MANUAL_INITIAL_MONTH
         ? 'Nueva planilla preparada. Este mes usa stock inicial manual.'
-        : 'Nueva planilla preparada con stock inicial del mes anterior.'
+        : 'Nueva planilla preparada.'
     );
   }
 
