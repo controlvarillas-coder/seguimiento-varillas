@@ -1287,12 +1287,15 @@ function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaChicaMor');
+    // Morón carga en moronChicaInterna (entrada, sobrante, pEmpaq, diferencia)
+    // cajaChicaMor son columnas de gerencia/Alvear que Morón no usa
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'moronChicaInterna');
 
     total +=
-      num(rowData?.morPlus) -
-      num(rowData?.morMinus) +
-      num(rowData?.dif);
+      num(rowData?.entrada) +
+      num(rowData?.sobrante) -
+      num(rowData?.pEmpaq) +
+      num(rowData?.diferencia);
   }
 
   return total;
@@ -1304,12 +1307,14 @@ function getCajaGrandeMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
-    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'cajaGrandeMor');
+    // Morón carga en moronGrandeInterna (entrada, sobrante, pEmpaq, diferencia)
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'moronGrandeInterna');
 
     total +=
-      num(rowData?.morPlus) -
-      num(rowData?.morMinus) +
-      num(rowData?.dif);
+      num(rowData?.entrada) +
+      num(rowData?.sobrante) -
+      num(rowData?.pEmpaq) +
+      num(rowData?.diferencia);
   }
 
   return total;
