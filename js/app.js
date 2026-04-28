@@ -1403,58 +1403,38 @@ function getAlvearRunningTotal(dayStr, productoId) {
 
 
 /* ================================================================
-   STOCK INICIAL ACUMULADO
-   Calcula el stock real al cierre del día anterior a `fecha`.
-   Busca el último reporte disponible antes de esa fecha
-   (en el mismo mes, o en el mes anterior si es el primer día del mes).
-   Esto garantiza que el stock de 27/04 arranque desde donde cerró 20/04.
+   STOCK INICIAL PARA UNA FECHA DADA
+   Busca el stock inicial real para un producto en una fecha concreta.
+   Estrategia:
+   1. Buscar en el mismo mes cualquier reporte (cualquier fábrica)
+      que tenga stockInicial con valores no-cero → ese es el stock del mes.
+   2. Si no hay nada en el mes → cierre del mes anterior.
+   3. Si tampoco → 0.
+   
+   NOTA: El stock inicial del mes es FIJO (lo carga gerencia una vez).
+   No se acumula con movimientos diarios — eso es para los running totals
+   de los grupos (Alvear Total, Morón Total, etc.), no para el stock inicial.
 ================================================================ */
 function getStockInitialAcumulado(fecha, productoId) {
   const { year, month } = getDateParts(fecha);
   const monthValue = `${year}-${String(month).padStart(2, '0')}`;
 
-  // Todos los reportes del mismo mes con fecha ANTERIOR a la solicitada
-  const reportesAnteriores = state.reportes
-    .filter((r) => r.fecha && r.fecha < fecha && r.fecha.startsWith(monthValue))
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  // Buscar en TODOS los reportes del mes (sin filtrar por fábrica ni por fecha)
+  // el primero que tenga stockInicial con algún valor no-cero
+  const reportesDelMes = state.reportes
+    .filter((r) => r.fecha?.startsWith(monthValue))
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 
-  // stockMes = stock inicial del mes buscando en TODAS las fábricas
-  // getInitialStockForMonth ya itera todos los reportes del mes sin filtrar fábrica
-  const stockMes = getInitialStockForMonth(productoId, monthValue);
-
-  if (reportesAnteriores.length > 0) {
-    // Hay reportes anteriores en el mismo mes → calcular running total acumulado
-    const ultimaFecha = reportesAnteriores[0].fecha;
-
-    const result = {
-      alvearChica:   getCajaChicaAlvearRunningTotal(ultimaFecha, productoId, stockMes),
-      alvearGrande:  getCajaGrandeAlvearRunningTotal(ultimaFecha, productoId, stockMes),
-      moronChica:    getCajaChicaMoronRunningTotal(ultimaFecha, productoId, stockMes),
-      moronGrande:   getCajaGrandeMoronRunningTotal(ultimaFecha, productoId, stockMes),
-      secandoChica:  getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
-      secandoGrande: getBanadoSecandoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes),
-      banadoChica:   getBanadoRunningTotal(ultimaFecha, productoId, 'banadoChica', stockMes),
-      banadoGrande:  getBanadoRunningTotal(ultimaFecha, productoId, 'banadoGrande', stockMes)
-    };
-
-    // Si el running total de una columna es 0 pero el stockMes tenía valor,
-    // significa que no hubo movimientos — el stock sigue siendo el inicial.
-    // Usar stockMes como fallback columna por columna.
-    Object.keys(result).forEach((key) => {
-      if (result[key] === 0 && num(stockMes[key]) !== 0) {
-        result[key] = num(stockMes[key]);
-      }
-    });
-
-    return result;
+  for (const reporte of reportesDelMes) {
+    const row = (reporte.rows || []).find((x) => x.productoId === productoId);
+    if (!row?.stockInicial) continue;
+    const tieneStock = Object.values(row.stockInicial).some((v) => num(v) !== 0);
+    if (tieneStock) {
+      return { ...normalizeExistingRow(row).stockInicial };
+    }
   }
 
-  // No hay reportes anteriores en el mismo mes:
-  // Si stockMes ya tiene valores (cargados por gerencia en otra fábrica), devolverlos directo
-  const tieneStockMes = Object.values(stockMes).some((v) => num(v) !== 0);
-  if (tieneStockMes) return stockMes;
-
-  // Sin nada en el mes → usar cierre del mes anterior
+  // Sin stock en el mes → cierre del mes anterior
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
