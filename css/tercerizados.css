@@ -1,0 +1,308 @@
+/* ============================================================
+   MÓDULO: SEGUIMIENTO DE TERCERIZADOS — estilos independientes
+   Se agrega al final de styles.css o como <link> separado.
+   Usa las mismas variables CSS del sistema (:root).
+   ============================================================ */
+
+/* ── Toast propio del módulo ── */
+.terc-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  padding: 14px 22px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(30, 40, 70, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity .3s ease, transform .3s ease;
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 360px;
+}
+.terc-toast-show { opacity: 1; transform: translateY(0); }
+.terc-toast-ok   { border-color: rgba(52, 211, 153, .35); background: rgba(6, 78, 59, .92); }
+.terc-toast-error{ border-color: rgba(248, 113, 113, .35); background: rgba(100, 10, 10, .92); }
+.terc-toast-info { border-color: rgba(110, 168, 255, .3); }
+
+/* ── Topbar del módulo ── */
+.terc-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.terc-topbar-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.terc-title { margin: 0; font-size: 22px; font-weight: 800; }
+
+/* ── Badge de rol ── */
+.terc-badge-rol {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  background: rgba(110, 168, 255, .14);
+  border: 1px solid rgba(110, 168, 255, .25);
+  color: #c5d8ff;
+}
+
+/* ── Tabs internos del módulo ── */
+.terc-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.terc-tab {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .03);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .2s ease;
+}
+.terc-tab:hover    { background: rgba(255, 255, 255, .07); color: var(--text); }
+.terc-tab.active   {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ── KPIs ── */
+.terc-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.terc-kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.terc-kpi-val  { font-size: 28px; font-weight: 900; margin-bottom: 4px; }
+.terc-kpi-lbl  { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+.terc-kpi-naranja { border-color: rgba(251, 146, 60, .3); }
+.terc-kpi-naranja .terc-kpi-val { color: #fb923c; }
+.terc-kpi-cyan  { border-color: rgba(34, 211, 238, .3); }
+.terc-kpi-cyan  .terc-kpi-val  { color: #22d3ee; }
+.terc-kpi-rojo  { border-color: rgba(248, 113, 113, .3); }
+.terc-kpi-rojo  .terc-kpi-val  { color: #f87171; }
+.terc-kpi-verde { border-color: rgba(52, 211, 153, .3); }
+.terc-kpi-verde .terc-kpi-val  { color: #34d399; }
+
+/* ── Filtros ── */
+.terc-filtros {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.terc-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+.terc-select {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+.terc-select:focus { border-color: var(--primary); }
+.terc-select-sm { padding: 8px 12px; font-size: 12px; }
+
+/* ── Tabla del módulo ── */
+.terc-table { width: 100%; }
+.terc-center { text-align: center; }
+.terc-obs    { max-width: 200px; font-size: 12px; color: var(--muted); }
+.terc-num    { display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 8px; background: rgba(255,255,255,.06); text-align: center; font-size: 12px; font-weight: 700; }
+.terc-muted  { color: var(--muted); font-size: 12px; }
+
+.terc-empty, .terc-empty-card {
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .02);
+}
+
+/* ── Pills de estado ── */
+.terc-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.pill-naranja  { background: rgba(251, 146, 60, .15);  color: #fb923c;  border: 1px solid rgba(251,146,60,.3); }
+.pill-azul     { background: rgba(110, 168, 255, .14); color: #93c5fd;  border: 1px solid rgba(110,168,255,.3); }
+.pill-amarillo { background: rgba(251, 191, 36, .15);  color: #fbbf24;  border: 1px solid rgba(251,191,36,.3); }
+.pill-cyan     { background: rgba(34, 211, 238, .12);  color: #22d3ee;  border: 1px solid rgba(34,211,238,.3); }
+.pill-rojo     { background: rgba(248, 113, 113, .14); color: #f87171;  border: 1px solid rgba(248,113,113,.3); }
+.pill-verde    { background: rgba(52, 211, 153, .14);  color: #34d399;  border: 1px solid rgba(52,211,153,.3); }
+.pill-gris     { background: rgba(255, 255, 255, .06); color: var(--muted); border: 1px solid var(--line); }
+
+/* ── Botones extra ── */
+.terc-btn-cyan {
+  background: linear-gradient(135deg, #0891b2, #06b6d4);
+  color: #fff;
+  border: none;
+}
+.terc-btn-cyan:hover { filter: brightness(1.1); }
+.terc-btn-verde {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+  border: none;
+}
+.terc-btn-verde:hover { filter: brightness(1.1); }
+
+.terc-acciones {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Inputs del módulo ── */
+.terc-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+.terc-input:focus { border-color: var(--primary); background: rgba(110, 168, 255, .06); }
+
+.terc-input-num {
+  width: 80px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  text-align: center;
+  transition: border-color .2s;
+}
+.terc-input-num:focus { border-color: var(--primary); }
+
+.terc-input-obs, .terc-input-motivo {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.terc-input-obs:focus, .terc-input-motivo:focus { border-color: var(--primary); }
+
+.terc-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.terc-form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Detalle ── */
+.terc-detalle-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.terc-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255,255,255,.03);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+.terc-meta-grid > div { font-size: 14px; }
+.terc-meta-grid .terc-label { font-size: 11px; display: block; margin-bottom: 4px; }
+
+/* ── Historial ── */
+.terc-hist-card { }
+.terc-hist-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.terc-hist-item {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--line);
+}
+.terc-hist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.terc-hist-tipo  { font-size: 13px; font-weight: 700; color: var(--primary); }
+.terc-hist-fecha { font-size: 12px; color: var(--muted); }
+.terc-hist-detalle { font-size: 13px; color: var(--muted); }
+
+/* ── Fila de ingreso previo ── */
+.terc-ingreso-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.terc-ingreso-row:last-child { border-bottom: none; }
+.terc-falla { color: #f87171; font-size: 11px; font-style: italic; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .terc-kpi-row  { grid-template-columns: repeat(2, 1fr); }
+  .terc-acciones { flex-direction: column; }
+  .terc-topbar   { flex-direction: column; align-items: flex-start; }
+}
