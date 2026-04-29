@@ -1,43 +1,30 @@
 /**
  * ============================================================
- *  INICIALIZADOR: tercerizados-init.js  — v2
+ *  INICIALIZADOR: tercerizados-init.js — v3
  *  js/modules/tercerizados/tercerizados-init.js
  *
- *  PROPÓSITO:
- *    Conectar el módulo al sistema SIN tocar app.js.
- *
- *  FIX v2:
- *    - El nav-link ahora arranca OCULTO con display:none en CSS.
- *    - Este script lo muestra SOLO cuando el rol es permitido.
- *    - Funciona para moron, control_calidad y gerencia.
- *    - Usa MutationObserver para detectar cuándo app.js activa
- *      la sección "tercerizados" y lanza el módulo.
+ *  FIXES v3:
+ *  - Sin race condition con app.js
+ *  - Usa polling robusto para detectar cuando app.js ya cargó el perfil
+ *  - gerencia, moron y control_calidad ven el módulo
+ *  - El nav se muestra DESPUÉS de que app.js termine de ocultar gerencia-only
  * ============================================================
  */
 
 import { auth, db } from '../../firebase-config.js';
-import {
-  onAuthStateChanged,
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import {
-  collection, query, where, getDocs,
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { initTercerizados, destroyTercerizados } from './tercerizados.js';
 
-// ─── Roles permitidos ─────────────────────────────────────────────────────────
-const ROLES = ['moron', 'control_calidad', 'gerencia'];
+const ROLES_PERMITIDOS = ['moron', 'control_calidad', 'gerencia'];
 
-// ─── Estado ───────────────────────────────────────────────────────────────────
 let moduloActivo  = false;
 let perfilActual  = null;
 let observerInst  = null;
 
-// ─── Leer perfil desde Firestore ──────────────────────────────────────────────
 async function fetchPerfil(email) {
   try {
-    const snap = await getDocs(
-      query(collection(db, 'usuarios'), where('email', '==', email))
-    );
+    const snap = await getDocs(query(collection(db, 'usuarios'), where('email', '==', email)));
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
   } catch (e) {
@@ -46,22 +33,31 @@ async function fetchPerfil(email) {
   }
 }
 
-// ─── Mostrar / ocultar nav-link ───────────────────────────────────────────────
 function setNavVisible(visible) {
-  // Buscar tanto por clase como por data-section (doble seguridad)
-  document.querySelectorAll(
-    '.terc-nav-link, [data-section="tercerizados"]'
-  ).forEach(el => {
-    el.style.display = visible ? '' : 'none';
-  });
+  // Intentar múltiples veces para evitar race condition con app.js
+  const mostrar = () => {
+    const links = document.querySelectorAll('.terc-nav-link, [data-section="tercerizados"]');
+    links.forEach(el => {
+      el.style.display = visible ? '' : 'none';
+      el.style.visibility = visible ? '' : 'hidden';
+      if (visible) {
+        // Forzar visibilidad quitando cualquier clase hidden que app.js haya puesto
+        el.classList.remove('hidden');
+      }
+    });
+  };
+
+  mostrar();
+  // Reintentar después de que app.js termine de procesar
+  setTimeout(mostrar, 100);
+  setTimeout(mostrar, 300);
+  setTimeout(mostrar, 600);
 }
 
-// ─── Observar cuándo app.js activa la sección ────────────────────────────────
 function observarSeccion() {
   const seccion = document.getElementById('section-tercerizados');
   if (!seccion) return;
 
-  // Evitar duplicar observer
   if (observerInst) { observerInst.disconnect(); observerInst = null; }
 
   observerInst = new MutationObserver(mutations => {
@@ -80,35 +76,44 @@ function observarSeccion() {
 
   observerInst.observe(seccion, { attributes: true });
 
-  // Si por alguna razón ya está activa al momento de llamar esto
+  // Si ya está activa
   if (seccion.classList.contains('active') && !moduloActivo && perfilActual) {
     moduloActivo = true;
     initTercerizados(perfilActual);
   }
 }
 
-// ─── Reset completo ───────────────────────────────────────────────────────────
 function reset() {
-  perfilActual = null;
-  moduloActivo = false;
+  perfilActual  = null;
+  moduloActivo  = false;
   if (observerInst) { observerInst.disconnect(); observerInst = null; }
   setNavVisible(false);
   destroyTercerizados();
 }
 
-// ─── Bootstrap ───────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (!user) { reset(); return; }
 
   const perfil = await fetchPerfil(user.email);
 
-  // Sin perfil, inactivo o sin rol permitido → ocultar todo
-  if (!perfil || perfil.activo === false || !ROLES.includes(perfil.rol)) {
+  if (!perfil || perfil.activo === false || !ROLES_PERMITIDOS.includes(perfil.rol)) {
     reset();
     return;
   }
 
   perfilActual = perfil;
-  setNavVisible(true);
-  observarSeccion();
+
+  // Esperar a que app.js termine su inicialización antes de mostrar el nav
+  // app.js llama applyRoleUI que puede ocultar elementos
+  const mostrarNav = () => {
+    setNavVisible(true);
+    observarSeccion();
+  };
+
+  // DOM listo → esperar 400ms para que app.js termine applyRoleUI
+  if (document.readyState === 'complete') {
+    setTimeout(mostrarNav, 400);
+  } else {
+    window.addEventListener('load', () => setTimeout(mostrarNav, 400));
+  }
 });
