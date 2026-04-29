@@ -1541,12 +1541,59 @@ async function loadStockMensual(monthValue) {
     const snap = await getDoc(doc(db, 'stock_mensual', monthValue));
     if (snap.exists()) {
       state.stockMensualCache[monthValue] = snap.data().stocks || {};
-    } else {
-      state.stockMensualCache[monthValue] = {};
+      return;
+    }
+    // No existe → migrar automáticamente desde reportes_diarios
+    const migrados = await _migrarStockDesdereportes(monthValue);
+    state.stockMensualCache[monthValue] = migrados;
+    if (Object.keys(migrados).length > 0) {
+      await setDoc(doc(db, 'stock_mensual', monthValue), {
+        monthValue, stocks: migrados,
+        actualizadoPor: 'auto-migrado', actualizadoEn: serverTimestamp()
+      });
     }
   } catch (err) {
     console.error('Error leyendo stock_mensual:', err);
     state.stockMensualCache[monthValue] = {};
+  }
+}
+
+// Migra stock desde reportes_diarios cuando stock_mensual no existe
+async function _migrarStockDesdereportes(monthValue) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'reportes_diarios'),
+        where('fecha', '>=', `${monthValue}-01`),
+        where('fecha', '<=', `${monthValue}-31`)
+      )
+    );
+    const stocksMap = {};
+    snap.docs
+      .sort((a, b) => String(a.data().fecha).localeCompare(String(b.data().fecha)))
+      .forEach((d) => {
+        const data = d.data();
+        (data.rows || []).forEach((row) => {
+          if (!row.productoId || stocksMap[row.productoId]) return;
+          const st = row.stockInicial;
+          if (!st) return;
+          const tieneStock = Object.values(st).some((v) => Number(v || 0) !== 0);
+          if (!tieneStock) return;
+          stocksMap[row.productoId] = {
+            alvearChica: Number(st.alvearChica || 0),
+            alvearGrande: Number(st.alvearGrande || 0),
+            moronChica: Number(st.moronChica || 0),
+            moronGrande: Number(st.moronGrande || 0),
+            secandoChica: Number(st.secandoChica || 0),
+            secandoGrande: Number(st.secandoGrande || 0),
+            banadoChica: Number(st.banadoChica || 0),
+            banadoGrande: Number(st.banadoGrande || 0)
+          };
+        });
+      });
+    return stocksMap;
+  } catch (err) {
+    console.error('Error migrando stock:', err);
+    return {};
   }
 }
 
