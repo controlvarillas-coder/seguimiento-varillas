@@ -1,13 +1,23 @@
 /**
  * ============================================================
- *  MÓDULO: SEGUIMIENTO DE TERCERIZADOS — v2
+ *  MÓDULO: SEGUIMIENTO DE TERCERIZADOS  — v2
  *  js/modules/tercerizados/tercerizados.js
  *
- *  ROL → ACCIONES
- *  ─────────────────────────────────────────────────────────
- *  moron           → Crear pedido · Dar salida · Registrar ingreso
- *  control_calidad → Preparar pedidos (cargar cantidades preparadas)
- *  gerencia        → Vista completa + puede ejecutar todo
+ *  FLUJO COMPLETO:
+ *  ┌─────────────────────────────────────────────────────────┐
+ *  │  MORÓN crea pedido           → pendiente_preparacion    │
+ *  │  CONTROL CALIDAD prepara     → preparado_completo /     │
+ *  │                                preparado_incompleto     │
+ *  │  MORÓN da salida (+ chofer)  → enviado                  │
+ *  │  MORÓN registra ingreso(s)   → cerrado /                │
+ *  │                                pendiente_completar /    │
+ *  │                                con_fallas               │
+ *  └─────────────────────────────────────────────────────────┘
+ *
+ *  ROLES:
+ *    moron           → crear · dar salida · registrar ingreso
+ *    control_calidad → preparar
+ *    gerencia        → todo + visión completa
  * ============================================================
  */
 
@@ -17,55 +27,55 @@ import {
   query, orderBy, serverTimestamp, onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
 
-const $ = (id) => document.getElementById(id);
+const $  = (id) => document.getElementById(id);
+const $$ = (sel, ctx = document) => ctx.querySelectorAll(sel);
 
 function fmt(ts) {
   if (!ts) return '—';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('es-AR') + ' ' +
-    d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+         d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
-function fmtDate(ts) {
+function fmtFecha(ts) {
   if (!ts) return '—';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('es-AR');
 }
-function nowISO() { return new Date().toISOString(); }
+function iso() { return new Date().toISOString(); }
 
-function toast(msg, type = 'info') {
+function toast(msg, tipo = 'info') {
   const el = $('terc-toast');
   if (!el) return;
   el.textContent = msg;
-  el.className = 'terc-toast terc-toast-' + type + ' terc-toast-show';
+  el.className = `terc-toast terc-toast-${tipo} terc-toast-show`;
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('terc-toast-show'), 3800);
 }
 
-function pill(estado) {
-  const MAP = {
-    pendiente_preparacion: ['🕐 Pendiente preparación', 'pill-naranja'],
-    preparado_completo:    ['✅ Preparado completo',    'pill-azul'],
-    preparado_incompleto:  ['⚠️ Preparado incompleto', 'pill-amarillo'],
-    enviado:               ['🚚 Enviado',               'pill-cyan'],
-    pendiente_completar:   ['📭 Pendiente completar',   'pill-naranja'],
-    con_fallas:            ['❌ Con fallas',             'pill-rojo'],
-    cerrado:               ['✅ Cerrado',                'pill-verde'],
-  };
-  const [label, cls] = MAP[estado] || [estado || '—', 'pill-gris'];
-  return `<span class="terc-pill ${cls}">${label}</span>`;
+const ESTADOS = {
+  pendiente_preparacion: { label: 'Pendiente preparación', cls: 'est-naranja', icon: '🕐' },
+  preparado_completo:    { label: 'Preparado completo',    cls: 'est-azul',    icon: '✅' },
+  preparado_incompleto:  { label: 'Preparado incompleto',  cls: 'est-amarillo',icon: '⚠️' },
+  enviado:               { label: 'Enviado',               cls: 'est-cyan',    icon: '🚚' },
+  pendiente_completar:   { label: 'Pendiente completar',   cls: 'est-naranja', icon: '📭' },
+  con_fallas:            { label: 'Con fallas',            cls: 'est-rojo',    icon: '❌' },
+  cerrado:               { label: 'Cerrado',               cls: 'est-verde',   icon: '✅' },
+};
+
+function badge(estado) {
+  const e = ESTADOS[estado] || { label: estado || '—', cls: 'est-gris', icon: '•' };
+  return `<span class="terc-badge ${e.cls}">${e.icon} ${e.label}</span>`;
 }
 
-function labelRol(rol) {
-  return {
-    gerencia: 'Gerencia',
-    moron: 'Morón',
-    control_calidad: 'Control de calidad',
-  }[rol] || rol;
+function rolLabel(rol) {
+  return { gerencia: 'Gerencia', moron: 'Morón', control_calidad: 'Control de Calidad' }[rol] || rol;
 }
 
-function labelHist(tipo) {
+function histLabel(tipo) {
   return {
     creacion:    '🆕 Creación',
     preparacion: '⚙️ Preparación',
@@ -75,196 +85,240 @@ function labelHist(tipo) {
   }[tipo] || tipo;
 }
 
-function kpiBox(val, label, colorClass) {
-  const COLOR = {
-    'pill-naranja':  'color:#fb923c',
-    'pill-azul':     'color:#93c5fd',
-    'pill-amarillo': 'color:#fbbf24',
-    'pill-cyan':     'color:#22d3ee',
-    'pill-rojo':     'color:#f87171',
-    'pill-verde':    'color:#34d399',
-    '':              '',
-  };
-  return `
-    <div class="terc-kpi">
-      <div class="terc-kpi-val" style="${COLOR[colorClass] || ''}">${val}</div>
-      <div class="terc-kpi-lbl">${label}</div>
-    </div>`;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//  ESTADO GLOBAL DEL MÓDULO
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Estado del módulo ────────────────────────────────────────────────────────
-
-const T = {
-  perfil: null,
+const M = {
+  perfil:    null,
   productos: [],
-  pedidos: [],
-  unsub: null,
-  vista: 'lista',
-  pedidoActual: null,
-  accionActual: null,
+  pedidos:   [],
+  unsub:     null,
+  vista:     'lista',        // 'lista' | 'nuevo' | 'detalle'
+  pedido:    null,           // pedido en detalle
+  accion:    null,           // 'preparar' | 'salida' | 'ingreso' | 'ver'
 };
 
-// ─── API pública ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  API PÚBLICA
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function initTercerizados(perfil) {
-  T.perfil = perfil;
-  T.vista = 'lista';
-  T.pedidoActual = null;
-  T.accionActual = null;
+  M.perfil = perfil;
+  M.vista  = 'lista';
+  M.pedido = null;
+  M.accion = null;
   buildShell();
-  await loadProductos();
-  subscribeStream();
+  await cargarProductos();
+  suscribirPedidos();
 }
 
 export function destroyTercerizados() {
-  if (T.unsub) { T.unsub(); T.unsub = null; }
+  if (M.unsub) { M.unsub(); M.unsub = null; }
 }
 
-// ─── Datos ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  FIRESTORE
+// ─────────────────────────────────────────────────────────────────────────────
 
-async function loadProductos() {
+async function cargarProductos() {
   try {
     const snap = await getDocs(collection(db, 'productos'));
-    T.productos = snap.docs
+    M.productos = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(p => p.activo !== false)
       .sort((a, b) =>
         (a.orden ?? 9999) - (b.orden ?? 9999) ||
         (a.nombre || '').localeCompare(b.nombre || ''));
   } catch (e) {
-    console.error('[Terc] loadProductos:', e);
+    console.error('[Terc] cargarProductos:', e);
   }
 }
 
-function subscribeStream() {
-  if (T.unsub) T.unsub();
+function suscribirPedidos() {
+  if (M.unsub) M.unsub();
   const q = query(
     collection(db, 'seguimiento_tercerizados'),
     orderBy('fecha_creacion', 'desc')
   );
-  T.unsub = onSnapshot(q, snap => {
-    T.pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // mantener referencia fresca al pedido en detalle
-    if (T.pedidoActual) {
-      const fresco = T.pedidos.find(p => p.id === T.pedidoActual.id);
-      if (fresco) T.pedidoActual = fresco;
+  M.unsub = onSnapshot(q, snap => {
+    M.pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (M.pedido) {
+      const fresco = M.pedidos.find(p => p.id === M.pedido.id);
+      if (fresco) M.pedido = fresco;
     }
     renderVista();
   }, e => console.error('[Terc] stream:', e));
 }
 
-// ─── Shell ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  SHELL PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildShell() {
   const root = $('terc-root');
   if (!root) return;
 
-  const canCreate = ['moron', 'gerencia'].includes(T.perfil.rol);
+  const puedeCrear = ['moron', 'gerencia'].includes(M.perfil.rol);
 
   root.innerHTML = `
     <div id="terc-toast" class="terc-toast"></div>
 
-    <div class="terc-topbar">
-      <div class="terc-topbar-left">
-        <h2 class="terc-title">📦 Seguimiento de Tercerizados</h2>
-        <span class="terc-badge-rol">${labelRol(T.perfil.rol)}</span>
+    <!-- ── Header del módulo ── -->
+    <div class="terc-header">
+      <div class="terc-header-left">
+        <div class="terc-header-icon">📦</div>
+        <div>
+          <h2 class="terc-header-title">Seguimiento de Tercerizados</h2>
+          <div class="terc-header-sub">Gestión completa de pedidos externos</div>
+        </div>
+      </div>
+      <div class="terc-header-right">
+        <span class="terc-rol-badge">${rolLabel(M.perfil.rol)}</span>
+        <span class="terc-usuario-badge">👤 ${M.perfil.nombre || M.perfil.email}</span>
       </div>
     </div>
 
+    <!-- ── Tabs ── -->
     <div class="terc-tabs" id="terc-tabs">
       <button class="terc-tab active" data-view="lista">
-        ${T.perfil.rol === 'control_calidad' ? '⚙️ Pedidos a preparar' : '📋 Pedidos'}
+        <span class="terc-tab-icon">${M.perfil.rol === 'control_calidad' ? '⚙️' : '📋'}</span>
+        ${M.perfil.rol === 'control_calidad' ? 'Pedidos a preparar' : 'Todos los pedidos'}
       </button>
-      ${canCreate ? '<button class="terc-tab" data-view="nuevo">➕ Nuevo pedido</button>' : ''}
+      ${puedeCrear ? `
+        <button class="terc-tab" data-view="nuevo">
+          <span class="terc-tab-icon">➕</span>
+          Nuevo pedido
+        </button>` : ''}
     </div>
 
+    <!-- ── Contenido dinámico ── -->
     <div id="terc-content"></div>
   `;
 
-  root.querySelectorAll('.terc-tab').forEach(btn => {
+  $$('.terc-tab', root).forEach(btn => {
     btn.addEventListener('click', () => {
-      T.vista = btn.dataset.view;
-      T.pedidoActual = null;
-      T.accionActual = null;
-      root.querySelectorAll('.terc-tab').forEach(b => b.classList.remove('active'));
+      M.vista  = btn.dataset.view;
+      M.pedido = null;
+      M.accion = null;
+      $$('.terc-tab', root).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderVista();
     });
   });
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  ROUTER
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderVista() {
-  if (T.pedidoActual) { renderDetalle(); return; }
-  if (T.vista === 'nuevo') { renderNuevo(); return; }
+  if (M.pedido)           { renderDetalle();  return; }
+  if (M.vista === 'nuevo'){ renderNuevo();    return; }
   renderLista();
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  LISTA — diferenciada por rol
-// ═══════════════════════════════════════════════════════════════
-
-function renderLista() {
-  const rol = T.perfil.rol;
-  if (rol === 'moron')           renderListaMoron();
-  else if (rol === 'control_calidad') renderListaCQ();
-  else                           renderListaGerencia();
+function irDetalle(id, accion) {
+  M.pedido = M.pedidos.find(p => p.id === id);
+  if (!M.pedido) return;
+  M.accion = accion || null;
+  renderDetalle();
 }
 
-// ── MORÓN ─────────────────────────────────────────────────────────────────────
+function volver() {
+  M.pedido = null;
+  M.accion = null;
+  $$('.terc-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === 'lista'));
+  M.vista = 'lista';
+  renderLista();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LISTA — enrutada por rol
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderLista() {
+  if (M.perfil.rol === 'moron')            renderListaMoron();
+  else if (M.perfil.rol === 'control_calidad') renderListaCQ();
+  else                                      renderListaGerencia();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  LISTA — MORÓN
+// ══════════════════════════════════════════════════════════════════════════════
 
 function renderListaMoron() {
   const content = $('terc-content');
   if (!content) return;
 
-  const pedidos  = T.pedidos;
-  const activos  = pedidos.filter(p => p.estado !== 'cerrado');
-  const cerrados = pedidos.filter(p => p.estado === 'cerrado');
+  const todos    = M.pedidos;
+  const activos  = todos.filter(p => p.estado !== 'cerrado');
+  const cerrados = todos.filter(p => p.estado === 'cerrado');
 
-  const conAccion = pedidos.filter(p =>
-    ['preparado_completo','preparado_incompleto','enviado','pendiente_completar','con_fallas']
-    .includes(p.estado)).length;
+  // Pedidos que piden acción ahora mismo
+  const urgentesSalida   = todos.filter(p => ['preparado_completo','preparado_incompleto'].includes(p.estado));
+  const urgentesIngreso  = todos.filter(p => ['enviado','pendiente_completar','con_fallas'].includes(p.estado));
+  const totalUrgentes    = urgentesSalida.length + urgentesIngreso.length;
 
   content.innerHTML = `
-    ${conAccion > 0 ? `
-      <div class="terc-banner terc-banner-accion">
-        <span class="terc-banner-icon">🔔</span>
-        <div>
-          <strong>${conAccion} pedido${conAccion > 1 ? 's' : ''} requieren tu atención</strong>
-          <div style="font-size:13px;opacity:.85;margin-top:3px;">
-            Hay pedidos listos para dar salida o para registrar el ingreso.
-          </div>
+
+    ${totalUrgentes > 0 ? `
+    <div class="terc-alerta-banner">
+      <div class="terc-alerta-icon">🔔</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">
+          ${totalUrgentes} pedido${totalUrgentes > 1 ? 's requieren' : ' requiere'} tu atención
         </div>
-      </div>` : ''}
+        <div class="terc-alerta-sub">
+          ${urgentesSalida.length > 0 ? `<span class="terc-chip-mini chip-azul">🚚 ${urgentesSalida.length} para dar salida</span>` : ''}
+          ${urgentesIngreso.length > 0 ? `<span class="terc-chip-mini chip-verde">📥 ${urgentesIngreso.length} para registrar ingreso</span>` : ''}
+        </div>
+      </div>
+    </div>` : ''}
 
-    <div class="terc-kpi-row">
-      ${kpiBox(pedidos.filter(p=>p.estado==='pendiente_preparacion').length, 'En preparación', 'pill-naranja')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='preparado_completo'||p.estado==='preparado_incompleto').length, 'Listos para salida', 'pill-azul')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='enviado').length, 'Enviados', 'pill-cyan')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='pendiente_completar'||p.estado==='con_fallas').length, 'Pendientes ingreso', 'pill-rojo')}
-      ${kpiBox(cerrados.length, 'Cerrados', 'pill-verde')}
+    <!-- KPIs -->
+    <div class="terc-kpis">
+      ${kpi(todos.filter(p=>p.estado==='pendiente_preparacion').length, 'En preparación', '⚙️', 'kpi-naranja')}
+      ${kpi(urgentesSalida.length, 'Listos para salida', '🚚', 'kpi-azul')}
+      ${kpi(urgentesIngreso.length, 'Esperando ingreso', '📥', 'kpi-cyan')}
+      ${kpi(cerrados.length, 'Cerrados', '✅', 'kpi-verde')}
     </div>
 
-    <div class="panel-card mt-20">
-      <div class="panel-header">
-        <h3>Pedidos activos</h3>
-        <span class="dash-badge">${activos.length}</span>
-      </div>
-      <div id="terc-cards-activos" class="terc-cards-grid"></div>
+    <!-- Pedidos activos -->
+    <div class="terc-section-title">
+      <span>Pedidos activos</span>
+      <span class="terc-count-badge">${activos.length}</span>
     </div>
 
-    <div class="panel-card mt-20">
-      <div class="panel-header">
-        <h3>Historial — Pedidos cerrados</h3>
-        <span class="dash-badge">${cerrados.length}</span>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table terc-table">
+    ${activos.length === 0
+      ? `<div class="terc-empty-state">
+           <div class="terc-empty-icon">📭</div>
+           <div>No hay pedidos activos en este momento.</div>
+           <button class="btn btn-primary" onclick="document.querySelector('[data-view=nuevo]').click()">
+             ➕ Crear nuevo pedido
+           </button>
+         </div>`
+      : `<div class="terc-cards-grid" id="terc-cards-activos"></div>`
+    }
+
+    <!-- Historial cerrados -->
+    <div class="terc-section-title" style="margin-top:32px;">
+      <span>Historial — Pedidos cerrados</span>
+      <span class="terc-count-badge">${cerrados.length}</span>
+    </div>
+
+    <div class="terc-panel">
+      <div class="terc-table-wrap">
+        <table class="terc-table">
           <thead>
             <tr>
-              <th>Fecha</th><th>Productos</th><th>Chofer</th>
-              <th>Fecha salida</th><th>Estado</th><th></th>
+              <th>Fecha</th>
+              <th>Ítems</th>
+              <th>Chofer</th>
+              <th>Fecha salida</th>
+              <th>Estado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="terc-tbody-cerr"></tbody>
@@ -273,127 +327,137 @@ function renderListaMoron() {
     </div>
   `;
 
-  // Cards activos
-  const cardsEl = $('terc-cards-activos');
-  if (!activos.length) {
-    cardsEl.innerHTML = `<div class="terc-empty" style="padding:28px">No hay pedidos activos.</div>`;
-  } else {
-    cardsEl.innerHTML = activos.map(p => buildCardMoron(p)).join('');
-    cardsEl.querySelectorAll('[data-accion]').forEach(btn =>
-      btn.addEventListener('click', () => abrirPedido(btn.dataset.id, btn.dataset.accion)));
+  // Montar cards
+  if (activos.length > 0) {
+    const grid = $('terc-cards-activos');
+    grid.innerHTML = activos.map(p => cardMoron(p)).join('');
+    $$('[data-accion]', grid).forEach(btn =>
+      btn.addEventListener('click', () => irDetalle(btn.dataset.id, btn.dataset.accion)));
   }
 
   // Tabla cerrados
-  const tbodyCerr = $('terc-tbody-cerr');
+  const tbody = $('terc-tbody-cerr');
   if (!cerrados.length) {
-    tbodyCerr.innerHTML = `<tr><td colspan="6" class="terc-empty">Sin pedidos cerrados aún.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="terc-td-empty">Sin pedidos cerrados aún.</td></tr>`;
   } else {
-    tbodyCerr.innerHTML = cerrados.map(p => `
+    tbody.innerHTML = cerrados.map(p => `
       <tr>
-        <td>${fmtDate(p.fecha_creacion)}</td>
+        <td>${fmtFecha(p.fecha_creacion)}</td>
         <td>${(p.items||[]).length} ítem(s)</td>
         <td>${p.chofer || '—'}</td>
         <td>${p.fecha_salida ? `${p.fecha_salida} ${p.hora_salida||''}` : '—'}</td>
-        <td>${pill(p.estado)}</td>
+        <td>${badge(p.estado)}</td>
         <td>
-          <button class="btn btn-sm btn-outline" data-accion="ver" data-id="${p.id}">
-            👁 Ver
-          </button>
+          <button class="terc-btn-icon" data-accion="ver" data-id="${p.id}" title="Ver detalle">👁</button>
         </td>
       </tr>`).join('');
-    tbodyCerr.querySelectorAll('[data-accion]').forEach(btn =>
-      btn.addEventListener('click', () => abrirPedido(btn.dataset.id, 'ver')));
+    $$('[data-accion]', tbody).forEach(btn =>
+      btn.addEventListener('click', () => irDetalle(btn.dataset.id, 'ver')));
   }
 }
 
-function buildCardMoron(p) {
+function cardMoron(p) {
   const btns = [];
-
-  if (p.estado === 'preparado_completo' || p.estado === 'preparado_incompleto') {
-    btns.push(`<button class="btn btn-primary terc-btn-accion" data-accion="salida" data-id="${p.id}">🚚 Dar salida</button>`);
+  if (['preparado_completo','preparado_incompleto'].includes(p.estado)) {
+    btns.push(`<button class="btn btn-primary terc-card-btn" data-accion="salida" data-id="${p.id}">🚚 Dar salida</button>`);
   }
   if (['enviado','pendiente_completar','con_fallas'].includes(p.estado)) {
-    btns.push(`<button class="btn terc-btn-verde terc-btn-accion" data-accion="ingreso" data-id="${p.id}">📥 Registrar ingreso</button>`);
+    btns.push(`<button class="btn terc-btn-verde terc-card-btn" data-accion="ingreso" data-id="${p.id}">📥 Registrar ingreso</button>`);
   }
-  btns.push(`<button class="btn btn-outline terc-btn-accion" data-accion="ver" data-id="${p.id}">👁 Ver detalle</button>`);
+  btns.push(`<button class="btn btn-outline terc-card-btn" data-accion="ver" data-id="${p.id}">👁 Ver detalle</button>`);
 
-  const nItems = (p.items || []).length;
-  const chips  = (p.items || []).slice(0, 3).map(it =>
-    `<span class="terc-item-chip">${it.producto_nombre || it.producto_id} × ${it.cantidad_solicitada}</span>`
-  ).join('') + (nItems > 3 ? `<span class="terc-item-chip terc-chip-more">+${nItems-3} más</span>` : '');
+  const chips = (p.items||[]).slice(0,3).map(it =>
+    `<span class="terc-item-chip">${it.producto_nombre||it.producto_id} <strong>×${it.cantidad_solicitada}</strong></span>`
+  ).join('') + ((p.items||[]).length > 3
+    ? `<span class="terc-item-chip terc-chip-mas">+${(p.items||[]).length-3} más</span>` : '');
+
+  const urgente = ['preparado_completo','preparado_incompleto','enviado','pendiente_completar','con_fallas'].includes(p.estado);
 
   return `
-    <div class="terc-card">
+    <div class="terc-card ${urgente ? 'terc-card-urgente' : ''}">
       <div class="terc-card-head">
-        <div>
-          <div class="terc-card-fecha">📅 ${fmtDate(p.fecha_creacion)}</div>
-          <div class="terc-card-chips">${chips}</div>
+        <div class="terc-card-meta-top">
+          <span class="terc-card-fecha">📅 ${fmtFecha(p.fecha_creacion)}</span>
+          ${badge(p.estado)}
         </div>
-        ${pill(p.estado)}
+        <div class="terc-card-chips">${chips}</div>
       </div>
       ${p.observacion ? `<div class="terc-card-obs">📝 ${p.observacion}</div>` : ''}
-      ${p.chofer ? `<div class="terc-card-meta">🚚 Chofer: <strong>${p.chofer}</strong> · ${p.fecha_salida||''} ${p.hora_salida||''}</div>` : ''}
+      ${p.chofer ? `<div class="terc-card-info">🚚 Chofer: <strong>${p.chofer}</strong> · ${p.fecha_salida||''} ${p.hora_salida||''}</div>` : ''}
       <div class="terc-card-actions">${btns.join('')}</div>
     </div>`;
 }
 
-// ── CONTROL DE CALIDAD ────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+//  LISTA — CONTROL DE CALIDAD
+// ══════════════════════════════════════════════════════════════════════════════
 
 function renderListaCQ() {
   const content = $('terc-content');
   if (!content) return;
 
-  const pendientes = T.pedidos.filter(p => p.estado === 'pendiente_preparacion');
-  const historial  = T.pedidos.filter(p => p.estado !== 'pendiente_preparacion');
+  const pendientes = M.pedidos.filter(p => p.estado === 'pendiente_preparacion');
+  const historial  = M.pedidos.filter(p => p.estado !== 'pendiente_preparacion');
 
   content.innerHTML = `
+
     ${pendientes.length > 0 ? `
-      <div class="terc-banner terc-banner-accion">
-        <span class="terc-banner-icon">⚙️</span>
-        <div>
-          <strong>${pendientes.length} pedido${pendientes.length > 1 ? 's' : ''} pendiente${pendientes.length > 1 ? 's' : ''} de preparación</strong>
-          <div style="font-size:13px;opacity:.85;margin-top:3px;">
-            Hacé click en "Preparar pedido" para cargar las cantidades preparadas.
-          </div>
+    <div class="terc-alerta-banner terc-alerta-cq">
+      <div class="terc-alerta-icon">⚙️</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">
+          ${pendientes.length} pedido${pendientes.length > 1 ? 's pendientes' : ' pendiente'} de preparación
         </div>
-      </div>` : `
-      <div class="terc-banner terc-banner-ok">
-        <span class="terc-banner-icon">✅</span>
-        <div><strong>¡Todo al día!</strong> No hay pedidos pendientes de preparación.</div>
-      </div>`}
-
-    <div class="terc-kpi-row">
-      ${kpiBox(pendientes.length, 'Pendientes', 'pill-naranja')}
-      ${kpiBox(T.pedidos.filter(p=>p.estado==='preparado_completo').length, 'Preparados OK', 'pill-azul')}
-      ${kpiBox(T.pedidos.filter(p=>p.estado==='preparado_incompleto').length, 'Preparados parcial', 'pill-amarillo')}
-      ${kpiBox(T.pedidos.filter(p=>p.estado==='enviado').length, 'Enviados', 'pill-cyan')}
-      ${kpiBox(T.pedidos.filter(p=>p.estado==='cerrado').length, 'Cerrados', 'pill-verde')}
-    </div>
-
-    <!-- Pedidos a preparar -->
-    <div class="panel-card mt-20">
-      <div class="panel-header">
-        <h3>⚙️ Pedidos para preparar</h3>
-        <span class="dash-badge dash-badge-orange">${pendientes.length} pendientes</span>
+        <div class="terc-alerta-sub">
+          Revisá cada pedido y cargá las cantidades preparadas.
+        </div>
       </div>
-      ${pendientes.length === 0
-        ? `<div class="terc-empty" style="padding:28px">Sin pedidos pendientes de preparación.</div>`
-        : `<div class="terc-cards-grid" id="terc-cq-cards"></div>`}
+    </div>` : `
+    <div class="terc-alerta-banner terc-alerta-ok">
+      <div class="terc-alerta-icon">✅</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">¡Todo al día!</div>
+        <div class="terc-alerta-sub">No hay pedidos pendientes de preparación.</div>
+      </div>
+    </div>`}
+
+    <!-- KPIs -->
+    <div class="terc-kpis">
+      ${kpi(pendientes.length, 'Pendientes', '🕐', 'kpi-naranja')}
+      ${kpi(M.pedidos.filter(p=>p.estado==='preparado_completo').length, 'Preparados OK', '✅', 'kpi-azul')}
+      ${kpi(M.pedidos.filter(p=>p.estado==='preparado_incompleto').length, 'Preparados parcial', '⚠️', 'kpi-amarillo')}
+      ${kpi(M.pedidos.filter(p=>p.estado==='enviado').length, 'Enviados', '🚚', 'kpi-cyan')}
+      ${kpi(M.pedidos.filter(p=>p.estado==='cerrado').length, 'Cerrados', '✅', 'kpi-verde')}
     </div>
+
+    <!-- Pedidos para preparar -->
+    <div class="terc-section-title">
+      <span>⚙️ Pedidos para preparar</span>
+      <span class="terc-count-badge terc-count-badge-naranja">${pendientes.length} pendientes</span>
+    </div>
+
+    ${pendientes.length === 0
+      ? `<div class="terc-empty-state"><div class="terc-empty-icon">🎉</div><div>Sin pedidos pendientes.</div></div>`
+      : `<div class="terc-cards-grid terc-cards-cq" id="terc-cq-cards"></div>`
+    }
 
     <!-- Historial -->
-    <div class="panel-card mt-20">
-      <div class="panel-header">
-        <h3>📋 Historial de preparaciones</h3>
-        <span class="dash-badge">${historial.length}</span>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table terc-table">
+    <div class="terc-section-title" style="margin-top:32px;">
+      <span>📋 Historial de preparaciones</span>
+      <span class="terc-count-badge">${historial.length}</span>
+    </div>
+
+    <div class="terc-panel">
+      <div class="terc-table-wrap">
+        <table class="terc-table">
           <thead>
             <tr>
-              <th>Fecha pedido</th><th>Ítems</th>
-              <th>Resultado preparación</th><th>Preparado por</th>
-              <th>Estado actual</th><th></th>
+              <th>Fecha pedido</th>
+              <th>Ítems</th>
+              <th>Resultado preparación</th>
+              <th>Preparado por</th>
+              <th>Estado actual</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="terc-cq-hist"></tbody>
@@ -403,96 +467,97 @@ function renderListaCQ() {
   `;
 
   if (pendientes.length) {
-    const el = $('terc-cq-cards');
-    el.innerHTML = pendientes.map(p => buildCardCQ(p)).join('');
-    el.querySelectorAll('[data-accion]').forEach(btn =>
-      btn.addEventListener('click', () => abrirPedido(btn.dataset.id, btn.dataset.accion)));
+    const grid = $('terc-cq-cards');
+    grid.innerHTML = pendientes.map(p => cardCQ(p)).join('');
+    $$('[data-accion]', grid).forEach(btn =>
+      btn.addEventListener('click', () => irDetalle(btn.dataset.id, btn.dataset.accion)));
   }
 
   const tbody = $('terc-cq-hist');
   if (!historial.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="terc-empty">Sin historial aún.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="terc-td-empty">Sin historial aún.</td></tr>`;
   } else {
     tbody.innerHTML = historial.map(p => `
       <tr>
-        <td>${fmtDate(p.fecha_creacion)}</td>
+        <td>${fmtFecha(p.fecha_creacion)}</td>
         <td>${(p.items||[]).length} ítem(s)</td>
         <td>
           ${p.usuario_preparacion_nombre
             ? (p.estado === 'preparado_completo'
-                ? '<span class="terc-pill pill-verde">COMPLETO</span>'
-                : '<span class="terc-pill pill-amarillo">INCOMPLETO</span>')
+                ? `<span class="terc-badge est-azul">✅ Completo</span>`
+                : `<span class="terc-badge est-amarillo">⚠️ Incompleto</span>`)
             : '—'}
         </td>
         <td>${p.usuario_preparacion_nombre || '—'}</td>
-        <td>${pill(p.estado)}</td>
+        <td>${badge(p.estado)}</td>
         <td>
-          <button class="btn btn-sm btn-outline" data-accion="ver" data-id="${p.id}">
-            👁 Ver
-          </button>
+          <button class="terc-btn-icon" data-accion="ver" data-id="${p.id}" title="Ver">👁</button>
         </td>
       </tr>`).join('');
-    tbody.querySelectorAll('[data-accion]').forEach(btn =>
-      btn.addEventListener('click', () => abrirPedido(btn.dataset.id, 'ver')));
+    $$('[data-accion]', tbody).forEach(btn =>
+      btn.addEventListener('click', () => irDetalle(btn.dataset.id, 'ver')));
   }
 }
 
-function buildCardCQ(p) {
-  const nItems = (p.items || []).length;
-  const preview = (p.items || []).slice(0, 4).map(it => `
-    <div class="terc-cq-item-row">
-      <span>${it.producto_nombre || it.producto_id}</span>
+function cardCQ(p) {
+  const items = (p.items||[]);
+  const preview = items.slice(0,4).map(it => `
+    <div class="terc-cq-row">
+      <span class="terc-cq-prod">${it.producto_nombre||it.producto_id}</span>
       <span class="terc-cq-cant">Solicitado: <strong>${it.cantidad_solicitada}</strong></span>
     </div>`).join('') +
-    (nItems > 4 ? `<div class="terc-muted" style="font-size:12px;margin-top:4px;">+${nItems-4} productos más…</div>` : '');
+    (items.length > 4 ? `<div class="terc-cq-mas">+${items.length-4} productos más…</div>` : '');
 
   return `
     <div class="terc-card terc-card-cq">
       <div class="terc-card-head">
         <div>
-          <div class="terc-card-fecha">📅 ${fmtDate(p.fecha_creacion)}</div>
-          <div class="terc-muted" style="font-size:12px;margin-top:2px;">
-            Por: ${p.usuario_creador_nombre || p.usuario_creador}
-          </div>
+          <div class="terc-card-fecha">📅 ${fmtFecha(p.fecha_creacion)}</div>
+          <div class="terc-card-creador">Por: ${p.usuario_creador_nombre||p.usuario_creador||'—'}</div>
         </div>
-        ${pill(p.estado)}
+        ${badge(p.estado)}
       </div>
-      <div class="terc-cq-items-preview">${preview}</div>
+      <div class="terc-cq-preview">${preview}</div>
       ${p.observacion ? `<div class="terc-card-obs">📝 ${p.observacion}</div>` : ''}
       <div class="terc-card-actions">
-        <button class="btn btn-primary terc-btn-accion" data-accion="preparar" data-id="${p.id}">
+        <button class="btn btn-primary terc-card-btn" data-accion="preparar" data-id="${p.id}">
           ⚙️ Preparar pedido
         </button>
-        <button class="btn btn-outline terc-btn-accion" data-accion="ver" data-id="${p.id}">
+        <button class="btn btn-outline terc-card-btn" data-accion="ver" data-id="${p.id}">
           👁 Ver detalle
         </button>
       </div>
     </div>`;
 }
 
-// ── GERENCIA ──────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+//  LISTA — GERENCIA
+// ══════════════════════════════════════════════════════════════════════════════
 
 function renderListaGerencia() {
   const content = $('terc-content');
   if (!content) return;
 
-  const pedidos = T.pedidos;
+  const todos = M.pedidos;
 
   content.innerHTML = `
-    <div class="terc-kpi-row">
-      ${kpiBox(pedidos.length, 'Total', '')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='pendiente_preparacion').length, 'Pend. preparación', 'pill-naranja')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='preparado_completo'||p.estado==='preparado_incompleto').length, 'Preparados', 'pill-azul')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='enviado').length, 'Enviados', 'pill-cyan')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='con_fallas').length, 'Con fallas', 'pill-rojo')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='pendiente_completar').length, 'Pend. completar', 'pill-naranja')}
-      ${kpiBox(pedidos.filter(p=>p.estado==='cerrado').length, 'Cerrados', 'pill-verde')}
+
+    <!-- KPIs -->
+    <div class="terc-kpis">
+      ${kpi(todos.length, 'Total pedidos', '📦', '')}
+      ${kpi(todos.filter(p=>p.estado==='pendiente_preparacion').length, 'Pend. preparación', '🕐', 'kpi-naranja')}
+      ${kpi(todos.filter(p=>['preparado_completo','preparado_incompleto'].includes(p.estado)).length, 'Preparados', '⚙️', 'kpi-azul')}
+      ${kpi(todos.filter(p=>p.estado==='enviado').length, 'Enviados', '🚚', 'kpi-cyan')}
+      ${kpi(todos.filter(p=>p.estado==='pendiente_completar').length, 'Pend. completar', '📭', 'kpi-naranja')}
+      ${kpi(todos.filter(p=>p.estado==='con_fallas').length, 'Con fallas', '❌', 'kpi-rojo')}
+      ${kpi(todos.filter(p=>p.estado==='cerrado').length, 'Cerrados', '✅', 'kpi-verde')}
     </div>
 
-    <div class="terc-filtros" style="margin-top:16px;">
-      <label class="terc-label">Filtrar por estado:</label>
-      <select id="terc-filtro" class="terc-select terc-select-sm">
-        <option value="">Todos</option>
+    <!-- Filtro -->
+    <div class="terc-toolbar">
+      <label class="terc-lbl">Filtrar por estado:</label>
+      <select id="terc-filtro-ger" class="terc-select">
+        <option value="">Todos los estados</option>
         <option value="pendiente_preparacion">Pendiente preparación</option>
         <option value="preparado_completo">Preparado completo</option>
         <option value="preparado_incompleto">Preparado incompleto</option>
@@ -501,19 +566,24 @@ function renderListaGerencia() {
         <option value="con_fallas">Con fallas</option>
         <option value="cerrado">Cerrado</option>
       </select>
+      <span id="terc-ger-count" class="terc-count-badge">${todos.length} registros</span>
     </div>
 
-    <div class="panel-card mt-20">
-      <div class="panel-header">
-        <h3>Todos los pedidos</h3>
-        <span class="dash-badge" id="terc-ger-count">${pedidos.length} registros</span>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table terc-table">
+    <!-- Tabla completa -->
+    <div class="terc-panel" style="margin-top:14px;">
+      <div class="terc-table-wrap">
+        <table class="terc-table">
           <thead>
             <tr>
-              <th>#</th><th>Fecha</th><th>Creado por</th><th>Ítems</th>
-              <th>Estado</th><th>Preparado por</th><th>Chofer</th><th>Salida</th><th>Acciones</th>
+              <th>#</th>
+              <th>Fecha</th>
+              <th>Creado por</th>
+              <th>Ítems</th>
+              <th>Estado</th>
+              <th>Preparado por</th>
+              <th>Chofer</th>
+              <th>Salida</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="terc-tbody-ger"></tbody>
@@ -522,163 +592,172 @@ function renderListaGerencia() {
     </div>
   `;
 
-  renderTbodyGer(pedidos);
+  renderTablaGerencia(todos);
 
-  $('terc-filtro')?.addEventListener('change', e => {
+  $('terc-filtro-ger')?.addEventListener('change', e => {
     const v = e.target.value;
-    const filt = v ? pedidos.filter(p => p.estado === v) : pedidos;
-    const count = $('terc-ger-count');
-    if (count) count.textContent = filt.length + ' registros';
-    renderTbodyGer(filt);
+    const filt = v ? todos.filter(p => p.estado === v) : todos;
+    const cnt = $('terc-ger-count');
+    if (cnt) cnt.textContent = filt.length + ' registros';
+    renderTablaGerencia(filt);
   });
 }
 
-function renderTbodyGer(pedidos) {
+function renderTablaGerencia(lista) {
   const tbody = $('terc-tbody-ger');
   if (!tbody) return;
 
-  if (!pedidos.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="terc-empty">Sin pedidos.</td></tr>`;
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="terc-td-empty">Sin pedidos para mostrar.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = pedidos.map((p, i) => {
-    const btns = [`<button class="btn btn-sm btn-outline" data-accion="ver" data-id="${p.id}">👁 Ver</button>`];
+  tbody.innerHTML = lista.map((p, i) => {
+    const acciones = [`<button class="terc-btn-icon" data-accion="ver" data-id="${p.id}" title="Ver">👁</button>`];
     if (p.estado === 'pendiente_preparacion')
-      btns.push(`<button class="btn btn-sm btn-primary" data-accion="preparar" data-id="${p.id}">⚙️ Preparar</button>`);
-    if (p.estado === 'preparado_completo' || p.estado === 'preparado_incompleto')
-      btns.push(`<button class="btn btn-sm terc-btn-cyan" data-accion="salida" data-id="${p.id}">🚚 Salida</button>`);
+      acciones.push(`<button class="terc-btn-sm terc-btn-primary" data-accion="preparar" data-id="${p.id}">⚙️ Preparar</button>`);
+    if (['preparado_completo','preparado_incompleto'].includes(p.estado))
+      acciones.push(`<button class="terc-btn-sm terc-btn-cyan" data-accion="salida" data-id="${p.id}">🚚 Salida</button>`);
     if (['enviado','pendiente_completar','con_fallas'].includes(p.estado))
-      btns.push(`<button class="btn btn-sm terc-btn-verde" data-accion="ingreso" data-id="${p.id}">📥 Ingreso</button>`);
+      acciones.push(`<button class="terc-btn-sm terc-btn-verde" data-accion="ingreso" data-id="${p.id}">📥 Ingreso</button>`);
 
     return `
       <tr>
-        <td><span class="terc-num">${pedidos.length - i}</span></td>
-        <td>${fmtDate(p.fecha_creacion)}</td>
-        <td>${p.usuario_creador_nombre || p.usuario_creador || '—'}</td>
-        <td>${(p.items||[]).length} ítem(s)</td>
-        <td>${pill(p.estado)}</td>
-        <td>${p.usuario_preparacion_nombre || '—'}</td>
-        <td>${p.chofer || '—'}</td>
+        <td><span class="terc-num">${lista.length - i}</span></td>
+        <td>${fmtFecha(p.fecha_creacion)}</td>
+        <td>${p.usuario_creador_nombre||p.usuario_creador||'—'}</td>
+        <td>${(p.items||[]).length}</td>
+        <td>${badge(p.estado)}</td>
+        <td>${p.usuario_preparacion_nombre||'—'}</td>
+        <td>${p.chofer||'—'}</td>
         <td>${p.fecha_salida ? `${p.fecha_salida} ${p.hora_salida||''}` : '—'}</td>
-        <td><div class="terc-acciones">${btns.join('')}</div></td>
+        <td><div class="terc-td-acciones">${acciones.join('')}</div></td>
       </tr>`;
   }).join('');
 
-  tbody.querySelectorAll('[data-accion]').forEach(btn =>
-    btn.addEventListener('click', () => abrirPedido(btn.dataset.id, btn.dataset.accion)));
+  $$('[data-accion]', tbody).forEach(btn =>
+    btn.addEventListener('click', () => irDetalle(btn.dataset.id, btn.dataset.accion)));
 }
 
-// ─── Helper navegación ────────────────────────────────────────────────────────
-
-function abrirPedido(id, accion) {
-  const p = T.pedidos.find(x => x.id === id);
-  if (!p) return;
-  T.pedidoActual = p;
-  T.accionActual = accion;
-  renderVista();
+// ─── Helper KPI ───────────────────────────────────────────────────────────────
+function kpi(val, label, icon, cls) {
+  return `
+    <div class="terc-kpi ${cls}">
+      <div class="terc-kpi-icon">${icon}</div>
+      <div class="terc-kpi-val">${val}</div>
+      <div class="terc-kpi-lbl">${label}</div>
+    </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  NUEVO PEDIDO (Morón / Gerencia)
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  NUEVO PEDIDO  (Morón / Gerencia)
+// ══════════════════════════════════════════════════════════════════════════════
 
 function renderNuevo() {
   const content = $('terc-content');
   if (!content) return;
 
-  if (!T.productos.length) {
-    content.innerHTML = `<div class="panel-card terc-empty-card">No hay productos activos cargados en el sistema.</div>`;
+  if (!M.productos.length) {
+    content.innerHTML = `
+      <div class="terc-empty-state">
+        <div class="terc-empty-icon">📦</div>
+        <div>No hay productos activos cargados en el sistema.</div>
+      </div>`;
     return;
   }
 
-  const categorias = [...new Set(T.productos.map(p => p.categoria || 'Sin categoría'))].sort();
+  const categorias = [...new Set(M.productos.map(p => p.categoria || 'Sin categoría'))].sort();
 
-  const filasPorCat = categorias.map(cat => {
-    const prods = T.productos.filter(p => (p.categoria || 'Sin categoría') === cat);
+  const filas = categorias.map(cat => {
+    const prods = M.productos.filter(p => (p.categoria || 'Sin categoría') === cat);
     return `
-      <tr class="terc-cat-header"><td colspan="3">📂 ${cat}</td></tr>
+      <tr class="terc-cat-row"><td colspan="3">📂 ${cat}</td></tr>
       ${prods.map(p => `
         <tr>
-          <td>${p.nombre || p.id}</td>
-          <td>
+          <td>${p.nombre||p.id}</td>
+          <td class="terc-td-num">
             <input type="number" min="0"
-              class="terc-input-num terc-np-cant"
-              data-prod-id="${p.id}"
-              data-prod-nombre="${(p.nombre || p.id).replace(/"/g, '&quot;')}"
+              class="terc-inp-num terc-np-cant"
+              data-id="${p.id}"
+              data-nombre="${(p.nombre||p.id).replace(/"/g,'&quot;')}"
               placeholder="0" />
           </td>
           <td>
             <input type="text"
-              class="terc-input-obs terc-np-obs"
-              data-prod-id="${p.id}"
+              class="terc-inp terc-np-obs"
+              data-id="${p.id}"
               placeholder="Observación…" />
           </td>
         </tr>`).join('')}`;
   }).join('');
 
   content.innerHTML = `
-    <div class="panel-card">
-      <div class="panel-header">
-        <h3>➕ Nuevo pedido de tercerizados</h3>
+    <div class="terc-panel">
+
+      <div class="terc-panel-header">
+        <div class="terc-panel-title">➕ Nuevo pedido de tercerizados</div>
       </div>
 
-      <div class="terc-field-row" style="max-width:520px;margin-bottom:20px;">
-        <label class="terc-label">Observación general (opcional)</label>
-        <input id="terc-obs-gral" type="text" class="terc-input"
-          placeholder="Ej: urgente, para esta semana…" />
-      </div>
+      <div class="terc-panel-body">
 
-      <div class="hint-box" style="margin-bottom:16px;">
-        Completá solo los productos que necesitás. Los que queden en 0 o vacíos se ignoran.
-      </div>
+        <div class="terc-field">
+          <label class="terc-lbl">Observación general <span class="terc-optional">(opcional)</span></label>
+          <input id="terc-obs-gral" type="text" class="terc-inp"
+            placeholder="Ej: urgente, para esta semana, envío especial…" style="max-width:540px;" />
+        </div>
 
-      <div class="table-wrap">
-        <table class="data-table terc-table">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Cantidad solicitada</th>
-              <th>Observación del ítem</th>
-            </tr>
-          </thead>
-          <tbody>${filasPorCat}</tbody>
-        </table>
-      </div>
+        <div class="terc-hint">
+          💡 Cargá solo los productos que necesitás. Los que queden en 0 o vacío se ignoran.
+        </div>
 
-      <div class="terc-form-actions" style="margin-top:24px;">
-        <button id="terc-btn-save" class="btn btn-primary">💾 Guardar pedido</button>
-        <button id="terc-btn-cancel" class="btn btn-outline">Cancelar</button>
+        <div class="terc-table-wrap" style="margin-top:16px;">
+          <table class="terc-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th style="width:140px;text-align:center">Cantidad solicitada</th>
+                <th>Observación del ítem</th>
+              </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+
+        <div class="terc-form-footer">
+          <button id="terc-btn-guardar" class="btn btn-primary" style="min-width:180px;">
+            💾 Guardar pedido
+          </button>
+          <button id="terc-btn-cancelar" class="btn btn-outline">Cancelar</button>
+        </div>
+
       </div>
     </div>
   `;
 
-  $('terc-btn-cancel')?.addEventListener('click', () => {
-    T.vista = 'lista';
-    document.querySelectorAll('#terc-tabs .terc-tab').forEach(b =>
-      b.classList.toggle('active', b.dataset.view === 'lista'));
+  $('terc-btn-cancelar')?.addEventListener('click', () => {
+    $$('.terc-tab').forEach(b => b.classList.toggle('active', b.dataset.view === 'lista'));
+    M.vista = 'lista';
     renderLista();
   });
 
-  $('terc-btn-save')?.addEventListener('click', guardarPedido);
+  $('terc-btn-guardar')?.addEventListener('click', guardarPedido);
 }
 
 async function guardarPedido() {
-  const btn = $('terc-btn-save');
+  const btn = $('terc-btn-guardar');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
   try {
     const items = [];
-    document.querySelectorAll('.terc-np-cant').forEach(inp => {
+    $$('.terc-np-cant').forEach(inp => {
       const cant = parseInt(inp.value) || 0;
       if (cant > 0) {
-        const pid = inp.dataset.prodId;
-        const obs = document.querySelector(`.terc-np-obs[data-prod-id="${pid}"]`);
+        const obs = document.querySelector(`.terc-np-obs[data-id="${inp.dataset.id}"]`);
         items.push({
-          producto_id: pid,
-          producto_nombre: inp.dataset.prodNombre,
+          producto_id:       inp.dataset.id,
+          producto_nombre:   inp.dataset.nombre,
           cantidad_solicitada: cant,
-          observacion_item: obs?.value?.trim() || '',
+          observacion_item:  obs?.value?.trim() || '',
         });
       }
     });
@@ -690,249 +769,286 @@ async function guardarPedido() {
     }
 
     await addDoc(collection(db, 'seguimiento_tercerizados'), {
-      estado: 'pendiente_preparacion',
-      observacion: $('terc-obs-gral')?.value?.trim() || '',
-      usuario_creador: T.perfil.email,
-      usuario_creador_nombre: T.perfil.nombre || T.perfil.email,
-      fecha_creacion: serverTimestamp(),
+      estado:                 'pendiente_preparacion',
+      observacion:            $('terc-obs-gral')?.value?.trim() || '',
+      usuario_creador:        M.perfil.email,
+      usuario_creador_nombre: M.perfil.nombre || M.perfil.email,
+      fecha_creacion:         serverTimestamp(),
       items,
       historial: [{
-        tipo: 'creacion',
-        fecha: nowISO(),
-        usuario: T.perfil.email,
-        usuario_nombre: T.perfil.nombre || T.perfil.email,
-        detalle: `Pedido creado con ${items.length} ítem(s).`,
+        tipo:          'creacion',
+        fecha:         iso(),
+        usuario:       M.perfil.email,
+        usuario_nombre:M.perfil.nombre || M.perfil.email,
+        detalle:       `Pedido creado con ${items.length} ítem(s).`,
       }],
     });
 
     toast('✅ Pedido guardado correctamente.', 'ok');
-    T.vista = 'lista';
-    document.querySelectorAll('#terc-tabs .terc-tab').forEach(b =>
-      b.classList.toggle('active', b.dataset.view === 'lista'));
+    $$('.terc-tab').forEach(b => b.classList.toggle('active', b.dataset.view === 'lista'));
+    M.vista = 'lista';
     renderLista();
 
   } catch (e) {
-    console.error('[Terc] guardar:', e);
+    console.error('[Terc] guardarPedido:', e);
     toast('Error al guardar: ' + e.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar pedido'; }
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  DETALLE + ACCIÓN
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  DETALLE  +  ACCIONES
+// ══════════════════════════════════════════════════════════════════════════════
 
 function renderDetalle() {
   const content = $('terc-content');
-  const p = T.pedidoActual;
+  const p = M.pedido;
   if (!content || !p) return;
 
-  const histHTML = (p.historial || []).slice().reverse().map(h => `
-    <div class="terc-hist-item">
-      <div class="terc-hist-header">
-        <span class="terc-hist-tipo">${labelHist(h.tipo)}</span>
-        <span class="terc-hist-fecha">
-          ${h.fecha ? new Date(h.fecha).toLocaleString('es-AR') : '—'} · ${h.usuario_nombre || h.usuario || '—'}
-        </span>
-      </div>
-      <div class="terc-hist-detalle">${h.detalle || ''}</div>
-    </div>`).join('') || `<div class="terc-empty" style="padding:12px 0">Sin historial.</div>`;
-
-  const itemsHTML = (p.items || []).map(item => {
-    const prep = item.cantidad_preparada ?? '—';
-    const estadoPrep = item.cantidad_preparada !== undefined
-      ? (item.cantidad_preparada >= item.cantidad_solicitada
-          ? '<span class="terc-pill pill-verde">COMPLETO</span>'
-          : '<span class="terc-pill pill-amarillo">INCOMPLETO</span>')
+  // ── tabla ítems ──
+  const itemsHTML = (p.items||[]).map(it => {
+    const prep   = it.cantidad_preparada ?? '—';
+    const epill  = it.cantidad_preparada !== undefined
+      ? (it.cantidad_preparada >= it.cantidad_solicitada
+          ? `<span class="terc-badge est-verde" style="font-size:10px">OK</span>`
+          : `<span class="terc-badge est-amarillo" style="font-size:10px">INCOMPLETO</span>`)
       : '';
 
-    const ingresosHTML = (item.ingresos || []).length
-      ? item.ingresos.map((ing, i) => `
-          <div class="terc-ingreso-row">
-            <span class="terc-muted">Ingreso ${i+1}:</span>
-            <span>✅ ${ing.ok ?? 0}</span>
-            <span>❌ ${ing.falladas ?? 0}</span>
-            <span>📭 ${ing.faltantes ?? 0}</span>
-            ${ing.motivo_falla ? `<span class="terc-falla">"${ing.motivo_falla}"</span>` : ''}
+    const ings = (it.ingresos||[]).length
+      ? it.ingresos.map((ing, j) => `
+          <div class="terc-ing-log">
+            <span class="terc-ing-num">Ing.${j+1}</span>
+            <span title="OK">✅ ${ing.ok??0}</span>
+            <span title="Falladas">❌ ${ing.falladas??0}</span>
+            <span title="Faltantes">📭 ${ing.faltantes??0}</span>
+            ${ing.motivo_falla ? `<span class="terc-ing-falla">"${ing.motivo_falla}"</span>` : ''}
             <span class="terc-muted">${ing.fecha ? new Date(ing.fecha).toLocaleString('es-AR') : ''}</span>
           </div>`).join('')
       : '<span class="terc-muted">—</span>';
 
     return `
       <tr>
-        <td>${item.producto_nombre || item.producto_id}</td>
-        <td class="terc-center">${item.cantidad_solicitada}</td>
-        <td class="terc-center">${prep} ${estadoPrep}</td>
-        <td class="terc-obs">${item.observacion_item || '—'}</td>
-        <td>${ingresosHTML}</td>
+        <td>${it.producto_nombre||it.producto_id}</td>
+        <td class="terc-td-c">${it.cantidad_solicitada}</td>
+        <td class="terc-td-c">${prep} ${epill}</td>
+        <td class="terc-obs-cell">${it.observacion_item||'—'}</td>
+        <td>${ings}</td>
       </tr>`;
   }).join('');
 
+  // ── historial ──
+  const histHTML = (p.historial||[]).slice().reverse().map(h => `
+    <div class="terc-hist-item">
+      <div class="terc-hist-head">
+        <span class="terc-hist-tipo">${histLabel(h.tipo)}</span>
+        <span class="terc-hist-meta">
+          ${h.fecha ? new Date(h.fecha).toLocaleString('es-AR') : '—'}
+          · ${h.usuario_nombre||h.usuario||'—'}
+        </span>
+      </div>
+      <div class="terc-hist-detalle">${h.detalle||''}</div>
+    </div>`).join('') ||
+    `<div class="terc-muted" style="padding:12px 0">Sin historial.</div>`;
+
   content.innerHTML = `
-    <div class="terc-detalle-grid">
 
-      <!-- Cabecera del pedido -->
-      <div class="panel-card">
-        <div class="panel-header">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <button id="terc-volver" class="btn btn-sm btn-outline">← Volver</button>
-            <h3 style="margin:0">Detalle del pedido</h3>
-            ${pill(p.estado)}
-          </div>
+    <!-- Cabecera del pedido -->
+    <div class="terc-panel">
+      <div class="terc-panel-header">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="terc-btn-back" id="terc-volver">← Volver</button>
+          <div class="terc-panel-title">Detalle del pedido</div>
+          ${badge(p.estado)}
         </div>
+      </div>
 
+      <div class="terc-panel-body">
+
+        <!-- Meta info -->
         <div class="terc-meta-grid">
-          <div><span class="terc-label">Creado</span><br>${fmt(p.fecha_creacion)}</div>
-          <div><span class="terc-label">Creado por</span><br>${p.usuario_creador_nombre || p.usuario_creador || '—'}</div>
-          <div><span class="terc-label">Observación</span><br>${p.observacion || '—'}</div>
-          ${p.usuario_preparacion_nombre ? `<div><span class="terc-label">Preparado por</span><br>${p.usuario_preparacion_nombre}</div>` : ''}
-          ${p.chofer ? `<div><span class="terc-label">Chofer</span><br>${p.chofer}</div>` : ''}
-          ${p.fecha_salida ? `<div><span class="terc-label">Salida</span><br>${p.fecha_salida} ${p.hora_salida||''}</div>` : ''}
-          ${p.usuario_salida_nombre ? `<div><span class="terc-label">Registró salida</span><br>${p.usuario_salida_nombre}</div>` : ''}
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Creado</div>
+            <div class="terc-meta-val">${fmt(p.fecha_creacion)}</div>
+          </div>
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Creado por</div>
+            <div class="terc-meta-val">${p.usuario_creador_nombre||p.usuario_creador||'—'}</div>
+          </div>
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Observación</div>
+            <div class="terc-meta-val">${p.observacion||'—'}</div>
+          </div>
+          ${p.usuario_preparacion_nombre ? `
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Preparado por</div>
+            <div class="terc-meta-val">${p.usuario_preparacion_nombre}</div>
+          </div>` : ''}
+          ${p.chofer ? `
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Chofer</div>
+            <div class="terc-meta-val">${p.chofer}</div>
+          </div>` : ''}
+          ${p.fecha_salida ? `
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Fecha/hora salida</div>
+            <div class="terc-meta-val">${p.fecha_salida} ${p.hora_salida||''}</div>
+          </div>` : ''}
+          ${p.usuario_salida_nombre ? `
+          <div class="terc-meta-item">
+            <div class="terc-meta-lbl">Registró salida</div>
+            <div class="terc-meta-val">${p.usuario_salida_nombre}</div>
+          </div>` : ''}
         </div>
 
-        <div class="table-wrap" style="margin-top:18px;">
-          <table class="data-table terc-table">
+        <!-- Tabla ítems -->
+        <div class="terc-table-wrap" style="margin-top:20px;">
+          <table class="terc-table">
             <thead>
               <tr>
-                <th>Producto</th><th>Solicitado</th>
-                <th>Preparado</th><th>Observación</th><th>Ingresos</th>
+                <th>Producto</th>
+                <th style="text-align:center">Solicitado</th>
+                <th style="text-align:center">Preparado</th>
+                <th>Observación</th>
+                <th>Ingresos recibidos</th>
               </tr>
             </thead>
             <tbody>${itemsHTML}</tbody>
           </table>
         </div>
+
       </div>
+    </div>
 
-      <!-- Panel de acción -->
-      <div id="terc-panel-accion" class="panel-card"></div>
+    <!-- Panel de acción -->
+    <div id="terc-panel-accion" class="terc-panel" style="margin-top:20px;"></div>
 
-      <!-- Historial -->
-      <div class="panel-card">
-        <div class="panel-header"><h3>📋 Historial de movimientos</h3></div>
+    <!-- Historial -->
+    <div class="terc-panel" style="margin-top:20px;">
+      <div class="terc-panel-header">
+        <div class="terc-panel-title">📋 Historial de movimientos</div>
+      </div>
+      <div class="terc-panel-body">
         <div class="terc-hist-list">${histHTML}</div>
       </div>
-
     </div>
+
   `;
 
-  $('terc-volver')?.addEventListener('click', () => {
-    T.pedidoActual = null;
-    T.accionActual = null;
-    renderLista();
-  });
+  $('terc-volver')?.addEventListener('click', volver);
 
+  // montar acción
   const panelAccion = $('terc-panel-accion');
-  if (panelAccion) {
-    const accion = T.accionActual === 'ver' ? null : (T.accionActual || inferAccion(p));
-    if      (accion === 'preparar') mountPreparar(p, panelAccion);
-    else if (accion === 'salida')   mountSalida(p, panelAccion);
-    else if (accion === 'ingreso')  mountIngreso(p, panelAccion);
-    else panelAccion.innerHTML = `
-      <div class="panel-header"><h3>ℹ️ Estado actual</h3></div>
-      <div class="terc-empty" style="padding:18px 0">
-        ${p.estado === 'cerrado'
-          ? '✅ Este pedido está cerrado. No hay acciones pendientes.'
-          : 'No hay acciones disponibles para este estado con tu rol actual.'}
+  const accion = (M.accion === 'ver' ? null : M.accion) || inferirAccion(p);
+
+  if (accion === 'preparar')      mountPreparar(p, panelAccion);
+  else if (accion === 'salida')   mountSalida(p, panelAccion);
+  else if (accion === 'ingreso')  mountIngreso(p, panelAccion);
+  else {
+    panelAccion.innerHTML = `
+      <div class="terc-panel-header"><div class="terc-panel-title">ℹ️ Estado actual</div></div>
+      <div class="terc-panel-body">
+        <div class="terc-empty-inline">
+          ${p.estado === 'cerrado'
+            ? '✅ Este pedido está cerrado. No hay acciones pendientes.'
+            : 'No hay acciones disponibles para este estado con tu rol.'}
+        </div>
       </div>`;
   }
 }
 
-function inferAccion(p) {
-  const rol = T.perfil.rol;
+function inferirAccion(p) {
+  const rol = M.perfil.rol;
   if ((rol === 'control_calidad' || rol === 'gerencia') && p.estado === 'pendiente_preparacion') return 'preparar';
-  if ((rol === 'moron' || rol === 'gerencia') && (p.estado === 'preparado_completo' || p.estado === 'preparado_incompleto')) return 'salida';
+  if ((rol === 'moron' || rol === 'gerencia') && ['preparado_completo','preparado_incompleto'].includes(p.estado)) return 'salida';
   if ((rol === 'moron' || rol === 'gerencia') && ['enviado','pendiente_completar','con_fallas'].includes(p.estado)) return 'ingreso';
   return null;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  ACCIÓN: PREPARAR — Control de calidad
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  ACCIÓN: PREPARAR
+// ══════════════════════════════════════════════════════════════════════════════
 
 function mountPreparar(p, container) {
-  const filas = (p.items || []).map((item, i) => `
+  const filas = (p.items||[]).map((it, i) => `
     <tr>
-      <td><strong>${item.producto_nombre || item.producto_id}</strong></td>
-      <td class="terc-center">
-        <span class="terc-pill pill-azul">${item.cantidad_solicitada}</span>
+      <td><strong>${it.producto_nombre||it.producto_id}</strong></td>
+      <td class="terc-td-c">
+        <span class="terc-badge est-azul">${it.cantidad_solicitada}</span>
       </td>
-      <td class="terc-center">
+      <td class="terc-td-c">
         <input type="number" min="0"
-          class="terc-input-num terc-prep-inp"
-          data-idx="${i}"
-          data-sol="${item.cantidad_solicitada}"
-          value="${item.cantidad_preparada ?? ''}"
+          class="terc-inp-num terc-prep-inp"
+          data-idx="${i}" data-sol="${it.cantidad_solicitada}"
+          value="${it.cantidad_preparada??''}"
           placeholder="0" />
       </td>
-      <td id="terc-ep-${i}" class="terc-center">—</td>
+      <td class="terc-td-c" id="terc-ep-${i}">—</td>
     </tr>`).join('');
 
   container.innerHTML = `
-    <div class="panel-header">
-      <h3>⚙️ Preparar pedido</h3>
-      <span class="terc-badge-rol">Control de calidad</span>
+    <div class="terc-panel-header">
+      <div class="terc-panel-title">⚙️ Preparar pedido</div>
+      <span class="terc-rol-badge">Control de Calidad</span>
     </div>
+    <div class="terc-panel-body">
 
-    <div class="hint-box" style="margin-bottom:16px;">
-      Cargá la cantidad <strong>real preparada</strong> por cada producto.
-      El sistema calcula automáticamente si está completo o incompleto.
-    </div>
+      <div class="terc-hint">
+        Cargá la cantidad <strong>real preparada</strong> por cada producto.
+        El sistema calcula automáticamente si está completo o incompleto.
+      </div>
 
-    <div class="table-wrap">
-      <table class="data-table terc-table">
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th style="text-align:center">Solicitado</th>
-            <th style="text-align:center">Preparado</th>
-            <th style="text-align:center">Estado</th>
-          </tr>
-        </thead>
-        <tbody>${filas}</tbody>
-      </table>
-    </div>
+      <div class="terc-table-wrap" style="margin-top:16px;">
+        <table class="terc-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th style="text-align:center;width:130px">Solicitado</th>
+              <th style="text-align:center;width:140px">Preparado</th>
+              <th style="text-align:center;width:130px">Estado</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
 
-    <div id="terc-prep-resumen" class="terc-resumen-prep" style="display:none;margin-top:16px;"></div>
+      <div id="terc-prep-resumen" class="terc-resumen" style="display:none;margin-top:16px;"></div>
 
-    <div class="terc-form-actions" style="margin-top:20px;">
-      <button id="terc-btn-prep" class="btn btn-primary">✅ Confirmar preparación</button>
-    </div>
-  `;
+      <div class="terc-form-footer">
+        <button id="terc-btn-prep" class="btn btn-primary" style="min-width:220px;">
+          ✅ Confirmar preparación
+        </button>
+      </div>
+
+    </div>`;
 
   function actualizarResumen() {
-    let completos = 0, incompletos = 0, sinCargar = 0;
-    container.querySelectorAll('.terc-prep-inp').forEach(inp => {
-      const idx = inp.dataset.idx;
-      const sol = parseInt(inp.dataset.sol) || 0;
-      const val = inp.value;
-      const prep = parseInt(val);
-      const el = $(`terc-ep-${idx}`);
-      if (!val || isNaN(prep)) {
-        if (el) el.innerHTML = '—';
-        sinCargar++;
+    let ok = 0, inc = 0, sin = 0;
+    $$('.terc-prep-inp', container).forEach(inp => {
+      const idx  = inp.dataset.idx;
+      const sol  = parseInt(inp.dataset.sol) || 0;
+      const prep = parseInt(inp.value);
+      const el   = $(`terc-ep-${idx}`);
+      if (!inp.value || isNaN(prep)) {
+        if (el) el.innerHTML = '—'; sin++;
       } else if (prep >= sol) {
-        if (el) el.innerHTML = '<span class="terc-pill pill-verde">COMPLETO</span>';
-        completos++;
+        if (el) el.innerHTML = `<span class="terc-badge est-verde">✅ OK</span>`; ok++;
       } else {
-        if (el) el.innerHTML = '<span class="terc-pill pill-amarillo">INCOMPLETO</span>';
-        incompletos++;
+        if (el) el.innerHTML = `<span class="terc-badge est-amarillo">⚠️ Incompleto</span>`; inc++;
       }
     });
     const res = $('terc-prep-resumen');
-    if (res && (completos || incompletos)) {
+    if (!res) return;
+    if (ok || inc) {
       res.style.display = 'flex';
       res.innerHTML = `
-        <span style="font-weight:600;margin-right:8px;">Resumen:</span>
-        ${completos  ? `<span class="terc-pill pill-verde">${completos} completo${completos>1?'s':''}</span>` : ''}
-        ${incompletos? `<span class="terc-pill pill-amarillo">${incompletos} incompleto${incompletos>1?'s':''}</span>` : ''}
-        ${sinCargar  ? `<span class="terc-pill pill-gris">${sinCargar} sin cargar</span>` : ''}`;
-    } else if (res) res.style.display = 'none';
+        <strong>Resumen:</strong>
+        ${ok  ? `<span class="terc-badge est-verde">${ok} completo${ok>1?'s':''}</span>` : ''}
+        ${inc ? `<span class="terc-badge est-amarillo">${inc} incompleto${inc>1?'s':''}</span>` : ''}
+        ${sin ? `<span class="terc-badge est-gris">${sin} sin cargar</span>` : ''}`;
+    } else res.style.display = 'none';
   }
 
-  container.querySelectorAll('.terc-prep-inp').forEach(inp =>
-    inp.addEventListener('input', actualizarResumen));
-
+  $$('.terc-prep-inp', container).forEach(inp => inp.addEventListener('input', actualizarResumen));
   $('terc-btn-prep')?.addEventListener('click', () => confirmarPreparacion(p, container));
 }
 
@@ -940,36 +1056,33 @@ async function confirmarPreparacion(p, container) {
   const btn = $('terc-btn-prep');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
-    const inputs = container.querySelectorAll('.terc-prep-inp');
+    const inputs = $$('.terc-prep-inp', container);
     let todosOk = true;
-
-    const items = p.items.map((item, i) => {
+    const items = p.items.map((it, i) => {
       const prep = parseInt(inputs[i]?.value) || 0;
-      if (prep < item.cantidad_solicitada) todosOk = false;
-      return { ...item, cantidad_preparada: prep };
+      if (prep < it.cantidad_solicitada) todosOk = false;
+      return { ...it, cantidad_preparada: prep };
     });
 
-    const estadoNuevo = todosOk ? 'preparado_completo' : 'preparado_incompleto';
+    const estado = todosOk ? 'preparado_completo' : 'preparado_incompleto';
 
     await updateDoc(doc(db, 'seguimiento_tercerizados', p.id), {
-      estado: estadoNuevo,
+      estado,
       items,
-      fecha_preparacion: serverTimestamp(),
-      usuario_preparacion: T.perfil.email,
-      usuario_preparacion_nombre: T.perfil.nombre || T.perfil.email,
-      historial: [...(p.historial || []), {
-        tipo: 'preparacion',
-        fecha: nowISO(),
-        usuario: T.perfil.email,
-        usuario_nombre: T.perfil.nombre || T.perfil.email,
-        detalle: `Preparación ${todosOk ? 'COMPLETA' : 'INCOMPLETA'} confirmada por ${T.perfil.nombre || T.perfil.email}.`,
+      fecha_preparacion:         serverTimestamp(),
+      usuario_preparacion:       M.perfil.email,
+      usuario_preparacion_nombre:M.perfil.nombre || M.perfil.email,
+      historial: [...(p.historial||[]), {
+        tipo:          'preparacion',
+        fecha:         iso(),
+        usuario:       M.perfil.email,
+        usuario_nombre:M.perfil.nombre || M.perfil.email,
+        detalle:       `Preparación ${todosOk ? 'COMPLETA' : 'INCOMPLETA'} confirmada.`,
       }],
     });
 
     toast(todosOk ? '✅ Preparación completa confirmada.' : '⚠️ Preparación incompleta registrada.', 'ok');
-    T.pedidoActual = null;
-    T.accionActual = null;
-    renderLista();
+    volver();
   } catch (e) {
     console.error('[Terc] preparar:', e);
     toast('Error: ' + e.message, 'error');
@@ -977,45 +1090,48 @@ async function confirmarPreparacion(p, container) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  ACCIÓN: DAR SALIDA — Morón
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  ACCIÓN: DAR SALIDA
+// ══════════════════════════════════════════════════════════════════════════════
 
 function mountSalida(p, container) {
-  const resumen = (p.items || []).map(it => `
+  const resumen = (p.items||[]).map(it => `
     <div class="terc-salida-item">
-      <span>${it.producto_nombre || it.producto_id}</span>
-      <span class="terc-pill ${(it.cantidad_preparada ?? 0) >= it.cantidad_solicitada ? 'pill-verde' : 'pill-amarillo'}">
-        Preparado: ${it.cantidad_preparada ?? '—'} / Sol: ${it.cantidad_solicitada}
+      <span>${it.producto_nombre||it.producto_id}</span>
+      <span class="terc-badge ${(it.cantidad_preparada??0) >= it.cantidad_solicitada ? 'est-verde' : 'est-amarillo'}">
+        Preparado: ${it.cantidad_preparada??'—'} / ${it.cantidad_solicitada}
       </span>
     </div>`).join('');
 
   container.innerHTML = `
-    <div class="panel-header">
-      <h3>🚚 Dar salida al pedido</h3>
-      <span class="terc-badge-rol">Morón</span>
+    <div class="terc-panel-header">
+      <div class="terc-panel-title">🚚 Dar salida al pedido</div>
+      <span class="terc-rol-badge">Morón</span>
     </div>
+    <div class="terc-panel-body">
 
-    <div class="terc-salida-resumen" style="margin-bottom:20px;">
-      <div class="terc-label" style="margin-bottom:10px;">Productos que salen:</div>
-      ${resumen}
-    </div>
+      <div class="terc-salida-resumen">
+        <div class="terc-lbl" style="margin-bottom:10px;">Productos que salen:</div>
+        ${resumen}
+      </div>
 
-    <div class="terc-field-row" style="max-width:380px;">
-      <label class="terc-label">Nombre del chofer *</label>
-      <input id="terc-chofer" type="text" class="terc-input" placeholder="Ej: Juan García" />
-    </div>
+      <div class="terc-field" style="margin-top:20px;max-width:400px;">
+        <label class="terc-lbl">Nombre del chofer <span style="color:#f87171">*</span></label>
+        <input id="terc-chofer" type="text" class="terc-inp"
+          placeholder="Ej: Juan García" />
+      </div>
 
-    <div class="hint-box" style="margin-top:14px;">
-      Al confirmar se registrará la fecha y hora de salida automáticamente.
-    </div>
+      <div class="terc-hint" style="margin-top:14px;">
+        📌 Al confirmar se registrará la fecha y hora de salida automáticamente.
+      </div>
 
-    <div class="terc-form-actions" style="margin-top:20px;">
-      <button id="terc-btn-salida" class="btn btn-primary" style="font-size:15px;padding:14px 28px;">
-        🚚 CONFIRMAR SALIDA
-      </button>
-    </div>
-  `;
+      <div class="terc-form-footer">
+        <button id="terc-btn-salida" class="btn btn-primary" style="min-width:220px;font-size:15px;padding:14px 28px;">
+          🚚 CONFIRMAR SALIDA
+        </button>
+      </div>
+
+    </div>`;
 
   $('terc-btn-salida')?.addEventListener('click', () => confirmarSalida(p));
 }
@@ -1029,25 +1145,23 @@ async function confirmarSalida(p) {
   try {
     const ahora = new Date();
     await updateDoc(doc(db, 'seguimiento_tercerizados', p.id), {
-      estado: 'enviado',
+      estado:              'enviado',
       chofer,
-      fecha_salida: ahora.toLocaleDateString('es-AR'),
-      hora_salida:  ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-      usuario_salida: T.perfil.email,
-      usuario_salida_nombre: T.perfil.nombre || T.perfil.email,
-      historial: [...(p.historial || []), {
-        tipo: 'salida',
-        fecha: nowISO(),
-        usuario: T.perfil.email,
-        usuario_nombre: T.perfil.nombre || T.perfil.email,
-        detalle: `Salida confirmada. Chofer: ${chofer}.`,
+      fecha_salida:        ahora.toLocaleDateString('es-AR'),
+      hora_salida:         ahora.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }),
+      usuario_salida:      M.perfil.email,
+      usuario_salida_nombre: M.perfil.nombre || M.perfil.email,
+      historial: [...(p.historial||[]), {
+        tipo:          'salida',
+        fecha:         iso(),
+        usuario:       M.perfil.email,
+        usuario_nombre:M.perfil.nombre || M.perfil.email,
+        detalle:       `Salida confirmada. Chofer: ${chofer}.`,
       }],
     });
 
     toast('🚚 Salida registrada correctamente.', 'ok');
-    T.pedidoActual = null;
-    T.accionActual = null;
-    renderLista();
+    volver();
   } catch (e) {
     console.error('[Terc] salida:', e);
     toast('Error: ' + e.message, 'error');
@@ -1055,82 +1169,81 @@ async function confirmarSalida(p) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  ACCIÓN: REGISTRAR INGRESO — Morón
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  ACCIÓN: REGISTRAR INGRESO
+// ══════════════════════════════════════════════════════════════════════════════
 
 function mountIngreso(p, container) {
-  const filas = (p.items || []).map((item, i) => {
-    const prevOk    = (item.ingresos||[]).reduce((s,x) => s+(x.ok??0), 0);
-    const prevFall  = (item.ingresos||[]).reduce((s,x) => s+(x.falladas??0), 0);
-    const prevFalt  = (item.ingresos||[]).reduce((s,x) => s+(x.faltantes??0), 0);
-    const preparado = item.cantidad_preparada ?? item.cantidad_solicitada;
-    const pendiente = Math.max(0, preparado - prevOk - prevFall - prevFalt);
+  const filas = (p.items||[]).map((it, i) => {
+    const prevOk   = (it.ingresos||[]).reduce((s,x) => s+(x.ok??0), 0);
+    const prevFall = (it.ingresos||[]).reduce((s,x) => s+(x.falladas??0), 0);
+    const prevFalt = (it.ingresos||[]).reduce((s,x) => s+(x.faltantes??0), 0);
+    const prep     = it.cantidad_preparada ?? it.cantidad_solicitada;
+    const pendiente= Math.max(0, prep - prevOk - prevFall - prevFalt);
 
     return `
       <tr>
-        <td><strong>${item.producto_nombre || item.producto_id}</strong></td>
-        <td class="terc-center">${item.cantidad_solicitada}</td>
-        <td class="terc-center">${preparado}</td>
-        <td class="terc-center" style="color:#34d399;font-weight:700;">${prevOk}</td>
-        <td class="terc-center" style="color:#f59e0b;font-weight:700;">${pendiente}</td>
-        <td class="terc-center">
-          <input type="number" min="0" class="terc-input-num terc-ing-ok"
-            data-idx="${i}" placeholder="0"/>
+        <td><strong>${it.producto_nombre||it.producto_id}</strong></td>
+        <td class="terc-td-c">${it.cantidad_solicitada}</td>
+        <td class="terc-td-c">${prep}</td>
+        <td class="terc-td-c terc-val-ok">${prevOk}</td>
+        <td class="terc-td-c terc-val-pend ${pendiente > 0 ? 'terc-pend-warn' : ''}">${pendiente}</td>
+        <td class="terc-td-c">
+          <input type="number" min="0" class="terc-inp-num terc-ing-ok"   data-idx="${i}" placeholder="0"/>
         </td>
-        <td class="terc-center">
-          <input type="number" min="0" class="terc-input-num terc-ing-fall"
-            data-idx="${i}" placeholder="0"/>
+        <td class="terc-td-c">
+          <input type="number" min="0" class="terc-inp-num terc-ing-fall" data-idx="${i}" placeholder="0"/>
         </td>
-        <td class="terc-center">
-          <input type="number" min="0" class="terc-input-num terc-ing-falt"
-            data-idx="${i}" placeholder="0"/>
+        <td class="terc-td-c">
+          <input type="number" min="0" class="terc-inp-num terc-ing-falt" data-idx="${i}" placeholder="0"/>
         </td>
         <td>
-          <input type="text" class="terc-input terc-ing-motivo"
-            data-idx="${i}"
-            placeholder="Motivo (si hay falla)…"
-            style="min-width:150px;padding:8px 10px;font-size:13px;"/>
+          <input type="text" class="terc-inp terc-ing-motivo"
+            data-idx="${i}" placeholder="Motivo falla…"
+            style="min-width:150px;font-size:13px;padding:7px 10px;"/>
         </td>
       </tr>`;
   }).join('');
 
   container.innerHTML = `
-    <div class="panel-header">
-      <h3>📥 Registrar ingreso</h3>
-      <span class="terc-badge-rol">Morón</span>
+    <div class="terc-panel-header">
+      <div class="terc-panel-title">📥 Registrar ingreso</div>
+      <span class="terc-rol-badge">Morón</span>
     </div>
+    <div class="terc-panel-body">
 
-    <div class="hint-box" style="margin-bottom:16px;">
-      Cargá las cantidades de este ingreso. Podés hacer múltiples ingresos parciales.
-      Si hay unidades <strong>falladas</strong>, el motivo es obligatorio.
-    </div>
+      <div class="terc-hint">
+        📌 Cargá las cantidades de <strong>este ingreso parcial</strong>.
+        Podés hacer múltiples ingresos hasta completar el pedido.
+        El motivo es <strong>obligatorio</strong> si hay unidades falladas.
+      </div>
 
-    <div class="table-wrap">
-      <table class="data-table terc-table" style="min-width:820px;">
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th>Solicitado</th>
-            <th>Preparado</th>
-            <th style="color:#34d399">✅ Recibido OK</th>
-            <th style="color:#f59e0b">⏳ Pendiente</th>
-            <th>✅ OK (este ingreso)</th>
-            <th>❌ Falladas</th>
-            <th>📭 Faltantes</th>
-            <th>Motivo falla</th>
-          </tr>
-        </thead>
-        <tbody>${filas}</tbody>
-      </table>
-    </div>
+      <div class="terc-table-wrap" style="margin-top:16px;overflow-x:auto;">
+        <table class="terc-table" style="min-width:860px;">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th style="text-align:center">Solicitado</th>
+              <th style="text-align:center">Preparado</th>
+              <th style="text-align:center;color:#34d399">✅ Recibido</th>
+              <th style="text-align:center;color:#f59e0b">⏳ Pendiente</th>
+              <th style="text-align:center">✅ OK hoy</th>
+              <th style="text-align:center">❌ Falladas</th>
+              <th style="text-align:center">📭 Faltantes</th>
+              <th>Motivo falla</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
 
-    <div class="terc-form-actions" style="margin-top:24px;">
-      <button id="terc-btn-ingreso" class="btn btn-primary" style="font-size:15px;padding:14px 28px;">
-        📥 CONFIRMAR INGRESO
-      </button>
-    </div>
-  `;
+      <div class="terc-form-footer">
+        <button id="terc-btn-ingreso" class="btn btn-primary" style="min-width:220px;font-size:15px;padding:14px 28px;">
+          📥 CONFIRMAR INGRESO
+        </button>
+      </div>
+
+    </div>`;
 
   $('terc-btn-ingreso')?.addEventListener('click', () => confirmarIngreso(p));
 }
@@ -1139,43 +1252,39 @@ async function confirmarIngreso(p) {
   const btn = $('terc-btn-ingreso');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
-    const items = p.items || [];
-    let algunoCargado = false;
-    let hayFallas     = false;
-
-    // Validar: motivo obligatorio si hay falladas
-    const ingFall   = document.querySelectorAll('.terc-ing-fall');
-    const ingMotivo = document.querySelectorAll('.terc-ing-motivo');
-    let motivoFalta = false;
-    ingFall.forEach((inp, i) => {
-      if ((parseInt(inp.value) || 0) > 0 && !ingMotivo[i]?.value?.trim()) {
-        motivoFalta = true;
-      }
+    // Validación motivo
+    const falls   = $$('.terc-ing-fall');
+    const motivos = $$('.terc-ing-motivo');
+    let faltaMotivo = false;
+    falls.forEach((inp, i) => {
+      if ((parseInt(inp.value)||0) > 0 && !motivos[i]?.value?.trim()) faltaMotivo = true;
     });
-    if (motivoFalta) {
-      toast('Ingresá el motivo de falla para los productos con unidades falladas.', 'error');
+    if (faltaMotivo) {
+      toast('El motivo de falla es obligatorio cuando hay unidades falladas.', 'error');
       if (btn) { btn.disabled = false; btn.textContent = '📥 CONFIRMAR INGRESO'; }
       return;
     }
 
-    const ingOk   = document.querySelectorAll('.terc-ing-ok');
-    const ingFalt = document.querySelectorAll('.terc-ing-falt');
+    const oks    = $$('.terc-ing-ok');
+    const falts  = $$('.terc-ing-falt');
+    let algunoCargado = false;
+    let hayFallas = false;
 
-    const itemsUpd = items.map((item, i) => {
-      const ok       = parseInt(ingOk[i]?.value)     || 0;
-      const falladas = parseInt(ingFall[i]?.value)   || 0;
-      const faltantes= parseInt(ingFalt[i]?.value)   || 0;
-      const motivo   = ingMotivo[i]?.value?.trim()   || '';
+    const itemsUpd = p.items.map((it, i) => {
+      const ok      = parseInt(oks[i]?.value)   || 0;
+      const falladas= parseInt(falls[i]?.value) || 0;
+      const faltantes=parseInt(falts[i]?.value) || 0;
+      const motivo  = motivos[i]?.value?.trim() || '';
 
       if (ok || falladas || faltantes) algunoCargado = true;
       if (falladas) hayFallas = true;
 
       return {
-        ...item,
-        ingresos: [...(item.ingresos || []), {
+        ...it,
+        ingresos: [...(it.ingresos||[]), {
           ok, falladas, faltantes,
           motivo_falla: motivo,
-          fecha: nowISO(),
+          fecha: iso(),
         }],
       };
     });
@@ -1186,44 +1295,41 @@ async function confirmarIngreso(p) {
       return;
     }
 
-    // Calcular si todos los ítems están completos
+    // Calcular estado
     let todosCompletos = true;
-    itemsUpd.forEach(item => {
-      const preparado = item.cantidad_preparada ?? item.cantidad_solicitada;
-      const totalReg  = (item.ingresos || []).reduce(
-        (s, x) => s + (x.ok ?? 0) + (x.falladas ?? 0) + (x.faltantes ?? 0), 0);
-      if (totalReg < preparado) todosCompletos = false;
+    itemsUpd.forEach(it => {
+      const prep  = it.cantidad_preparada ?? it.cantidad_solicitada;
+      const total = (it.ingresos||[]).reduce((s,x) => s+(x.ok??0)+(x.falladas??0)+(x.faltantes??0), 0);
+      if (total < prep) todosCompletos = false;
     });
 
-    let estadoNuevo;
-    if (todosCompletos) estadoNuevo = hayFallas ? 'con_fallas' : 'cerrado';
-    else                estadoNuevo = hayFallas ? 'con_fallas' : 'pendiente_completar';
+    let nuevoEstado;
+    if (todosCompletos) nuevoEstado = hayFallas ? 'con_fallas' : 'cerrado';
+    else                nuevoEstado = hayFallas ? 'con_fallas' : 'pendiente_completar';
 
-    const histEntry = {
-      tipo: estadoNuevo === 'cerrado' ? 'cierre' : 'ingreso',
-      fecha: nowISO(),
-      usuario: T.perfil.email,
-      usuario_nombre: T.perfil.nombre || T.perfil.email,
-      detalle: estadoNuevo === 'cerrado'
+    const hist = {
+      tipo:          nuevoEstado === 'cerrado' ? 'cierre' : 'ingreso',
+      fecha:         iso(),
+      usuario:       M.perfil.email,
+      usuario_nombre:M.perfil.nombre || M.perfil.email,
+      detalle:       nuevoEstado === 'cerrado'
         ? 'Pedido cerrado. Todas las unidades recibidas correctamente.'
-        : `Ingreso parcial registrado. Estado actualizado a: ${estadoNuevo}.`,
+        : `Ingreso parcial registrado. Estado: ${nuevoEstado}.`,
     };
 
     await updateDoc(doc(db, 'seguimiento_tercerizados', p.id), {
-      estado: estadoNuevo,
-      items: itemsUpd,
-      historial: [...(p.historial || []), histEntry],
+      estado: nuevoEstado,
+      items:  itemsUpd,
+      historial: [...(p.historial||[]), hist],
     });
 
     const msgs = {
-      cerrado:              '✅ ¡Pedido cerrado! Todas las unidades recibidas.',
-      pendiente_completar:  '⚠️ Ingreso registrado. Quedan unidades pendientes.',
-      con_fallas:           '❌ Ingreso registrado. Se detectaron fallas.',
+      cerrado:             '✅ ¡Pedido cerrado! Todo recibido correctamente.',
+      pendiente_completar: '⚠️ Ingreso registrado. Quedan unidades pendientes.',
+      con_fallas:          '❌ Ingreso registrado. Se detectaron fallas.',
     };
-    toast(msgs[estadoNuevo] || 'Ingreso guardado.', estadoNuevo === 'cerrado' ? 'ok' : 'info');
-    T.pedidoActual = null;
-    T.accionActual = null;
-    renderLista();
+    toast(msgs[nuevoEstado] || 'Ingreso guardado.', nuevoEstado === 'cerrado' ? 'ok' : 'info');
+    volver();
 
   } catch (e) {
     console.error('[Terc] ingreso:', e);
