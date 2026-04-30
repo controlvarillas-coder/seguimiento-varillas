@@ -1,144 +1,464 @@
 /* ============================================================
-   MÓDULO: SEGUIMIENTO DE TERCERIZADOS — v2
-   Agregar como <link rel="stylesheet" href="css/tercerizados.css?v=2" />
-   Usa las variables CSS del sistema (:root de styles.css)
+   MÓDULO: SEGUIMIENTO DE TERCERIZADOS — v2 definitivo
+   Archivo: css/tercerizados.css
+
+   INSTRUCCIÓN: agregar en index.html DESPUÉS de styles.css:
+   <link rel="stylesheet" href="css/tercerizados.css?v=2" />
    ============================================================ */
 
-/* ── NAV: ocultar por defecto, el init lo muestra según rol ── */
-.terc-nav-link {
-  display: none;
-}
+/* ── El nav arranca oculto, tercerizados-init.js lo muestra según rol ── */
+#nav-tercerizados { display: none; }
 
-/* ── Toast ────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOAST
+───────────────────────────────────────────────────────────────────────────── */
 .terc-toast {
   position: fixed;
   bottom: 28px;
   right: 28px;
+  z-index: 9999;
   padding: 14px 22px;
   border-radius: 16px;
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: rgba(20, 30, 60, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  background: rgba(15, 23, 42, 0.97);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
   opacity: 0;
   transform: translateY(14px);
-  transition: opacity .3s ease, transform .3s ease;
+  transition: opacity .28s ease, transform .28s ease;
   pointer-events: none;
-  z-index: 9999;
   max-width: 380px;
 }
 .terc-toast-show  { opacity: 1; transform: translateY(0); }
-.terc-toast-ok    { border-color: rgba(52,211,153,.35); background: rgba(6,78,59,.93); }
-.terc-toast-error { border-color: rgba(248,113,113,.35); background: rgba(100,10,10,.93); }
-.terc-toast-info  { border-color: rgba(110,168,255,.3); }
+.terc-toast-ok    { background: rgba(6,78,59,.96);  border-color: rgba(52,211,153,.4); }
+.terc-toast-error { background: rgba(127,29,29,.96); border-color: rgba(248,113,113,.4); }
+.terc-toast-info  { background: rgba(30,41,75,.96);  border-color: rgba(110,168,255,.3); }
 
-/* ── Topbar ───────────────────────────────────────────────────────────────── */
-.terc-topbar {
+/* ─────────────────────────────────────────────────────────────────────────────
+   HEADER DEL MÓDULO
+───────────────────────────────────────────────────────────────────────────── */
+.terc-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(99,135,255,.1), rgba(59,130,246,.06));
+  border: 1px solid rgba(99,135,255,.2);
+  border-radius: 20px;
 }
-.terc-topbar-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.terc-title { margin: 0; font-size: 22px; font-weight: 800; }
-
-/* ── Badge rol ────────────────────────────────────────────────────────────── */
-.terc-badge-rol {
-  display: inline-block;
-  padding: 5px 12px;
+.terc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.terc-header-icon {
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(99,135,255,.4));
+}
+.terc-header-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.terc-header-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.terc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.terc-rol-badge {
+  padding: 6px 14px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: .05em;
-  background: rgba(110,168,255,.14);
-  border: 1px solid rgba(110,168,255,.25);
+  background: rgba(99,135,255,.15);
+  border: 1px solid rgba(99,135,255,.3);
   color: #c5d8ff;
 }
+.terc-usuario-badge {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--muted);
+}
 
-/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   TABS
+───────────────────────────────────────────────────────────────────────────── */
 .terc-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 .terc-tab {
-  padding: 10px 20px;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 20px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255,255,255,.03);
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: .2s ease;
+  transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
 }
-.terc-tab:hover  { background: rgba(255,255,255,.07); color: var(--text); }
+.terc-tab:hover { background: rgba(255,255,255,.07); color: var(--text); }
 .terc-tab.active {
-  background: linear-gradient(135deg, var(--primary), var(--primary-2, #5b8fff));
+  background: linear-gradient(135deg, #4f7cff, #3b5bdb);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 4px 16px rgba(99,135,255,.3);
+  box-shadow: 0 4px 18px rgba(79,124,255,.4);
 }
+.terc-tab-icon { font-size: 15px; }
 
-/* ── Banners de alerta / ok ───────────────────────────────────────────────── */
-.terc-banner {
+/* ─────────────────────────────────────────────────────────────────────────────
+   BANNERS DE ALERTA
+───────────────────────────────────────────────────────────────────────────── */
+.terc-alerta-banner {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 16px;
   padding: 16px 20px;
-  border-radius: 16px;
+  border-radius: 18px;
+  margin-bottom: 24px;
   border: 1px solid;
-  margin-bottom: 20px;
-  font-size: 14px;
 }
-.terc-banner-accion {
+.terc-alerta-banner.terc-alerta-cq,
+.terc-alerta-banner:not(.terc-alerta-ok):not(.terc-alerta-cq) {
   background: rgba(251,146,60,.08);
   border-color: rgba(251,146,60,.3);
-  color: #fed7aa;
 }
-.terc-banner-ok {
-  background: rgba(52,211,153,.07);
-  border-color: rgba(52,211,153,.3);
-  color: #a7f3d0;
+.terc-alerta-ok {
+  background: rgba(52,211,153,.07) !important;
+  border-color: rgba(52,211,153,.3) !important;
 }
-.terc-banner-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.terc-alerta-cq {
+  background: rgba(251,146,60,.08);
+  border-color: rgba(251,146,60,.3);
+}
+.terc-alerta-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.terc-alerta-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+.terc-alerta-sub {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
 
-/* ── KPIs ─────────────────────────────────────────────────────────────────── */
-.terc-kpi-row {
+/* ─────────────────────────────────────────────────────────────────────────────
+   KPIs
+───────────────────────────────────────────────────────────────────────────── */
+.terc-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 14px;
-  margin-bottom: 4px;
+  margin-bottom: 28px;
 }
 .terc-kpi {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 18px;
-  padding: 18px 14px;
+  padding: 18px 14px 16px;
   text-align: center;
   box-shadow: var(--shadow);
+  transition: transform .2s, box-shadow .2s;
 }
-.terc-kpi-val { font-size: 26px; font-weight: 900; margin-bottom: 5px; }
-.terc-kpi-lbl { font-size: 11.5px; color: var(--muted); font-weight: 500; line-height: 1.3; }
+.terc-kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.terc-kpi-icon { font-size: 20px; margin-bottom: 8px; }
+.terc-kpi-val  { font-size: 28px; font-weight: 900; margin-bottom: 5px; line-height: 1; }
+.terc-kpi-lbl  { font-size: 11.5px; color: var(--muted); font-weight: 500; line-height: 1.3; }
 
-/* ── Filtros ──────────────────────────────────────────────────────────────── */
-.terc-filtros {
+.kpi-naranja  { border-color: rgba(251,146,60,.3); }
+.kpi-naranja  .terc-kpi-val { color: #fb923c; }
+.kpi-azul     { border-color: rgba(99,135,255,.3); }
+.kpi-azul     .terc-kpi-val { color: #93c5fd; }
+.kpi-amarillo { border-color: rgba(251,191,36,.3); }
+.kpi-amarillo .terc-kpi-val { color: #fbbf24; }
+.kpi-cyan     { border-color: rgba(34,211,238,.3); }
+.kpi-cyan     .terc-kpi-val { color: #22d3ee; }
+.kpi-rojo     { border-color: rgba(248,113,113,.3); }
+.kpi-rojo     .terc-kpi-val { color: #f87171; }
+.kpi-verde    { border-color: rgba(52,211,153,.3); }
+.kpi-verde    .terc-kpi-val { color: #34d399; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SECTION TITLES
+───────────────────────────────────────────────────────────────────────────── */
+.terc-section-title {
   display: flex;
   align-items: center;
   gap: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.terc-count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,.07);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.terc-count-badge-naranja {
+  background: rgba(251,146,60,.12);
+  border-color: rgba(251,146,60,.3);
+  color: #fb923c;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CHIPS MINI (alerta banner)
+───────────────────────────────────────────────────────────────────────────── */
+.terc-chip-mini {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.chip-azul  { background: rgba(99,135,255,.15); border: 1px solid rgba(99,135,255,.3); color: #93c5fd; }
+.chip-verde { background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.3); color: #34d399; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CARDS GRID
+───────────────────────────────────────────────────────────────────────────── */
+.terc-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CARD BASE
+───────────────────────────────────────────────────────────────────────────── */
+.terc-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+  position: relative;
+}
+.terc-card:hover {
+  border-color: rgba(99,135,255,.35);
+  box-shadow: 0 6px 28px rgba(0,0,0,.3);
+  transform: translateY(-2px);
+}
+.terc-card-urgente {
+  border-color: rgba(251,146,60,.35);
+  background: rgba(251,146,60,.03);
+}
+.terc-card-urgente:hover { border-color: rgba(251,146,60,.55); }
+.terc-card-urgente::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, #fb923c, #f59e0b);
+}
+
+.terc-card-cq {
+  border-color: rgba(251,146,60,.25);
+}
+.terc-card-cq:hover { border-color: rgba(251,146,60,.5); }
+.terc-card-cq::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, #f59e0b, #fb923c);
+}
+
+.terc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   flex-wrap: wrap;
 }
-.terc-label {
+.terc-card-fecha {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.terc-card-creador {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.terc-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.terc-card-obs {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.03);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.terc-card-info {
+  font-size: 12px;
+  color: var(--muted);
+}
+.terc-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.terc-card-btn { flex-shrink: 0; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ITEM CHIPS EN CARDS
+───────────────────────────────────────────────────────────────────────────── */
+.terc-item-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--text);
+}
+.terc-item-chip strong { color: #93c5fd; }
+.terc-chip-mas {
+  background: rgba(99,135,255,.1);
+  border-color: rgba(99,135,255,.2);
+  color: #93c5fd;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CQ PREVIEW EN CARDS
+───────────────────────────────────────────────────────────────────────────── */
+.terc-cq-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.03);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.terc-cq-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  gap: 8px;
+}
+.terc-cq-prod { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terc-cq-cant { font-size: 12px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.terc-cq-cant strong { color: #93c5fd; }
+.terc-cq-mas  { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 2px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BADGES DE ESTADO
+───────────────────────────────────────────────────────────────────────────── */
+.terc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.est-naranja  { background: rgba(251,146,60,.15);  color: #fb923c;  border: 1px solid rgba(251,146,60,.35); }
+.est-azul     { background: rgba(99,135,255,.14);  color: #93c5fd;  border: 1px solid rgba(99,135,255,.35); }
+.est-amarillo { background: rgba(251,191,36,.14);  color: #fbbf24;  border: 1px solid rgba(251,191,36,.35); }
+.est-cyan     { background: rgba(34,211,238,.12);  color: #22d3ee;  border: 1px solid rgba(34,211,238,.35); }
+.est-rojo     { background: rgba(248,113,113,.14); color: #f87171;  border: 1px solid rgba(248,113,113,.35); }
+.est-verde    { background: rgba(52,211,153,.14);  color: #34d399;  border: 1px solid rgba(52,211,153,.35); }
+.est-gris     { background: rgba(255,255,255,.06); color: var(--muted); border: 1px solid var(--line); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PANEL (reemplaza panel-card para el módulo)
+───────────────────────────────────────────────────────────────────────────── */
+.terc-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.terc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
+}
+.terc-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.terc-panel-body { padding: 22px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOOLBAR
+───────────────────────────────────────────────────────────────────────────── */
+.terc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.terc-lbl {
   font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .06em;
   color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
 }
 .terc-select {
   padding: 10px 14px;
@@ -150,141 +470,173 @@
   font-family: inherit;
   outline: none;
   cursor: pointer;
+  transition: border-color .2s;
 }
-.terc-select:focus { border-color: var(--primary); }
-.terc-select-sm   { padding: 8px 12px; font-size: 12px; }
+.terc-select:focus { border-color: #4f7cff; }
 
-/* ── Cards grid ───────────────────────────────────────────────────────────── */
-.terc-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 4px 0 8px;
+/* ─────────────────────────────────────────────────────────────────────────────
+   TABLA DEL MÓDULO
+───────────────────────────────────────────────────────────────────────────── */
+.terc-table-wrap { overflow-x: auto; }
+.terc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
 }
-
-/* ── Card base ────────────────────────────────────────────────────────────── */
-.terc-card {
+.terc-table thead tr {
   background: rgba(255,255,255,.03);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: border-color .2s, box-shadow .2s;
 }
-.terc-card:hover {
-  border-color: rgba(110,168,255,.3);
-  box-shadow: 0 4px 20px rgba(0,0,0,.25);
-}
-.terc-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.terc-card-fecha {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-.terc-card-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.terc-card-obs   { font-size: 13px; color: var(--muted); font-style: italic; }
-.terc-card-meta  { font-size: 12px; color: var(--muted); }
-.terc-card-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.terc-btn-accion { flex-shrink: 0; }
-
-/* ── Chips de items en cards ──────────────────────────────────────────────── */
-.terc-item-chip {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 8px;
+.terc-table th {
+  padding: 11px 14px;
+  text-align: left;
   font-size: 11.5px;
-  font-weight: 600;
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.1);
-  color: var(--text);
-}
-.terc-chip-more {
-  background: rgba(110,168,255,.1);
-  border-color: rgba(110,168,255,.2);
-  color: #93c5fd;
-}
-
-/* ── Card CQ (control calidad) ────────────────────────────────────────────── */
-.terc-card-cq {
-  border-color: rgba(251,146,60,.2);
-}
-.terc-card-cq:hover { border-color: rgba(251,146,60,.45); }
-
-.terc-cq-items-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  background: rgba(255,255,255,.03);
-  border-radius: 12px;
-  border: 1px solid var(--line);
-}
-.terc-cq-item-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  gap: 8px;
-}
-.terc-cq-cant {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.terc-cq-cant strong { color: #93c5fd; }
-
-/* ── Pills de estado ──────────────────────────────────────────────────────── */
-.terc-pill {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
   font-weight: 700;
-  letter-spacing: .04em;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
-.pill-naranja  { background:rgba(251,146,60,.15);  color:#fb923c;  border:1px solid rgba(251,146,60,.3); }
-.pill-azul     { background:rgba(110,168,255,.14); color:#93c5fd;  border:1px solid rgba(110,168,255,.3); }
-.pill-amarillo { background:rgba(251,191,36,.15);  color:#fbbf24;  border:1px solid rgba(251,191,36,.3); }
-.pill-cyan     { background:rgba(34,211,238,.12);  color:#22d3ee;  border:1px solid rgba(34,211,238,.3); }
-.pill-rojo     { background:rgba(248,113,113,.14); color:#f87171;  border:1px solid rgba(248,113,113,.3); }
-.pill-verde    { background:rgba(52,211,153,.14);  color:#34d399;  border:1px solid rgba(52,211,153,.3); }
-.pill-gris     { background:rgba(255,255,255,.06); color:var(--muted); border:1px solid var(--line); }
+.terc-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  vertical-align: middle;
+}
+.terc-table tbody tr:last-child td { border-bottom: none; }
+.terc-table tbody tr:hover { background: rgba(255,255,255,.025); }
 
-/* ── Botones extra ────────────────────────────────────────────────────────── */
+.terc-td-c     { text-align: center !important; }
+.terc-td-empty { text-align: center; color: var(--muted); padding: 28px 0 !important; font-size: 13px; }
+.terc-obs-cell { max-width: 180px; font-size: 12px; color: var(--muted); }
+
+.terc-td-acciones { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+.terc-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.terc-cat-row td {
+  background: rgba(99,135,255,.06) !important;
+  color: #93c5fd;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 8px 14px !important;
+}
+
+/* Columnas de valores en tabla ingreso */
+.terc-val-ok   { color: #34d399; font-weight: 700; }
+.terc-val-pend { color: var(--muted); }
+.terc-pend-warn{ color: #f59e0b; font-weight: 700; }
+
+/* Logs de ingresos dentro de celda */
+.terc-ing-log {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.terc-ing-log:last-child { border-bottom: none; }
+.terc-ing-num { font-weight: 700; color: var(--muted); font-size: 11px; }
+.terc-ing-falla { color: #f87171; font-style: italic; font-size: 11px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BOTONES EXTRA
+───────────────────────────────────────────────────────────────────────────── */
+.terc-btn-verde {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .2s, transform .15s;
+}
+.terc-btn-verde:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
 .terc-btn-cyan {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  border: none;
   background: linear-gradient(135deg, #0891b2, #06b6d4);
-  color: #fff; border: none; border-radius: 10px;
-  padding: 8px 14px; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: filter .2s;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .2s;
 }
 .terc-btn-cyan:hover { filter: brightness(1.1); }
-.terc-btn-verde {
-  background: linear-gradient(135deg, #059669, #10b981);
-  color: #fff; border: none; border-radius: 10px;
-  padding: 8px 14px; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: filter .2s;
+
+.terc-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .2s;
 }
-.terc-btn-verde:hover { filter: brightness(1.1); }
+.terc-btn-primary { background: linear-gradient(135deg, #4f7cff, #3b5bdb); color: #fff; }
+.terc-btn-primary:hover { filter: brightness(1.1); }
+.terc-btn-verde.terc-btn-sm { padding: 7px 12px; font-size: 12px; }
 
-.terc-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+.terc-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.terc-btn-icon:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.2); }
 
-/* ── Inputs ───────────────────────────────────────────────────────────────── */
-.terc-input {
+.terc-btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.terc-btn-back:hover { background: rgba(255,255,255,.08); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   INPUTS
+───────────────────────────────────────────────────────────────────────────── */
+.terc-inp {
   width: 100%;
   padding: 10px 14px;
   border-radius: 12px;
@@ -297,120 +649,109 @@
   transition: border-color .2s, background .2s;
   box-sizing: border-box;
 }
-.terc-input:focus { border-color: var(--primary); background: rgba(110,168,255,.06); }
+.terc-inp:focus { border-color: #4f7cff; background: rgba(79,124,255,.06); }
+.terc-inp::placeholder { color: rgba(255,255,255,.25); }
 
-.terc-input-num {
-  width: 72px;
+.terc-inp-num {
+  width: 75px;
   padding: 8px 6px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: rgba(255,255,255,.04);
   color: var(--text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   font-family: inherit;
   outline: none;
   text-align: center;
   transition: border-color .2s;
 }
-.terc-input-num:focus { border-color: var(--primary); }
+.terc-inp-num:focus { border-color: #4f7cff; }
+.terc-td-num { text-align: center; }
 
-.terc-input-obs {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(255,255,255,.04);
-  color: var(--text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  box-sizing: border-box;
-}
-.terc-input-obs:focus { border-color: var(--primary); }
-
-.terc-field-row {
+.terc-field {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+}
+.terc-optional { color: var(--muted); font-weight: 400; font-size: 10.5px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   HINT BOX
+───────────────────────────────────────────────────────────────────────────── */
+.terc-hint {
+  padding: 12px 16px;
+  background: rgba(99,135,255,.07);
+  border: 1px solid rgba(99,135,255,.2);
+  border-radius: 12px;
+  font-size: 13px;
+  color: #c5d8ff;
+  line-height: 1.55;
 }
 
-.terc-form-actions {
+/* ─────────────────────────────────────────────────────────────────────────────
+   FORM FOOTER
+───────────────────────────────────────────────────────────────────────────── */
+.terc-form-footer {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 
-/* ── Tabla módulo ─────────────────────────────────────────────────────────── */
-.terc-table       { width: 100%; }
-.terc-center      { text-align: center !important; }
-.terc-obs         { max-width: 180px; font-size: 12px; color: var(--muted); }
-.terc-num {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 8px;
-  background: rgba(255,255,255,.06); font-size: 12px; font-weight: 700;
-}
-.terc-muted       { color: var(--muted); font-size: 12px; }
-.terc-empty       { text-align: center; color: var(--muted); font-size: 14px; padding: 16px 0; }
-.terc-empty-card  {
-  padding: 32px; text-align: center; color: var(--muted); font-size: 14px;
-  border-radius: 18px; border: 1px dashed rgba(255,255,255,.1);
-}
-
-/* ── Tabla encabezados de categoría ──────────────────────────────────────── */
-.terc-cat-header td {
-  background: rgba(110,168,255,.06) !important;
-  color: #93c5fd;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  padding: 8px 14px !important;
-}
-
-/* ── Detalle ──────────────────────────────────────────────────────────────── */
-.terc-detalle-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+/* ─────────────────────────────────────────────────────────────────────────────
+   DETALLE — META GRID
+───────────────────────────────────────────────────────────────────────────── */
 .terc-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 16px;
-  margin-top: 16px;
-  padding: 16px;
-  background: rgba(255,255,255,.02);
+  padding: 18px;
+  background: rgba(255,255,255,.025);
   border-radius: 14px;
   border: 1px solid var(--line);
 }
-.terc-meta-grid > div { font-size: 14px; line-height: 1.5; }
-.terc-meta-grid .terc-label { font-size: 11px; display: block; margin-bottom: 3px; }
+.terc-meta-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.terc-meta-val { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
 
-/* ── Panel de resumen preparación ────────────────────────────────────────── */
-.terc-resumen-prep {
+/* ─────────────────────────────────────────────────────────────────────────────
+   PREPARACIÓN — RESUMEN
+───────────────────────────────────────────────────────────────────────────── */
+.terc-resumen {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   padding: 12px 16px;
   background: rgba(255,255,255,.03);
   border-radius: 12px;
   border: 1px solid var(--line);
   font-size: 13px;
+  font-weight: 600;
 }
 
-/* ── Resumen de salida ────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   SALIDA — RESUMEN DE PRODUCTOS
+───────────────────────────────────────────────────────────────────────────── */
 .terc-salida-resumen {
-  padding: 14px 16px;
+  padding: 16px 18px;
   background: rgba(255,255,255,.03);
   border-radius: 14px;
   border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .terc-salida-item {
   display: flex;
@@ -418,75 +759,77 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
-/* ── Ingresos en detalle ──────────────────────────────────────────────────── */
-.terc-ingreso-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  padding: 4px 0;
-  border-bottom: 1px solid rgba(255,255,255,.04);
-}
-.terc-ingreso-row:last-child { border-bottom: none; }
-.terc-falla { color: #f87171; font-style: italic; font-size: 11px; }
-
-/* ── Historial ────────────────────────────────────────────────────────────── */
-.terc-hist-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 4px;
-}
+/* ─────────────────────────────────────────────────────────────────────────────
+   HISTORIAL
+───────────────────────────────────────────────────────────────────────────── */
+.terc-hist-list { display: flex; flex-direction: column; gap: 10px; }
 .terc-hist-item {
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
   background: rgba(255,255,255,.03);
   border: 1px solid var(--line);
+  border-left: 3px solid rgba(99,135,255,.4);
 }
-.terc-hist-header {
+.terc-hist-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
-.terc-hist-tipo   { font-size: 13px; font-weight: 700; color: var(--primary, #6e93ff); }
-.terc-hist-fecha  { font-size: 12px; color: var(--muted); }
-.terc-hist-detalle{ font-size: 13px; color: var(--muted); }
+.terc-hist-tipo { font-size: 13px; font-weight: 700; color: #93c5fd; }
+.terc-hist-meta { font-size: 12px; color: var(--muted); }
+.terc-hist-detalle { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
-/* ── Utilidades ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   EMPTY STATES
+───────────────────────────────────────────────────────────────────────────── */
+.terc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.terc-empty-icon { font-size: 40px; }
+.terc-empty-inline {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 12px 0;
+}
+.terc-muted { color: var(--muted); font-size: 12px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   UTILIDADES
+───────────────────────────────────────────────────────────────────────────── */
 .mt-20 { margin-top: 20px; }
 
-.dash-badge-orange {
-  background: rgba(251,146,60,.15) !important;
-  color: #fb923c !important;
-  border: 1px solid rgba(251,146,60,.3) !important;
+/* ─────────────────────────────────────────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .terc-header          { flex-direction: column; align-items: flex-start; }
+  .terc-kpis            { grid-template-columns: repeat(2, 1fr); }
+  .terc-cards-grid      { grid-template-columns: 1fr; }
+  .terc-card-actions    { flex-direction: column; }
+  .terc-td-acciones     { flex-direction: column; align-items: flex-start; }
+  .terc-form-footer     { flex-direction: column; }
+  .terc-form-footer .btn,
+  .terc-form-footer .terc-btn-verde { width: 100%; justify-content: center; }
+  .terc-meta-grid       { grid-template-columns: 1fr 1fr; }
+  .terc-salida-item     { flex-direction: column; align-items: flex-start; }
+  .terc-tabs            { flex-direction: column; }
+  .terc-tab             { justify-content: center; }
 }
-
-/* ── Hint box (heredar del sistema si existe, sino propio) ───────────────── */
-.hint-box {
-  padding: 12px 16px;
-  background: rgba(110,168,255,.07);
-  border: 1px solid rgba(110,168,255,.2);
-  border-radius: 12px;
-  font-size: 13px;
-  color: #c5d8ff;
-  line-height: 1.55;
-}
-
-/* ── Responsive ───────────────────────────────────────────────────────────── */
-@media (max-width: 700px) {
-  .terc-kpi-row       { grid-template-columns: repeat(2, 1fr); }
-  .terc-cards-grid    { grid-template-columns: 1fr; }
-  .terc-card-actions  { flex-direction: column; }
-  .terc-acciones      { flex-direction: column; }
-  .terc-topbar        { flex-direction: column; align-items: flex-start; }
-  .terc-salida-item   { flex-direction: column; align-items: flex-start; }
-  .terc-form-actions  { flex-direction: column; }
-  .terc-form-actions .btn { width: 100%; justify-content: center; }
+@media (max-width: 480px) {
+  .terc-kpis    { grid-template-columns: 1fr 1fr; }
+  .terc-meta-grid { grid-template-columns: 1fr; }
 }
