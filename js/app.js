@@ -2211,7 +2211,23 @@ function renderGerenciaExcel() {
       row += `<td class="product-name-cell">${producto.nombre}</td>`;
 
       DAY_GROUPS.forEach((group) => {
-        const rowData = getMergedGroupDataForDay(dayStr, producto.id, group.key);
+        // Para cajaChicaMor y cajaGrandeMor leer datos de los grupos internos de Morón
+        // porque el operativo de Morón carga en moronChicaInterna/moronGrandeInterna
+        const internalKey = group.key === 'cajaChicaMor'  ? 'moronChicaInterna'
+                          : group.key === 'cajaGrandeMor' ? 'moronGrandeInterna'
+                          : group.key;
+        const rawData  = getMergedGroupDataForDay(dayStr, producto.id, internalKey);
+
+        // Adaptar los campos del grupo interno a los campos esperados por DAY_GROUPS
+        // moronChicaInterna: entrada→morPlus, pEmpaq→morMinus, diferencia→dif
+        let rowData = rawData;
+        if (group.key === 'cajaChicaMor' || group.key === 'cajaGrandeMor') {
+          rowData = {
+            morPlus:  num(rawData?.entrada),
+            morMinus: num(rawData?.pEmpaq),
+            dif:      num(rawData?.diferencia),
+          };
+        }
 
         group.columns.forEach((col) => {
           if (col.readonly) {
@@ -2227,12 +2243,6 @@ function renderGerenciaExcel() {
               totalValue = getCajaChicaMoronRunningTotal(dayStr, producto.id, stockInicial);
             } else if (group.key === 'cajaGrandeMor') {
               totalValue = getCajaGrandeMoronRunningTotal(dayStr, producto.id, stockInicial);
-            } else if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
-              if (col.key === 'salidaTotal') {
-                totalValue = computeMoronInternalReadonly(group.key, col.key, rowData || {});
-              } else if (col.key === 'total') {
-                totalValue = getMoronRunningTotal(dayStr, producto.id, group.key, stockInicial);
-              }
             } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
               if (col.key === 'totalSecando') {
                 totalValue = getBanadoSecandoRunningTotal(dayStr, producto.id, group.key, stockInicial);
@@ -3498,53 +3508,53 @@ function ensureMassiveDraft() {
 ========================================================= */
 
 function getTemplateHeaders(fabrica) {
-
+  // Headers con nombres reales del sistema (igual a lo que se ve en pantalla)
   if (fabrica === 'alvear') {
     return [
       'PRODUCTO',
-      'ALV',
-      'ALV_PLUS_CH',
-      'ALV_MINUS_CH',
-      'DIF_CH',
-      'ALV_PLUS_GR',
-      'ALV_MINUS_GR',
-      'DIF_GR'
+      'ALVEAR ENTRADA',         // alvear.alv
+      'CAJA CHICA ALVEAR ENTRADA',  // cajaChica.alvPlus
+      'CAJA CHICA ALVEAR SALIDA',   // cajaChica.alvMinus
+      'CAJA CHICA ALVEAR DIFERENCIA', // cajaChica.dif
+      'CAJA GRANDE ALVEAR ENTRADA', // cajaGrandeAlv.alvPlus
+      'CAJA GRANDE ALVEAR SALIDA',  // cajaGrandeAlv.alvMinus
+      'CAJA GRANDE ALVEAR DIFERENCIA' // cajaGrandeAlv.dif
     ];
   }
 
   if (fabrica === 'banado') {
     return [
       'PRODUCTO',
-      'BANADO_PLUS_CH',
-      'SECANDO_CH',
-      'COSECHA_CH',
-      'SALIDA_CH',
-      'DIF_CH',
-      'BANADO_PLUS_GR',
-      'SECANDO_GR',
-      'COSECHA_GR',
-      'SALIDA_GR',
-      'DIF_GR'
+      'BAÑADO CHICA ENTRADA',   // banadoChica.banadoPlus
+      'BAÑADO CHICA SECANDO',   // banadoChica.secando
+      'BAÑADO CHICA COSECHA',   // banadoChica.cosecha
+      'BAÑADO CHICA SALIDA',    // banadoChica.salida
+      'BAÑADO CHICA DIFERENCIA',// banadoChica.dif
+      'BAÑADO GRANDE ENTRADA',  // banadoGrande.banadoPlus
+      'BAÑADO GRANDE SECANDO',  // banadoGrande.secando
+      'BAÑADO GRANDE COSECHA',  // banadoGrande.cosecha
+      'BAÑADO GRANDE SALIDA',   // banadoGrande.salida
+      'BAÑADO GRANDE DIFERENCIA'// banadoGrande.dif
     ];
   }
 
   if (fabrica === 'moron') {
     return [
       'PRODUCTO',
-      'TOTAL_BASE_CH',
-      'ENTRADA_CH',
-      'SOBRANTE_CH',
-      'P_EMPAQ_CH',
-      'DIFERENCIA_CH',
-      'FALLADOS_CH',
-      'DEVOLUCIONES_CH',
-      'TOTAL_BASE_GR',
-      'ENTRADA_GR',
-      'SOBRANTE_GR',
-      'P_EMPAQ_GR',
-      'DIFERENCIA_GR',
-      'FALLADOS_GR',
-      'DEVOLUCIONES_GR'
+      'CAJA CHICA TOTAL',       // moronChicaInterna.totalBase
+      'CAJA CHICA ENTRADA',     // moronChicaInterna.entrada
+      'CAJA CHICA SOBRANTE',    // moronChicaInterna.sobrante
+      'CAJA CHICA P/EMPAQ',     // moronChicaInterna.pEmpaq
+      'CAJA CHICA DIFERENCIA',  // moronChicaInterna.diferencia
+      'CAJA CHICA FALLADOS',    // moronChicaInterna.fallados
+      'CAJA CHICA DEVOLUCIONES',// moronChicaInterna.devoluciones
+      'CAJA GRANDE TOTAL',      // moronGrandeInterna.totalBase
+      'CAJA GRANDE ENTRADA',    // moronGrandeInterna.entrada
+      'CAJA GRANDE SOBRANTE',   // moronGrandeInterna.sobrante
+      'CAJA GRANDE P/EMPAQ',    // moronGrandeInterna.pEmpaq
+      'CAJA GRANDE DIFERENCIA', // moronGrandeInterna.diferencia
+      'CAJA GRANDE FALLADOS',   // moronGrandeInterna.fallados
+      'CAJA GRANDE DEVOLUCIONES'// moronGrandeInterna.devoluciones
     ];
   }
 
@@ -3650,93 +3660,103 @@ function procesarCargaMasivaExcel() {
       const target = state.reporteActual.rows[targetIndex];
 
       if (fabrica === 'alvear') {
-
-        const idxAlv = findHeader(headers, ['ALV']);
+        const idxAlv = findHeader(headers, ['ALVEAR ENTRADA', 'ALV']);
         if (idxAlv >= 0) target.groups.alvear.alv = numExcel(row[idxAlv]);
 
         target.groups.cajaChica.alvPlus =
-          numExcel(row[findHeader(headers, ['ALV_PLUS_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA ALVEAR ENTRADA', 'ALV_PLUS_CH'])]);
 
         target.groups.cajaChica.alvMinus =
-          numExcel(row[findHeader(headers, ['ALV_MINUS_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA ALVEAR SALIDA', 'ALV_MINUS_CH'])]);
 
         target.groups.cajaChica.dif =
-          numExcel(row[findHeader(headers, ['DIF_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA ALVEAR DIFERENCIA', 'DIF_CH'])]);
 
         target.groups.cajaGrandeAlv.alvPlus =
-          numExcel(row[findHeader(headers, ['ALV_PLUS_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE ALVEAR ENTRADA', 'ALV_PLUS_GR'])]);
 
         target.groups.cajaGrandeAlv.alvMinus =
-          numExcel(row[findHeader(headers, ['ALV_MINUS_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE ALVEAR SALIDA', 'ALV_MINUS_GR'])]);
 
         target.groups.cajaGrandeAlv.dif =
-          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE ALVEAR DIFERENCIA', 'DIF_GR'])]);
       }
 
       if (fabrica === 'banado') {
-
         target.groups.banadoChica.banadoPlus =
-          numExcel(row[findHeader(headers, ['BANADO_PLUS_CH'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO CHICA ENTRADA', 'BANADO_PLUS_CH'])]);
 
         target.groups.banadoChica.secando =
-          numExcel(row[findHeader(headers, ['SECANDO_CH'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO CHICA SECANDO', 'SECANDO_CH'])]);
 
         target.groups.banadoChica.cosecha =
-          numExcel(row[findHeader(headers, ['COSECHA_CH'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO CHICA COSECHA', 'COSECHA_CH'])]);
 
         target.groups.banadoChica.salida =
-          numExcel(row[findHeader(headers, ['SALIDA_CH'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO CHICA SALIDA', 'SALIDA_CH'])]);
 
         target.groups.banadoChica.dif =
-          numExcel(row[findHeader(headers, ['DIF_CH'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO CHICA DIFERENCIA', 'DIF_CH'])]);
 
         target.groups.banadoGrande.banadoPlus =
-          numExcel(row[findHeader(headers, ['BANADO_PLUS_GR'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO GRANDE ENTRADA', 'BANADO_PLUS_GR'])]);
 
         target.groups.banadoGrande.secando =
-          numExcel(row[findHeader(headers, ['SECANDO_GR'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO GRANDE SECANDO', 'SECANDO_GR'])]);
 
         target.groups.banadoGrande.cosecha =
-          numExcel(row[findHeader(headers, ['COSECHA_GR'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO GRANDE COSECHA', 'COSECHA_GR'])]);
 
         target.groups.banadoGrande.salida =
-          numExcel(row[findHeader(headers, ['SALIDA_GR'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO GRANDE SALIDA', 'SALIDA_GR'])]);
 
         target.groups.banadoGrande.dif =
-          numExcel(row[findHeader(headers, ['DIF_GR'])]);
+          numExcel(row[findHeader(headers, ['BAÑADO GRANDE DIFERENCIA', 'DIF_GR'])]);
       }
 
       if (fabrica === 'moron') {
-
+        // Acepta tanto los headers nuevos (nombres reales) como los viejos (códigos)
         target.groups.moronChicaInterna.totalBase =
-          numExcel(row[findHeader(headers, ['TOTAL_BASE_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA TOTAL', 'TOTAL_BASE_CH'])]);
 
         target.groups.moronChicaInterna.entrada =
-          numExcel(row[findHeader(headers, ['ENTRADA_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA ENTRADA', 'ENTRADA_CH'])]);
 
         target.groups.moronChicaInterna.sobrante =
-          numExcel(row[findHeader(headers, ['SOBRANTE_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA SOBRANTE', 'SOBRANTE_CH'])]);
 
         target.groups.moronChicaInterna.pEmpaq =
-          numExcel(row[findHeader(headers, ['P_EMPAQ_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA P/EMPAQ', 'P_EMPAQ_CH'])]);
 
         target.groups.moronChicaInterna.diferencia =
-          numExcel(row[findHeader(headers, ['DIFERENCIA_CH'])]);
+          numExcel(row[findHeader(headers, ['CAJA CHICA DIFERENCIA', 'DIFERENCIA_CH'])]);
+
+        target.groups.moronChicaInterna.fallados =
+          numExcel(row[findHeader(headers, ['CAJA CHICA FALLADOS', 'FALLADOS_CH'])]);
+
+        target.groups.moronChicaInterna.devoluciones =
+          numExcel(row[findHeader(headers, ['CAJA CHICA DEVOLUCIONES', 'DEVOLUCIONES_CH'])]);
 
         target.groups.moronGrandeInterna.totalBase =
-          numExcel(row[findHeader(headers, ['TOTAL_BASE_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE TOTAL', 'TOTAL_BASE_GR'])]);
 
         target.groups.moronGrandeInterna.entrada =
-          numExcel(row[findHeader(headers, ['ENTRADA_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE ENTRADA', 'ENTRADA_GR'])]);
 
         target.groups.moronGrandeInterna.sobrante =
-          numExcel(row[findHeader(headers, ['SOBRANTE_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE SOBRANTE', 'SOBRANTE_GR'])]);
 
         target.groups.moronGrandeInterna.pEmpaq =
-          numExcel(row[findHeader(headers, ['P_EMPAQ_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE P/EMPAQ', 'P_EMPAQ_GR'])]);
 
         target.groups.moronGrandeInterna.diferencia =
-          numExcel(row[findHeader(headers, ['DIFERENCIA_GR'])]);
+          numExcel(row[findHeader(headers, ['CAJA GRANDE DIFERENCIA', 'DIFERENCIA_GR'])]);
+
+        target.groups.moronGrandeInterna.fallados =
+          numExcel(row[findHeader(headers, ['CAJA GRANDE FALLADOS', 'FALLADOS_GR'])]);
+
+        target.groups.moronGrandeInterna.devoluciones =
+          numExcel(row[findHeader(headers, ['CAJA GRANDE DEVOLUCIONES', 'DEVOLUCIONES_GR'])]);
       }
 
       cargados++;
