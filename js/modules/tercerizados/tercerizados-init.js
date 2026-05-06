@@ -1,7 +1,16 @@
 /**
- * tercerizados-init.js — v5
- * FIX: busca #nav-tercerizados (ahora con ID correcto en HTML)
- * + retry para evitar race condition con app.js
+ * ============================================================
+ *  tercerizados-init.js  — v6 DEFINITIVO
+ *  js/modules/tercerizados/tercerizados-init.js
+ *
+ *  FIXES v6:
+ *  - ROLES corregidos: incluye TODOS los que usa tercerizados.js
+ *  - NO llama reset() cuando el rol no está en la lista
+ *    (evita interferir con el login de app.js)
+ *  - Sin setTimeouts múltiples que causaban race conditions
+ *  - mostrarNav con un solo delay de 500ms para respetar
+ *    que app.js termine su inicialización primero
+ * ============================================================
  */
 
 import { auth, db } from '../../firebase-config.js';
@@ -9,80 +18,97 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/f
 import { collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { initTercerizados, destroyTercerizados } from './tercerizados.js';
 
-const ROLES_PERMITIDOS = ['moron', 'control_calidad', 'gerencia'];
+// ← Todos los roles que maneja tercerizados.js
+const ROLES = ['moron', 'planificacion', 'control_calidad', 'tercerizado', 'gerencia'];
 
 let perfilActual = null;
 let moduloActivo = false;
 let observer     = null;
 
+// ─── Leer perfil desde Firestore ─────────────────────────────────────────────
 async function fetchPerfil(email) {
   try {
-    const snap = await getDocs(query(collection(db, 'usuarios'), where('email', '==', email)));
+    const snap = await getDocs(
+      query(collection(db, 'usuarios'), where('email', '==', email))
+    );
     if (snap.empty) return null;
-    return { id: snap.docs[0].id, ...snap.docs[0].data() };
-  } catch (e) { return null; }
-}
-
-function mostrarNav(visible) {
-  const btn = document.getElementById('nav-tercerizados');
-  if (!btn) return;
-  if (visible) {
-    btn.style.display = 'block';
-    btn.classList.remove('hidden');
-  } else {
-    btn.style.display = 'none';
+    const d = snap.docs[0];
+    return { id: d.id, uid: d.id, ...d.data() };
+  } catch (e) {
+    console.error('[TercInit] fetchPerfil:', e);
+    return null;
   }
 }
 
-function arrancarModulo() {
+// ─── Mostrar / ocultar nav ───────────────────────────────────────────────────
+function mostrarNav(visible) {
+  const btn = document.getElementById('nav-tercerizados');
+  if (!btn) return;
+  btn.style.display = visible ? '' : 'none';
+}
+
+// ─── Arrancar / detener módulo ───────────────────────────────────────────────
+function arrancar() {
   if (moduloActivo || !perfilActual) return;
   moduloActivo = true;
   initTercerizados(perfilActual);
 }
 
-function detenerModulo() {
+function detener() {
   if (!moduloActivo) return;
   moduloActivo = false;
   destroyTercerizados();
 }
 
+// ─── Observar sección ────────────────────────────────────────────────────────
 function observarSeccion() {
-  const seccion = document.getElementById('section-tercerizados');
-  if (!seccion) return;
+  const sec = document.getElementById('section-tercerizados');
+  if (!sec) return;
+
   if (observer) { observer.disconnect(); observer = null; }
 
   observer = new MutationObserver(() => {
-    const activa = seccion.classList.contains('active');
-    if (activa && !moduloActivo) arrancarModulo();
-    else if (!activa && moduloActivo) detenerModulo();
+    const activa = sec.classList.contains('active');
+    if (activa && !moduloActivo) arrancar();
+    else if (!activa && moduloActivo) detener();
   });
 
-  observer.observe(seccion, { attributes: true, attributeFilter: ['class'] });
-  if (seccion.classList.contains('active')) arrancarModulo();
+  observer.observe(sec, { attributes: true, attributeFilter: ['class'] });
+
+  // Por si ya está activa al momento de inicializar
+  if (sec.classList.contains('active')) arrancar();
 }
 
-function resetTodo() {
-  detenerModulo();
+// ─── Reset al cerrar sesión ──────────────────────────────────────────────────
+function reset() {
+  detener();
   if (observer) { observer.disconnect(); observer = null; }
   perfilActual = null;
   mostrarNav(false);
 }
 
+// ─── Bootstrap ───────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { resetTodo(); return; }
+  if (!user) {
+    reset();
+    return;
+  }
 
   const perfil = await fetchPerfil(user.email);
-  if (!perfil || perfil.activo === false || !ROLES_PERMITIDOS.includes(perfil.rol)) {
-    resetTodo();
+
+  // Rol no permitido → solo ocultar nav, NO llamar reset()
+  // para no interferir con el onAuthStateChanged de app.js
+  if (!perfil || perfil.activo === false || !ROLES.includes(perfil.rol)) {
+    mostrarNav(false);
     return;
   }
 
   perfilActual = perfil;
 
-  // Mostrar nav inmediatamente y reintentar varias veces
-  // para evitar que app.js lo oculte con applyRoleUI
-  mostrarNav(true);
-  [100, 300, 600, 1000, 1800].forEach(ms => setTimeout(() => mostrarNav(true), ms));
-
-  observarSeccion();
+  // Esperar que app.js termine su propia inicialización (refreshAll, etc.)
+  // antes de mostrar el nav y observar la sección
+  setTimeout(() => {
+    mostrarNav(true);
+    observarSeccion();
+  }, 500);
 });
