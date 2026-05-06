@@ -833,3 +833,183 @@
   .terc-kpis    { grid-template-columns: 1fr 1fr; }
   .terc-meta-grid { grid-template-columns: 1fr; }
 }
+
+/* =====================================================
+   CLASES NUEVAS — v3
+===================================================== */
+
+/* Timestamps registro tercerizado */
+.terc-ts-registro {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  background: rgba(45,212,191,.08);
+  border: 1px solid rgba(45,212,191,.2);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.terc-ts-label { color: var(--muted); font-weight: 600; }
+.terc-ts-val   { color: #2dd4bf; font-weight: 700; }
+
+/* Botón naranja (check Morón) */
+.terc-btn-orange {
+  background: rgba(251,146,60,.18);
+  border: 1px solid rgba(251,146,60,.4);
+  color: #fb923c;
+  border-radius: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: .15s ease;
+  white-space: nowrap;
+}
+.terc-btn-orange:hover { background: rgba(251,146,60,.28); }
+
+/* Botón grande */
+.terc-btn-lg {
+  min-width: 220px;
+  font-size: 15px;
+  padding: 14px 28px;
+}
+
+/* Fila con falla (rojo suave) */
+.terc-fila-falla td { background: rgba(248,113,113,.06) !important; }
+
+/* Grid formulario */
+.terc-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 700px) { .terc-form-grid { grid-template-columns: 1fr; } }
+
+/* Info salida al tercerizado */
+.terc-salida-info {
+  padding: 16px;
+  background: rgba(110,168,255,.06);
+  border: 1px solid rgba(110,168,255,.18);
+  border-radius: 14px;
+}
+.terc-salida-tercerizado {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.terc-salida-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 13px;
+}
+.terc-salida-item:last-child { border-bottom: none; }
+
+/* Check lock */
+.terc-check-lock {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+/* Hint pequeño */
+.terc-hint-small {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.terc-hint-small code {
+  background: rgba(255,255,255,.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+/* Requerido / opcional */
+.terc-req { color: #f87171; }
+.terc-opt { color: var(--muted); font-size: 12px; }
+
+/* Meta grid */
+.terc-meta-item {
+  padding: 10px 14px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.terc-meta-lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .05em; }
+.terc-meta-val { font-size: 14px; font-weight: 600; color: var(--text); }
+
+/* Sección mini */
+.terc-section-mini {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Nombre de producto en tabla */
+.terc-prod-nombre {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Label de categoría en tabla */
+.terc-cat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* Empty inline */
+.terc-empty-inline {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Badge count naranja */
+.terc-count-badge-naranja {
+  background: rgba(251,146,60,.18);
+  color: #fb923c;
+  border: 1px solid rgba(251,146,60,.3);
+}
+
+/* Alertas variantes */
+.terc-alerta-cq {
+  background: rgba(110,168,255,.08);
+  border-color: rgba(110,168,255,.25);
+}
+.terc-alerta-ok {
+  background: rgba(52,211,153,.08);
+  border-color: rgba(52,211,153,.25);
+}
+
+/* Chip simple (sin clases extra) */
+.terc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,.1);
+}
+
+/* Estado badges extra */
+.est-purple   { background: rgba(167,139,250,.14); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
+.est-verde-cl { background: rgba(52,211,153,.12);  color: #34d399; border: 1px solid rgba(52,211,153,.3); }
+
+/* Diferencia ingreso */
+.terc-ing-diff { min-height: 16px; margin-top: 3px; text-align: center; }
