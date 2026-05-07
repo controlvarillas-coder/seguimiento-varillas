@@ -1,13 +1,10 @@
 /**
- * ============================================================
- *  tercerizados-init.js  — v7 definitivo
- *  js/modules/tercerizados/tercerizados-init.js
+ * tercerizados-init.js — v7
  *
- *  FIX v7: mostrarNav usaba display='' que devolvía el control
- *  al CSS que tiene #nav-tercerizados { display:none }
- *  → el botón quedaba oculto igual.
- *  Corrección: display='block' cuando visible=true.
- * ============================================================
+ * FIXES:
+ * - ROLES incluye todos los que usa el módulo
+ * - mostrarNav usa display='block' (no '' que devuelve control al CSS display:none)
+ * - Cuando rol no está en lista NO llama resetTodo() para no interferir con app.js
  */
 
 import { auth, db } from '../../firebase-config.js';
@@ -38,8 +35,9 @@ async function fetchPerfil(email) {
 function mostrarNav(visible) {
   const btn = document.getElementById('nav-tercerizados');
   if (!btn) return;
-  // ← CRÍTICO: usar 'block' y no '' para sobreescribir el CSS display:none
+  // 'block' sobreescribe el CSS display:none del archivo tercerizados.css
   btn.style.display = visible ? 'block' : 'none';
+  if (visible) btn.classList.remove('hidden');
 }
 
 function arrancar() {
@@ -81,6 +79,8 @@ onAuthStateChanged(auth, async (user) => {
 
   const perfil = await fetchPerfil(user.email);
 
+  // Rol no permitido → solo ocultar nav, NO resetear nada más
+  // (para no interferir con el onAuthStateChanged de app.js)
   if (!perfil || perfil.activo === false || !ROLES.includes(perfil.rol)) {
     mostrarNav(false);
     return;
@@ -88,9 +88,9 @@ onAuthStateChanged(auth, async (user) => {
 
   perfilActual = perfil;
 
-  // Esperar que app.js termine su refreshAll() antes de mostrar el nav
+  // Esperar que app.js termine su refreshAll antes de mostrar el nav
   setTimeout(() => {
     mostrarNav(true);
     observarSeccion();
-  }, 500);
+  }, 800);
 });
