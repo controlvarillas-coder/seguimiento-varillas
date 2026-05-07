@@ -555,35 +555,20 @@ function renderListaTercerizado() {
 
 /* ─── NUEVO PEDIDO ─────────────────────────────────────────────────────────── */
 
+// Contador para IDs únicos de renglones
+let _rengIdx = 0;
+
 function renderNuevo() {
   const c = $('terc-content');
   if (!c) return;
 
-  const cats  = [...new Set(M.productos.map(p => p.categoria || 'Sin categoría'))].sort();
-  const optTerc = M.tercerizados.length
-    ? M.tercerizados.map(u => `<option value="${u.email}" data-nombre="${u.nombre||u.email}">${u.nombre||u.email}</option>`).join('')
-    : `<option value="">— Sin tercerizados cargados —</option>`;
+  _rengIdx = 0;
 
-  const filas = cats.map(cat => {
-    const prods = M.productos.filter(p => (p.categoria || 'Sin categoría') === cat);
-    return `
-      <tr class="terc-cat-row"><td colspan="3"><span class="terc-cat-label">📂 ${cat}</span></td></tr>
-      ${prods.map(p => `
-        <tr>
-          <td class="terc-prod-nombre">${p.nombre || p.id}</td>
-          <td style="width:130px;">
-            <input type="number" min="0" step="0.1"
-              class="terc-inp-num terc-reng-cant"
-              data-id="${p.id}"
-              data-nombre="${(p.nombre||p.id).replace(/"/g,'&quot;')}"
-              placeholder="0" />
-          </td>
-          <td>
-            <input type="text" class="terc-inp terc-reng-obs"
-              data-id="${p.id}" placeholder="Observación del renglón…" />
-          </td>
-        </tr>`).join('')}`;
-  }).join('');
+  const optTerc = M.tercerizados.length
+    ? M.tercerizados.map(u =>
+        `<option value="${u.email}" data-nombre="${(u.nombre||u.email).replace(/"/g,'&quot;')}">${u.nombre||u.email}</option>`
+      ).join('')
+    : `<option value="">— Sin tercerizados cargados —</option>`;
 
   c.innerHTML = `
     <div class="terc-panel">
@@ -601,9 +586,9 @@ function renderNuevo() {
             </select>
             ${M.tercerizados.length === 0 ? `
               <div class="terc-hint-small">
-                💡 Para agregar tercerizados: en Firestore → colección "usuarios" → nuevo doc con
+                💡 Para agregar tercerizados: Firestore → colección "usuarios" → nuevo documento con
                 <code>rol: "tercerizado"</code>, <code>activo: true</code>, <code>email</code> y <code>nombre</code>.
-                Luego en Firebase Auth creá el usuario con ese email.
+                Luego en Firebase Auth creá el usuario con ese email y contraseña.
               </div>` : ''}
           </div>
           <div class="terc-field">
@@ -613,20 +598,31 @@ function renderNuevo() {
           </div>
         </div>
 
-        <div class="terc-hint" style="margin-top:16px;">
-          💡 Completá solo los renglones con cantidad mayor a 0. Los vacíos se ignoran automáticamente.
+        <div class="terc-np-header">
+          <div class="terc-lbl" style="font-size:13px;">Renglones del pedido</div>
+          <button type="button" id="terc-btn-add-reng" class="btn btn-outline terc-btn-add">
+            ➕ Agregar renglón
+          </button>
         </div>
 
-        <div class="terc-table-wrap" style="margin-top:16px;">
-          <table class="terc-table">
+        <div class="terc-hint" style="margin-bottom:14px;">
+          Agregá los ítems o materias primas que necesitás que el tercerizado prepare.
+          Podés agregar tantos renglones como necesites.
+        </div>
+
+        <div class="terc-table-wrap">
+          <table class="terc-table terc-np-table">
             <thead>
               <tr>
-                <th>Materia prima / Ítem</th>
-                <th style="width:130px;text-align:center;">Cantidad</th>
-                <th>Observación del renglón</th>
+                <th style="width:36px;">#</th>
+                <th>Descripción del ítem / materia prima</th>
+                <th style="width:120px;text-align:center;">Cantidad</th>
+                <th style="width:180px;">Unidad</th>
+                <th>Observación</th>
+                <th style="width:44px;"></th>
               </tr>
             </thead>
-            <tbody>${filas}</tbody>
+            <tbody id="terc-renglones-body"></tbody>
           </table>
         </div>
 
@@ -638,8 +634,71 @@ function renderNuevo() {
     </div>
   `;
 
+  // Agregar 3 renglones vacíos iniciales
+  agregarRenglon();
+  agregarRenglon();
+  agregarRenglon();
+
+  $('terc-btn-add-reng')?.addEventListener('click', agregarRenglon);
   $('terc-btn-cancelar')?.addEventListener('click', () => { M.vista='lista'; renderLista(); });
   $('terc-btn-guardar')?.addEventListener('click', guardarPedido);
+}
+
+function agregarRenglon() {
+  const tbody = $('terc-renglones-body');
+  if (!tbody) return;
+
+  const idx = _rengIdx++;
+  const num = tbody.rows.length + 1;
+
+  const tr = document.createElement('tr');
+  tr.dataset.rengIdx = idx;
+  tr.innerHTML = `
+    <td class="terc-td-c terc-reng-num">${num}</td>
+    <td>
+      <input type="text"
+        class="terc-inp terc-reng-desc"
+        data-idx="${idx}"
+        placeholder="Ej: Varilla 6mm cortada, Tubo 1 pulgada…" />
+    </td>
+    <td>
+      <input type="number" min="0" step="0.01"
+        class="terc-inp-num terc-reng-cant"
+        data-idx="${idx}"
+        placeholder="0" />
+    </td>
+    <td>
+      <input type="text"
+        class="terc-inp terc-reng-unidad"
+        data-idx="${idx}"
+        placeholder="piezas, kg, m…" />
+    </td>
+    <td>
+      <input type="text"
+        class="terc-inp terc-reng-obs"
+        data-idx="${idx}"
+        placeholder="Observación…" />
+    </td>
+    <td class="terc-td-c">
+      <button type="button" class="terc-btn-del-reng" data-idx="${idx}" title="Eliminar renglón">✕</button>
+    </td>
+  `;
+
+  tr.querySelector('.terc-btn-del-reng').addEventListener('click', () => {
+    tr.remove();
+    renumerarRenglones();
+  });
+
+  tbody.appendChild(tr);
+}
+
+function renumerarRenglones() {
+  const tbody = $('terc-renglones-body');
+  if (!tbody) return;
+  [...tbody.rows].forEach((tr, i) => {
+    const num = tr.querySelector('.terc-reng-num');
+    if (num) num.textContent = i + 1;
+  });
 }
 
 async function guardarPedido() {
@@ -656,27 +715,34 @@ async function guardarPedido() {
       return;
     }
 
+    // Leer renglones de la tabla dinámica
     const renglones = [];
-    $$('.terc-reng-cant').forEach(inp => {
-      const cant = parseFloat(inp.value) || 0;
-      if (cant <= 0) return;
-      const obs = document.querySelector(`.terc-reng-obs[data-id="${inp.dataset.id}"]`);
-      renglones.push({
-        item_id:     inp.dataset.id,
-        item_nombre: inp.dataset.nombre,
-        cantidad:    cant,
-        observacion: obs?.value?.trim() || '',
-        check_moron:            false,
-        check_validador:        false,
-        fecha_check_moron:      null,
-        fecha_check_validador:  null,
-        usuario_check_moron:    null,
-        usuario_check_validador:null,
+    const tbody = $('terc-renglones-body');
+    if (tbody) {
+      [...tbody.rows].forEach((tr, i) => {
+        const desc  = tr.querySelector('.terc-reng-desc')?.value?.trim()   || '';
+        const cant  = parseFloat(tr.querySelector('.terc-reng-cant')?.value) || 0;
+        const unidad= tr.querySelector('.terc-reng-unidad')?.value?.trim() || '';
+        const obs   = tr.querySelector('.terc-reng-obs')?.value?.trim()    || '';
+        if (!desc) return; // ignorar renglones sin descripción
+        renglones.push({
+          item_id:                `reng_${Date.now()}_${i}`,
+          item_nombre:            desc,
+          cantidad:               cant,
+          unidad,
+          observacion:            obs,
+          check_moron:            false,
+          check_validador:        false,
+          fecha_check_moron:      null,
+          fecha_check_validador:  null,
+          usuario_check_moron:    null,
+          usuario_check_validador:null,
+        });
       });
-    });
+    }
 
     if (!renglones.length) {
-      toast('Cargá al menos un renglón con cantidad > 0.', 'error');
+      toast('Agregá al menos un renglón con descripción.', 'error');
       if (btn) { btn.disabled=false; btn.textContent='💾 Guardar pedido'; }
       return;
     }
