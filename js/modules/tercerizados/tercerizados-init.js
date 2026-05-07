@@ -1,15 +1,22 @@
 /**
  * ============================================================
- *  tercerizados-init.js  — v6 DEFINITIVO
+ *  tercerizados-init.js  — v6 definitivo
  *  js/modules/tercerizados/tercerizados-init.js
  *
+ *  ROLES con acceso:
+ *    moron           → crear · checks armado · enviar · ingreso
+ *    control_calidad → checks validador
+ *    planificacion   → checks validador
+ *    tercerizado     → recibir · entregar
+ *    gerencia        → todo + reporte fallas
+ *
  *  FIXES v6:
- *  - ROLES corregidos: incluye TODOS los que usa tercerizados.js
- *  - NO llama reset() cuando el rol no está en la lista
- *    (evita interferir con el login de app.js)
- *  - Sin setTimeouts múltiples que causaban race conditions
- *  - mostrarNav con un solo delay de 500ms para respetar
- *    que app.js termine su inicialización primero
+ *    - ROLES incluye todos los que usa tercerizados.js
+ *    - Cuando el rol no está en la lista NO llama reset()
+ *      → evita interferir con onAuthStateChanged de app.js
+ *    - Sin setTimeouts múltiples (race condition)
+ *    - Un único setTimeout(500ms) para esperar que app.js
+ *      termine refreshAll() antes de mostrar el nav
  * ============================================================
  */
 
@@ -18,7 +25,6 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/f
 import { collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { initTercerizados, destroyTercerizados } from './tercerizados.js';
 
-// ← Todos los roles que maneja tercerizados.js
 const ROLES = ['moron', 'planificacion', 'control_calidad', 'tercerizado', 'gerencia'];
 
 let perfilActual = null;
@@ -60,11 +66,10 @@ function detener() {
   destroyTercerizados();
 }
 
-// ─── Observar sección ────────────────────────────────────────────────────────
+// ─── Observar cuando app.js activa la sección ────────────────────────────────
 function observarSeccion() {
   const sec = document.getElementById('section-tercerizados');
   if (!sec) return;
-
   if (observer) { observer.disconnect(); observer = null; }
 
   observer = new MutationObserver(() => {
@@ -75,11 +80,11 @@ function observarSeccion() {
 
   observer.observe(sec, { attributes: true, attributeFilter: ['class'] });
 
-  // Por si ya está activa al momento de inicializar
+  // por si la sección ya está activa al momento de inicializar
   if (sec.classList.contains('active')) arrancar();
 }
 
-// ─── Reset al cerrar sesión ──────────────────────────────────────────────────
+// ─── Reset completo al cerrar sesión ─────────────────────────────────────────
 function reset() {
   detener();
   if (observer) { observer.disconnect(); observer = null; }
@@ -96,8 +101,8 @@ onAuthStateChanged(auth, async (user) => {
 
   const perfil = await fetchPerfil(user.email);
 
-  // Rol no permitido → solo ocultar nav, NO llamar reset()
-  // para no interferir con el onAuthStateChanged de app.js
+  // Rol no permitido → solo ocultar nav
+  // NO llamar reset() para no interferir con app.js
   if (!perfil || perfil.activo === false || !ROLES.includes(perfil.rol)) {
     mostrarNav(false);
     return;
@@ -105,8 +110,7 @@ onAuthStateChanged(auth, async (user) => {
 
   perfilActual = perfil;
 
-  // Esperar que app.js termine su propia inicialización (refreshAll, etc.)
-  // antes de mostrar el nav y observar la sección
+  // Esperar que app.js termine su refreshAll() antes de mostrar el nav
   setTimeout(() => {
     mostrarNav(true);
     observarSeccion();
