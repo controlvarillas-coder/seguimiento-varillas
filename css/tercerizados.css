@@ -1013,3 +1013,50 @@
 
 /* Diferencia ingreso */
 .terc-ing-diff { min-height: 16px; margin-top: 3px; text-align: center; }
+
+/* ─── NUEVO PEDIDO — renglones dinámicos ──────────────────── */
+.terc-np-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.terc-btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 10px;
+}
+.terc-np-table .terc-inp {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+.terc-np-table .terc-inp-num {
+  width: 80px;
+  font-size: 13px;
+}
+.terc-btn-del-reng {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: rgba(248,113,113,.15);
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.terc-btn-del-reng:hover {
+  background: rgba(248,113,113,.3);
+}
