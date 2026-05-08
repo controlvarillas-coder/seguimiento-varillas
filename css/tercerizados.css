@@ -1060,3 +1060,124 @@
 .terc-btn-del-reng:hover {
   background: rgba(248,113,113,.3);
 }
+
+/* ─── VISTA TERCERIZADO — tarjetas con renglones ──────────── */
+.terc-terc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.terc-terc-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.terc-terc-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+}
+.terc-terc-card-recibir::before {
+  background: linear-gradient(90deg, #4f7cff, #22d3ee);
+}
+.terc-terc-card-entregar::before {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.terc-terc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.terc-terc-card-fecha {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.terc-terc-card-obs {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* Tabla de renglones dentro de la card */
+.terc-terc-renglones {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
+}
+.terc-terc-renglones-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.terc-terc-table {
+  background: transparent;
+}
+.terc-terc-table th {
+  background: rgba(255,255,255,.03);
+  font-size: 11px;
+}
+.terc-terc-table td {
+  padding: 10px 12px;
+  font-size: 13.5px;
+}
+.terc-terc-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.terc-terc-table tbody tr:hover {
+  background: rgba(255,255,255,.03);
+}
+
+/* Timestamps recibido/entregado */
+.terc-ts-registro {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(52,211,153,.04);
+}
+.terc-ts-label {
+  font-weight: 700;
+  color: #34d399;
+  white-space: nowrap;
+}
+.terc-ts-val {
+  color: var(--muted);
+}
+
+/* Botón de acción principal */
+.terc-terc-card-footer {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+.terc-terc-btn-accion {
+  min-width: 240px;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 13px 24px;
+  letter-spacing: .02em;
+}
+
+@media (max-width: 600px) {
+  .terc-terc-card-footer { justify-content: stretch; }
+  .terc-terc-btn-accion  { width: 100%; }
+}
