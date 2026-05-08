@@ -471,86 +471,180 @@ function renderListaTercerizado() {
   const c = $('terc-content');
   if (!c) return;
 
-  const miEmail = M.perfil.email;
-  const misPed  = M.pedidos.filter(p => p.tercerizado_email === miEmail);
-  const activos  = misPed.filter(p => !['cerrado','con_fallas'].includes(p.estado));
-  const cerrados = misPed.filter(p => ['cerrado','con_fallas'].includes(p.estado));
+  const miEmail   = M.perfil.email;
+  const misPed    = M.pedidos.filter(p => p.tercerizado_email === miEmail);
+
+  // Solo los dos estados relevantes para el tercerizado
+  const paraRecibir  = misPed.filter(p => p.estado === 'enviado_tercerizado');
+  const paraEntregar = misPed.filter(p => p.estado === 'recibido_tercerizado');
+  const cerrados     = misPed.filter(p => ['cerrado','con_fallas','entregado_tercerizado'].includes(p.estado));
 
   c.innerHTML = `
-    <div class="terc-kpis">
-      ${kpi(misPed.filter(p=>p.estado==='enviado_tercerizado').length,  'Para recibir','📬','kpi-azul')}
-      ${kpi(misPed.filter(p=>p.estado==='recibido_tercerizado').length, 'En proceso',  '📦','kpi-cyan')}
-      ${kpi(cerrados.length, 'Entregados','✅','kpi-verde')}
-    </div>
 
+    <!-- Banner si hay algo pendiente -->
+    ${paraRecibir.length > 0 ? `
+    <div class="terc-alerta-banner">
+      <div class="terc-alerta-icon">📬</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">Tenés ${paraRecibir.length} pedido${paraRecibir.length>1?'s':''} listo${paraRecibir.length>1?'s':''} para recibir</div>
+        <div class="terc-alerta-sub">Confirmá la recepción cuando retires el material.</div>
+      </div>
+    </div>` : ''}
+
+    ${paraEntregar.length > 0 ? `
+    <div class="terc-alerta-banner" style="background:rgba(52,211,153,.07);border-color:rgba(52,211,153,.3);">
+      <div class="terc-alerta-icon">📦</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">Tenés ${paraEntregar.length} pedido${paraEntregar.length>1?'s':''} para entregar a Morón</div>
+        <div class="terc-alerta-sub">Confirmá la entrega cuando devolvás el trabajo terminado.</div>
+      </div>
+    </div>` : ''}
+
+    ${paraRecibir.length === 0 && paraEntregar.length === 0 ? `
+    <div class="terc-alerta-banner" style="background:rgba(255,255,255,.03);border-color:var(--line);">
+      <div class="terc-alerta-icon">✅</div>
+      <div class="terc-alerta-body">
+        <div class="terc-alerta-titulo">Sin pedidos pendientes</div>
+        <div class="terc-alerta-sub">Cuando Morón te asigne un pedido aparecerá acá.</div>
+      </div>
+    </div>` : ''}
+
+    <!-- SECCIÓN: Para recibir -->
+    ${paraRecibir.length > 0 ? `
     <div class="terc-section-title">
-      <span>Mis pedidos activos</span>
-      <span class="terc-count-badge">${activos.length}</span>
+      <span>📬 Para recibir</span>
+      <span class="terc-count-badge terc-count-badge-naranja">${paraRecibir.length}</span>
     </div>
+    <div class="terc-terc-list" id="terc-lista-recibir"></div>
+    ` : ''}
 
-    ${activos.length === 0
-      ? `<div class="terc-empty-state"><div class="terc-empty-icon">📭</div><div>No tenés pedidos activos.</div></div>`
-      : `<div class="terc-cards-grid" id="terc-cards-terc"></div>`}
+    <!-- SECCIÓN: Para entregar -->
+    ${paraEntregar.length > 0 ? `
+    <div class="terc-section-title" style="margin-top:${paraRecibir.length>0?'32px':'0'};">
+      <span>📦 Para entregar a Morón</span>
+      <span class="terc-count-badge" style="background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3);color:#34d399;">${paraEntregar.length}</span>
+    </div>
+    <div class="terc-terc-list" id="terc-lista-entregar"></div>
+    ` : ''}
 
+    <!-- SECCIÓN: Historial -->
     <div class="terc-section-title" style="margin-top:32px;">
       <span>Historial</span>
       <span class="terc-count-badge">${cerrados.length}</span>
     </div>
-    <div class="terc-panel"><div class="terc-table-wrap">
-      <table class="terc-table">
-        <thead><tr><th>Fecha</th><th>Renglones</th><th>Recibido</th><th>Entregado</th><th></th></tr></thead>
-        <tbody id="terc-tbody-terc"></tbody>
-      </table>
-    </div></div>
+    <div class="terc-panel">
+      <div class="terc-table-wrap">
+        <table class="terc-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Renglones</th>
+              <th>Recibido</th>
+              <th>Entregado</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="terc-tbody-hist"></tbody>
+        </table>
+      </div>
+    </div>
   `;
 
-  if (activos.length) {
-    const grid = $('terc-cards-terc');
-    grid.innerHTML = activos.map(p => {
-      const esEnviado   = p.estado === 'enviado_tercerizado';
-      const esRecibido  = p.estado === 'recibido_tercerizado';
-      const btns = [];
-      if (esEnviado)  btns.push(`<button class="btn btn-primary terc-card-btn" data-accion="terc_recibir" data-id="${p.id}">📬 RECIBIDO</button>`);
-      if (esRecibido) btns.push(`<button class="btn terc-btn-verde terc-card-btn" data-accion="terc_entregar" data-id="${p.id}">📦 ENTREGADO A MORÓN</button>`);
-      btns.push(`<button class="btn btn-outline terc-card-btn" data-accion="ver" data-id="${p.id}">👁 Ver</button>`);
-
-      return `
-        <div class="terc-card ${esEnviado ? 'terc-card-urgente' : ''}">
-          <div class="terc-card-head">
-            <div>
-              <div class="terc-card-fecha">📅 ${fmtFecha(p.fecha_creacion)}</div>
-              <div class="terc-card-sub">${(p.renglones||[]).length} renglone${(p.renglones||[]).length===1?'':'s'}</div>
-            </div>
-            ${badge(p.estado)}
-          </div>
-          ${p.fecha_recibido ? `
-            <div class="terc-ts-registro">
-              <span class="terc-ts-label">📬 Recibido:</span>
-              <span class="terc-ts-val">${p.fecha_recibido}</span>
-            </div>` : ''}
-          ${p.fecha_entregado ? `
-            <div class="terc-ts-registro">
-              <span class="terc-ts-label">📦 Entregado:</span>
-              <span class="terc-ts-val">${p.fecha_entregado}</span>
-            </div>` : ''}
-          ${p.observacion_general ? `<div class="terc-card-obs">📝 ${p.observacion_general}</div>` : ''}
-          <div class="terc-card-actions">${btns.join('')}</div>
-        </div>`;
-    }).join('');
-    $$('[data-accion]', grid).forEach(b => b.addEventListener('click', () => irDetalle(b.dataset.id, b.dataset.accion)));
+  // Renderizar pedidos para recibir
+  const listaRecibir = $('terc-lista-recibir');
+  if (listaRecibir) {
+    listaRecibir.innerHTML = paraRecibir.map(p => cardTercerizado(p, 'recibir')).join('');
+    $$('[data-accion]', listaRecibir).forEach(b =>
+      b.addEventListener('click', () => irDetalle(b.dataset.id, b.dataset.accion)));
   }
 
-  const tbody = $('terc-tbody-terc');
-  tbody.innerHTML = cerrados.length
-    ? cerrados.map(p => `<tr>
-        <td>${fmtFecha(p.fecha_creacion)}</td>
-        <td>${(p.renglones||[]).length}</td>
-        <td style="font-size:12px;">${p.fecha_recibido || '—'}</td>
-        <td style="font-size:12px;">${p.fecha_entregado || '—'}</td>
-        <td><button class="terc-btn-icon" data-accion="ver" data-id="${p.id}">👁</button></td>
-      </tr>`).join('')
-    : `<tr><td colspan="5" class="terc-td-empty">Sin historial.</td></tr>`;
-  $$('[data-accion]', tbody).forEach(b => b.addEventListener('click', () => irDetalle(b.dataset.id, 'ver')));
+  // Renderizar pedidos para entregar
+  const listaEntregar = $('terc-lista-entregar');
+  if (listaEntregar) {
+    listaEntregar.innerHTML = paraEntregar.map(p => cardTercerizado(p, 'entregar')).join('');
+    $$('[data-accion]', listaEntregar).forEach(b =>
+      b.addEventListener('click', () => irDetalle(b.dataset.id, b.dataset.accion)));
+  }
+
+  // Historial
+  const tbody = $('terc-tbody-hist');
+  if (tbody) {
+    tbody.innerHTML = cerrados.length
+      ? cerrados.map(p => `
+          <tr>
+            <td>${fmtFecha(p.fecha_creacion)}</td>
+            <td>${(p.renglones||[]).length} renglón(es)</td>
+            <td style="font-size:12px;color:var(--muted);">${p.fecha_recibido || '—'}</td>
+            <td style="font-size:12px;color:var(--muted);">${p.fecha_entregado || '—'}</td>
+            <td>${badge(p.estado)}</td>
+          </tr>`).join('')
+      : `<tr><td colspan="5" class="terc-td-empty">Sin historial aún.</td></tr>`;
+  }
+}
+
+function cardTercerizado(p, modo) {
+  // Tabla de renglones con descripción y cantidad
+  const rengsHTML = (p.renglones||[]).map((r, i) => `
+    <tr>
+      <td class="terc-td-c terc-muted" style="font-size:12px;">${i+1}</td>
+      <td><strong>${r.item_nombre || r.item_id || '—'}</strong>${r.observacion ? `<div class="terc-obs-small">${r.observacion}</div>` : ''}</td>
+      <td class="terc-td-c">
+        <span class="terc-badge est-azul">${r.cantidad}${r.unidad ? ' ' + r.unidad : ''}</span>
+      </td>
+    </tr>`).join('');
+
+  const esRecibir  = modo === 'recibir';
+  const accionBtn  = esRecibir ? 'terc_recibir' : 'terc_entregar';
+  const btnLabel   = esRecibir ? '📬 CONFIRMAR RECEPCIÓN' : '📦 CONFIRMAR ENTREGA A MORÓN';
+  const btnClass   = esRecibir ? 'btn btn-primary' : 'btn terc-btn-verde';
+
+  return `
+    <div class="terc-terc-card ${esRecibir ? 'terc-terc-card-recibir' : 'terc-terc-card-entregar'}">
+
+      <!-- Cabecera -->
+      <div class="terc-terc-card-head">
+        <div class="terc-terc-card-info">
+          <div class="terc-terc-card-fecha">📅 Pedido del ${fmtFecha(p.fecha_creacion)}</div>
+          ${p.observacion_general ? `<div class="terc-terc-card-obs">📝 ${p.observacion_general}</div>` : ''}
+        </div>
+        ${badge(p.estado)}
+      </div>
+
+      <!-- Tabla de renglones -->
+      <div class="terc-terc-renglones">
+        <div class="terc-terc-renglones-titulo">📋 Detalle del pedido</div>
+        <table class="terc-table terc-terc-table">
+          <thead>
+            <tr>
+              <th style="width:32px;">#</th>
+              <th>Ítem / Descripción</th>
+              <th style="text-align:center;width:110px;">Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>${rengsHTML}</tbody>
+        </table>
+      </div>
+
+      <!-- Timestamps si ya tiene -->
+      ${p.fecha_recibido ? `
+        <div class="terc-ts-registro">
+          <span class="terc-ts-label">📬 Recibido:</span>
+          <span class="terc-ts-val">${p.fecha_recibido}</span>
+        </div>` : ''}
+      ${p.fecha_entregado ? `
+        <div class="terc-ts-registro">
+          <span class="terc-ts-label">📦 Entregado:</span>
+          <span class="terc-ts-val">${p.fecha_entregado}</span>
+        </div>` : ''}
+
+      <!-- Botón de acción -->
+      <div class="terc-terc-card-footer">
+        <button class="${btnClass} terc-terc-btn-accion" data-accion="${accionBtn}" data-id="${p.id}">
+          ${btnLabel}
+        </button>
+      </div>
+
+    </div>`;
 }
 
 /* ─── NUEVO PEDIDO ─────────────────────────────────────────────────────────── */
@@ -659,7 +753,7 @@ function agregarRenglon() {
       <input type="text"
         class="terc-inp terc-reng-desc"
         data-idx="${idx}"
-        placeholder="Ej: Varilla Neutras, Packaging…" />
+        placeholder="Ej: Varilla 6mm cortada, Tubo 1 pulgada…" />
     </td>
     <td>
       <input type="number" min="0" step="0.01"
