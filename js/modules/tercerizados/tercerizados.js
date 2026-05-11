@@ -753,7 +753,7 @@ function agregarRenglon() {
       <input type="text"
         class="terc-inp terc-reng-desc"
         data-idx="${idx}"
-        placeholder="Ej: Varilla 6mm cortada, Tubo 1 pulgada…" />
+        placeholder="Ej: Varilla neutra, packaging…" />
     </td>
     <td>
       <input type="number" min="0" step="0.01"
