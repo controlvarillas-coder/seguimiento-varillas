@@ -1072,7 +1072,8 @@ function renderCellInput({
   key,
   value,
   canEdit,
-  extraClass = ''
+  extraClass = '',
+  comentario = ''
 }) {
   const attrs = [
     `class="excel-input ${extraClass}"`,
@@ -1086,7 +1087,18 @@ function renderCellInput({
     `value="${value}"`
   ].filter(Boolean).join(' ');
 
-  return `<input ${attrs} ${canEdit ? '' : 'disabled'}>`;
+  const hasComment = !!comentario;
+  const comentarioAttrs = [
+    `class="cell-comment-btn${hasComment ? ' has-comment' : ''}"`,
+    `data-row="${rowIndex}"`,
+    key ? `data-key="${key}"` : '',
+    groupKey ? `data-group="${groupKey}"` : '',
+    area ? `data-area="${area}"` : '',
+    `title="${hasComment ? comentario.replace(/"/g,'&quot;') : 'Agregar comentario'}"`,
+    `data-comment="${(comentario || '').replace(/"/g,'&quot;')}"`
+  ].filter(Boolean).join(' ');
+
+  return `<div class="cell-wrap"><input ${attrs} ${canEdit ? '' : 'disabled'}><button type="button" ${comentarioAttrs}>💬</button>${hasComment ? `<div class="cell-comment-indicator" title="${comentario.replace(/"/g,'&quot;')}"></div>` : ''}</div>`;
 }
 
 function hasAnyNonZeroValue(obj = {}) {
@@ -1761,13 +1773,20 @@ function renderCargaDiaria() {
   if ($('btnGuardarReporte')) $('btnGuardarReporte').disabled = locked;
   if ($('btnEnviarReporte')) $('btnEnviarReporte').disabled = locked;
 
-  let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th><th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
+  const isGerenciaView = state.perfil?.rol === 'gerencia';
+
+  let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th>`;
+  if (isGerenciaView) {
+    thead1 += `<th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
+  }
   let thead2 = '<tr>';
   let thead3 = '<tr>';
 
-  INITIAL_STOCK_COLUMNS.forEach((col) => {
-    thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`;
-  });
+  if (isGerenciaView) {
+    INITIAL_STOCK_COLUMNS.forEach((col) => {
+      thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`;
+    });
+  }
 
   visibleGroups.forEach((group) => {
     thead1 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
@@ -1793,12 +1812,10 @@ function renderCargaDiaria() {
   rows.forEach((row, rowIndex) => {
     let rowHtml = `<tr><td class="sticky-col product-name-cell">${row.productoNombre}</td>`;
 
-    INITIAL_STOCK_COLUMNS.forEach((col) => {
-      const value = num(row.stockInicial?.[col.key]);
-      const isGerencia = state.perfil?.rol === 'gerencia';
-
-      if (isGerencia) {
-        // Gerencia: input editable siempre
+    if (isGerenciaView) {
+      INITIAL_STOCK_COLUMNS.forEach((col) => {
+        const value = num(row.stockInicial?.[col.key]);
+        // Gerencia: input editable
         rowHtml += `<td>${renderCellInput({
           rowIndex,
           area: 'stockInicial',
@@ -1807,13 +1824,9 @@ function renderCargaDiaria() {
           canEdit: true,
           extraClass: 'stock-input'
         })}</td>`;
-      } else {
-        // Operativo: solo muestra el valor (readonly, sin input)
-        rowHtml += `<td class="readonly-cell stock-readonly">${value}</td>`;
-      }
-
-      columnTotals[`stock_${col.key}`] += value;
-    });
+        columnTotals[`stock_${col.key}`] += value;
+      });
+    }
 
     visibleGroups.forEach((group) => {
       group.columns.forEach((col) => {
@@ -1887,13 +1900,15 @@ function renderCargaDiaria() {
           const value = num(row.groups?.[group.key]?.[col.key]);
           const canEdit = editableGroups.includes(group.key) && !locked;
 
+          const comentario = row.comentarios?.[`${group.key}_${col.key}`] || '';
           rowHtml += `<td>${renderCellInput({
             rowIndex,
             groupKey: group.key,
             key: col.key,
             value,
             canEdit,
-            extraClass: group.colorClass
+            extraClass: group.colorClass,
+            comentario
           })}</td>`;
 
           columnTotals[`${group.key}_${col.key}`] += value;
@@ -1914,9 +1929,11 @@ function renderCargaDiaria() {
   });
 
   let tfoot = `<tr><th class="sticky-col">TOTAL</th>`;
-  INITIAL_STOCK_COLUMNS.forEach((col) => {
-    tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`;
-  });
+  if (isGerenciaView) {
+    INITIAL_STOCK_COLUMNS.forEach((col) => {
+      tfoot += `<th>${columnTotals[`stock_${col.key}`]}</th>`;
+    });
+  }
   visibleGroups.forEach((group) => {
     group.columns.forEach((col) => {
       tfoot += `<th>${columnTotals[`${group.key}_${col.key}`]}</th>`;
@@ -1935,7 +1952,92 @@ function _parseDecimal(val) {
   return isNaN(n) ? 0 : n;
 }
 
+// ── Modal de comentarios por celda ────────────────────────────────────────────
+function showCommentModal(btn) {
+  const rowIndex  = Number(btn.dataset.row);
+  const groupKey  = btn.dataset.group || '';
+  const area      = btn.dataset.area  || '';
+  const key       = btn.dataset.key   || '';
+  const cellKey   = area ? `${area}_${key}` : `${groupKey}_${key}`;
+  const current   = btn.dataset.comment || '';
+
+  // Quitar modal anterior si existe
+  document.getElementById('cell-comment-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'cell-comment-modal';
+  modal.className = 'cell-comment-modal';
+  modal.innerHTML = `
+    <div class="cell-comment-modal-inner">
+      <div class="cell-comment-modal-header">
+        <span>💬 Comentario de celda</span>
+        <button class="cell-comment-modal-close" id="ccm-close">✕</button>
+      </div>
+      <textarea id="ccm-textarea" class="cell-comment-textarea" placeholder="Escribí tu comentario…" rows="4">${current}</textarea>
+      <div class="cell-comment-modal-footer">
+        <button id="ccm-guardar" class="btn btn-primary">Guardar</button>
+        ${current ? '<button id="ccm-borrar" class="btn btn-outline" style="color:#f87171;border-color:#f87171;">Borrar</button>' : ''}
+        <button id="ccm-cancelar" class="btn btn-outline">Cancelar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const textarea = document.getElementById('ccm-textarea');
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  function guardarComentario(texto) {
+    // Guardar en el reporte
+    if (!state.reporteActual) return;
+    if (!state.reporteActual.comentarios) state.reporteActual.comentarios = {};
+    if (texto) {
+      state.reporteActual.comentarios[`${rowIndex}_${cellKey}`] = texto;
+    } else {
+      delete state.reporteActual.comentarios[`${rowIndex}_${cellKey}`];
+    }
+    // También en la fila
+    const filas = state.reporteActual.rows;
+    if (filas && filas[rowIndex]) {
+      if (!filas[rowIndex].comentarios) filas[rowIndex].comentarios = {};
+      if (texto) {
+        filas[rowIndex].comentarios[cellKey] = texto;
+      } else {
+        delete filas[rowIndex].comentarios[cellKey];
+      }
+    }
+    // Actualizar botón visualmente
+    btn.dataset.comment = texto;
+    btn.title = texto || 'Agregar comentario';
+    btn.classList.toggle('has-comment', !!texto);
+    // Auto-guardar
+    autoGuardarReporte();
+    modal.remove();
+    renderCargaDiaria();
+  }
+
+  document.getElementById('ccm-guardar')?.addEventListener('click', () => {
+    guardarComentario(textarea.value.trim());
+  });
+  document.getElementById('ccm-borrar')?.addEventListener('click', () => {
+    guardarComentario('');
+  });
+  document.getElementById('ccm-cancelar')?.addEventListener('click', () => modal.remove());
+  document.getElementById('ccm-close')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
 function bindCargaInputs() {
+  // Handler para botones de comentario
+  document.querySelectorAll('#tablaCargaDiaria .cell-comment-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentReporteIsLocked() && state.perfil?.rol !== 'gerencia') return;
+      showCommentModal(btn);
+    });
+  });
+
   document.querySelectorAll('#tablaCargaDiaria input').forEach((input) => {
     input.addEventListener('keydown', (e) => {
       const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','.',','];
@@ -2028,7 +2130,8 @@ async function cargarReporteDiario() {
       ...loaded,
       estado: estadoFirestore,
       idYaExistia: true,
-      rows: loadedRows
+      rows: loadedRows,
+      comentarios: loaded.comentarios || {}
     };
 
     if (state.perfil?.rol === 'gerencia') {
@@ -2134,7 +2237,8 @@ async function guardarReporte(estado = 'borrador') {
     creadoPor: state.currentUser?.email || '',
     actualizadoEnTexto: new Date().toISOString(),
     actualizadoEn: serverTimestamp(),
-    rows: normalizedRows
+    rows: normalizedRows,
+    comentarios: state.reporteActual.comentarios || {}
   };
 
   if (!snap.exists()) {
@@ -3004,7 +3108,7 @@ function procesarCargaMasivaStockInicial() {
   reader.onload = function(e) {
     const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
     const ws = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0, raw: false });
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 });
 
     if (rows.length < 2) { toast('Excel vacío.'); return; }
 
@@ -3450,19 +3554,7 @@ function normalizeProduct(value) {
 
 function numExcel(v) {
   if (v === '' || v === null || v === undefined) return 0;
-  // Si ya es número (SheetJS lo parseó) devolverlo directo
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  // Si es string con coma decimal (ej: "8,6" o "1.234,56")
-  let s = String(v).trim();
-  // Detectar formato europeo: tiene coma antes de exactamente 1-2 dígitos al final
-  if (/\..*,/.test(s)) {
-    // Formato 1.234,56 → quitar puntos de miles, cambiar coma por punto
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else {
-    // Formato simple: solo reemplazar coma por punto
-    s = s.replace(',', '.');
-  }
-  const n = parseFloat(s);
+  const n = Number(String(v).replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -3632,8 +3724,7 @@ function procesarCargaMasivaExcel() {
 
     const rows = XLSX.utils.sheet_to_json(ws, {
       header: 1,
-      defval: '',
-      raw: false
+      defval: ''
     });
 
     if (rows.length < 2) {
@@ -3821,4 +3912,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-
