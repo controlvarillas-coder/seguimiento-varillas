@@ -3004,7 +3004,7 @@ function procesarCargaMasivaStockInicial() {
   reader.onload = function(e) {
     const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
     const ws = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 });
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0, raw: false });
 
     if (rows.length < 2) { toast('Excel vacío.'); return; }
 
@@ -3450,7 +3450,19 @@ function normalizeProduct(value) {
 
 function numExcel(v) {
   if (v === '' || v === null || v === undefined) return 0;
-  const n = Number(String(v).replace(',', '.'));
+  // Si ya es número (SheetJS lo parseó) devolverlo directo
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  // Si es string con coma decimal (ej: "8,6" o "1.234,56")
+  let s = String(v).trim();
+  // Detectar formato europeo: tiene coma antes de exactamente 1-2 dígitos al final
+  if (/\..*,/.test(s)) {
+    // Formato 1.234,56 → quitar puntos de miles, cambiar coma por punto
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Formato simple: solo reemplazar coma por punto
+    s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -3620,7 +3632,8 @@ function procesarCargaMasivaExcel() {
 
     const rows = XLSX.utils.sheet_to_json(ws, {
       header: 1,
-      defval: ''
+      defval: '',
+      raw: false
     });
 
     if (rows.length < 2) {
