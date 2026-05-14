@@ -269,6 +269,10 @@ function setSection(sectionId) {
     if (fechaActual) {
       cargarReporteDiario();
     }
+    // Scroll al top de la sección para que la fecha sea visible
+    setTimeout(() => {
+      $('cargaFecha')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
   }
 
   if (sectionId === 'pedido-semanal') {
@@ -3365,8 +3369,13 @@ function bindEvents() {
 
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
-    // Auto-cargar el reporte del día seleccionado
-    cargarReporteDiario();
+    const fechaEl = $('cargaFecha');
+    if (fechaEl) fechaEl.style.opacity = '0.5';
+    cargarReporteDiario().finally(() => {
+      if (fechaEl) fechaEl.style.opacity = '';
+      // Scroll al input de fecha para que siga visible
+      fechaEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   });
 
   // Búsqueda de aroma en carga diaria
