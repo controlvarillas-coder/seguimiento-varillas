@@ -263,9 +263,24 @@ function setSection(sectionId) {
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
 
+  // Auto-cargar al entrar a Carga Diaria si hay una fecha seleccionada
+  if (sectionId === 'carga') {
+    const fechaActual = $('cargaFecha')?.value;
+    if (fechaActual) {
+      cargarReporteDiario();
+    }
+  }
+
   if (sectionId === 'pedido-semanal') {
     refreshPedidoWeeks();
-    renderPedidoSemanal();
+    // Auto-cargar la semana actual si hay mes y semana seleccionados
+    const semanaVal = $('pedidoSemana')?.value;
+    const mesVal    = $('pedidoMes')?.value;
+    if (mesVal && semanaVal) {
+      cargarPedidoSemanal();
+    } else {
+      renderPedidoSemanal();
+    }
   }
 
   if (sectionId === 'reportes') {
@@ -1815,7 +1830,6 @@ function renderCargaDiaria() {
     if (isGerenciaView) {
       INITIAL_STOCK_COLUMNS.forEach((col) => {
         const value = num(row.stockInicial?.[col.key]);
-        // Gerencia: input editable
         rowHtml += `<td>${renderCellInput({
           rowIndex,
           area: 'stockInicial',
@@ -1952,7 +1966,6 @@ function _parseDecimal(val) {
   return isNaN(n) ? 0 : n;
 }
 
-// ── Modal de comentarios por celda ────────────────────────────────────────────
 function showCommentModal(btn) {
   const rowIndex  = Number(btn.dataset.row);
   const groupKey  = btn.dataset.group || '';
@@ -1961,7 +1974,6 @@ function showCommentModal(btn) {
   const cellKey   = area ? `${area}_${key}` : `${groupKey}_${key}`;
   const current   = btn.dataset.comment || '';
 
-  // Quitar modal anterior si existe
   document.getElementById('cell-comment-modal')?.remove();
 
   const modal = document.createElement('div');
@@ -1981,7 +1993,6 @@ function showCommentModal(btn) {
       </div>
     </div>
   `;
-
   document.body.appendChild(modal);
 
   const textarea = document.getElementById('ccm-textarea');
@@ -1989,7 +2000,6 @@ function showCommentModal(btn) {
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
   function guardarComentario(texto) {
-    // Guardar en el reporte
     if (!state.reporteActual) return;
     if (!state.reporteActual.comentarios) state.reporteActual.comentarios = {};
     if (texto) {
@@ -1997,7 +2007,6 @@ function showCommentModal(btn) {
     } else {
       delete state.reporteActual.comentarios[`${rowIndex}_${cellKey}`];
     }
-    // También en la fila
     const filas = state.reporteActual.rows;
     if (filas && filas[rowIndex]) {
       if (!filas[rowIndex].comentarios) filas[rowIndex].comentarios = {};
@@ -2007,11 +2016,9 @@ function showCommentModal(btn) {
         delete filas[rowIndex].comentarios[cellKey];
       }
     }
-    // Actualizar botón visualmente
     btn.dataset.comment = texto;
     btn.title = texto || 'Agregar comentario';
     btn.classList.toggle('has-comment', !!texto);
-    // Auto-guardar
     autoGuardarReporte();
     modal.remove();
     renderCargaDiaria();
@@ -2029,7 +2036,7 @@ function showCommentModal(btn) {
 }
 
 function bindCargaInputs() {
-  // Handler para botones de comentario
+  // Handler comentarios por celda
   document.querySelectorAll('#tablaCargaDiaria .cell-comment-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -3349,8 +3356,8 @@ function bindEvents() {
 
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
-    renderCargaDiaria();
-    _actualizarSelectCategoriaCarga();
+    // Auto-cargar el reporte del día seleccionado
+    cargarReporteDiario();
   });
 
   // Búsqueda de aroma en carga diaria
@@ -3390,7 +3397,8 @@ function bindEvents() {
   $('pedidoSemana')?.addEventListener('change', () => {
     state.pedidoSemanalActual = null;
     state.pedidoSemanalSelectedRow = null;
-    renderPedidoSemanal();
+    // Auto-cargar la semana seleccionada
+    cargarPedidoSemanal();
   });
 
   $('btnCargarPedidoSemanal')?.addEventListener('click', cargarPedidoSemanal);
