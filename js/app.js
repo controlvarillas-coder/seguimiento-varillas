@@ -1755,11 +1755,11 @@ function renderCargaDiaria() {
     if (fabricaSelect) fabricaSelect.disabled = false;
     if (btnCargarReporte) btnCargarReporte.disabled = false;
   } else {
-    // Operativo: fábrica siempre fija, fecha y cargar disponibles
-    // Solo se deshabilitan si la planilla está publicada (locked)
-    if (fechaInput) fechaInput.disabled = locked;
+    // Operativo: fecha SIEMPRE disponible para poder navegar entre días
+    // La fábrica es fija (disabled). El botón Cargar siempre habilitado.
+    if (fechaInput) fechaInput.disabled = false;   // ← nunca bloquear la fecha
     if (fabricaSelect) fabricaSelect.disabled = true;
-    if (btnCargarReporte) btnCargarReporte.disabled = false; // siempre puede cargar
+    if (btnCargarReporte) btnCargarReporte.disabled = false;
   }
 
   // Estado visual con color y texto descriptivo
@@ -2435,24 +2435,33 @@ function getPedidoEstadoText() {
 }
 
 function getPedidoSemanalViewMode() {
-  if (state.perfil?.rol === 'gerencia') return 'gerencia';
-  if (state.perfil?.fabrica === 'moron') return 'moron';
-  if (state.perfil?.fabrica === 'alvear') return 'alvear';
-  return 'otro';
+  const rol = state.perfil?.rol;
+  if (rol === 'gerencia') return 'gerencia';
+  const fab = state.perfil?.fabrica;
+  if (fab === 'moron') return 'moron';
+  if (fab === 'alvear') return 'alvear';
+  if (fab === 'banado' || fab === 'bañado') return 'banado';
+  // Fallback: si no tiene fábrica asignada pero es operativo, usar rol
+  if (rol === 'moron') return 'moron';
+  if (rol === 'alvear') return 'alvear';
+  return 'gerencia'; // fallback seguro: mostrar todo
 }
 
 function getPedidoSemanalRowsForView(rows = []) {
   const viewMode = getPedidoSemanalViewMode();
 
   if (viewMode === 'gerencia') return rows;
-  if (viewMode === 'moron') return rows;
+  if (viewMode === 'moron')    return rows;
+  if (viewMode === 'banado')   return rows;
 
   if (viewMode === 'alvear') {
     // Alvear solo ve productos donde Morón haya pedido algo
-    return rows.filter((row) => num(row.moronCantidad) > 0);
+    const filtradas = rows.filter((row) => num(row.moronCantidad) > 0);
+    // Si no hay filas con pedido, mostrar todas (semana aún no cargada por Morón)
+    return filtradas.length > 0 ? filtradas : rows;
   }
 
-  return [];
+  return rows; // fallback: mostrar todo
 }
 
 function hasWeeklyPendingRows(rows = []) {
