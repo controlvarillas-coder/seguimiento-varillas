@@ -2455,7 +2455,17 @@ function getPedidoSemanalViewMode() {
 function getPedidoSemanalRowsForView(rows = []) {
   const viewMode = getPedidoSemanalViewMode();
 
-  if (viewMode === 'gerencia') return rows;
+  if (viewMode === 'gerencia') {
+    if (state.pedidoSemanalSoloConCantidad) {
+      const conCantidad = rows.filter((row) =>
+        num(row.moronCantidad) > 0 ||
+        num(row.moronPedidoChica) > 0 ||
+        num(row.moronPedidoGrande) > 0
+      );
+      return conCantidad.length > 0 ? conCantidad : rows;
+    }
+    return rows;
+  }
   if (viewMode === 'banado')   return rows;
 
   if (viewMode === 'moron') {
@@ -2732,8 +2742,39 @@ function renderPedidoSemanal() {
       const hint = filtroEl.querySelector('.pedido-filtro-hint');
       if (hint) hint.textContent = state.pedidoSemanalSoloConCantidad ? 'Mostrando solo productos cargados' : 'Mostrando todos los productos';
     }
+  } else if (viewMode === 'gerencia') {
+    // Gerencia también puede filtrar por cantidad
+    if (!filtroEl) {
+      filtroEl = document.createElement('div');
+      filtroEl.id = 'pedido-filtro-moron';
+      filtroEl.className = 'pedido-filtro-moron-wrap';
+      filtroEl.innerHTML = `
+        <button id="btn-filtro-solo-cantidad" class="btn ${state.pedidoSemanalSoloConCantidad ? 'btn-primary' : 'btn-outline'} btn-sm" style="gap:6px;">
+          ${state.pedidoSemanalSoloConCantidad ? '✅' : '☐'} Solo productos con cantidad
+        </button>
+        <span class="pedido-filtro-hint">
+          ${state.pedidoSemanalSoloConCantidad ? 'Mostrando solo productos cargados' : 'Mostrando todos los productos'}
+        </span>
+      `;
+      const tablaPanelCard = table.closest('.panel-card') || table.parentElement;
+      if (tablaPanelCard?.parentElement) {
+        tablaPanelCard.parentElement.insertBefore(filtroEl, tablaPanelCard);
+      }
+      document.getElementById('btn-filtro-solo-cantidad')?.addEventListener('click', () => {
+        state.pedidoSemanalSoloConCantidad = !state.pedidoSemanalSoloConCantidad;
+        renderPedidoSemanal();
+      });
+    } else {
+      const btn = $('btn-filtro-solo-cantidad');
+      if (btn) {
+        btn.textContent = (state.pedidoSemanalSoloConCantidad ? '✅' : '☐') + ' Solo productos con cantidad';
+        btn.className = `btn ${state.pedidoSemanalSoloConCantidad ? 'btn-primary' : 'btn-outline'} btn-sm`;
+      }
+      const hint = filtroEl.querySelector('.pedido-filtro-hint');
+      if (hint) hint.textContent = state.pedidoSemanalSoloConCantidad ? 'Mostrando solo productos cargados' : 'Mostrando todos los productos';
+    }
   } else {
-    // No es morón → remover el filtro si existe
+    // Otros roles → remover el filtro si existe
     filtroEl?.remove();
   }
 
