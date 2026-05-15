@@ -498,3 +498,20 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   z-index: 100;
   background: var(--bg);
 }
+
+/* ─── PEDIDO SEMANAL: filtro Morón ─────────────────────────── */
+.pedido-filtro-moron-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  background: rgba(99,135,255,.07);
+  border: 1px solid rgba(99,135,255,.2);
+  border-radius: 14px;
+}
+.pedido-filtro-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
