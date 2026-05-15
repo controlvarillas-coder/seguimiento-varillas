@@ -44,6 +44,7 @@ const MANUAL_INITIAL_MONTH = '2026-04';
 const state = {
   currentUser: null,
   perfil: null,
+  pedidoSemanalSoloConCantidad: false,  // filtro morón: solo productos con cantidad
   productos: [],
   usuarios: [],
   reportes: [],
@@ -2455,17 +2456,27 @@ function getPedidoSemanalRowsForView(rows = []) {
   const viewMode = getPedidoSemanalViewMode();
 
   if (viewMode === 'gerencia') return rows;
-  if (viewMode === 'moron')    return rows;
   if (viewMode === 'banado')   return rows;
 
+  if (viewMode === 'moron') {
+    // Filtro opcional: solo productos con cantidad cargada
+    if (state.pedidoSemanalSoloConCantidad) {
+      const conCantidad = rows.filter((row) =>
+        num(row.moronCantidad) > 0 ||
+        num(row.moronPedidoChica) > 0 ||
+        num(row.moronPedidoGrande) > 0
+      );
+      return conCantidad.length > 0 ? conCantidad : rows;
+    }
+    return rows;
+  }
+
   if (viewMode === 'alvear') {
-    // Alvear solo ve productos donde Morón haya pedido algo
     const filtradas = rows.filter((row) => num(row.moronCantidad) > 0);
-    // Si no hay filas con pedido, mostrar todas (semana aún no cargada por Morón)
     return filtradas.length > 0 ? filtradas : rows;
   }
 
-  return rows; // fallback: mostrar todo
+  return rows;
 }
 
 function hasWeeklyPendingRows(rows = []) {
@@ -2685,8 +2696,48 @@ function renderPedidoSemanal() {
   }
 
   const allRows = state.pedidoSemanalActual?.rows || buildDefaultWeeklyRows(getWeeklyProducts());
-  const rows = getPedidoSemanalRowsForView(allRows);
   const viewMode = getPedidoSemanalViewMode();
+
+  // ── Filtro Morón: botón toggle "Solo con cantidad" ──
+  let filtroEl = $('pedido-filtro-moron');
+  if (viewMode === 'moron') {
+    if (!filtroEl) {
+      filtroEl = document.createElement('div');
+      filtroEl.id = 'pedido-filtro-moron';
+      filtroEl.className = 'pedido-filtro-moron-wrap';
+      filtroEl.innerHTML = `
+        <button id="btn-filtro-solo-cantidad" class="btn ${state.pedidoSemanalSoloConCantidad ? 'btn-primary' : 'btn-outline'} btn-sm" style="gap:6px;">
+          ${state.pedidoSemanalSoloConCantidad ? '✅' : '☐'} Solo productos con cantidad
+        </button>
+        <span class="pedido-filtro-hint">
+          ${state.pedidoSemanalSoloConCantidad ? 'Mostrando solo productos cargados' : 'Mostrando todos los productos'}
+        </span>
+      `;
+      // Insertar antes del panel de la tabla
+      const tablaPanelCard = table.closest('.panel-card') || table.parentElement;
+      if (tablaPanelCard?.parentElement) {
+        tablaPanelCard.parentElement.insertBefore(filtroEl, tablaPanelCard);
+      }
+      document.getElementById('btn-filtro-solo-cantidad')?.addEventListener('click', () => {
+        state.pedidoSemanalSoloConCantidad = !state.pedidoSemanalSoloConCantidad;
+        renderPedidoSemanal();
+      });
+    } else {
+      // Actualizar estado del botón
+      const btn = $('btn-filtro-solo-cantidad');
+      if (btn) {
+        btn.textContent = (state.pedidoSemanalSoloConCantidad ? '✅' : '☐') + ' Solo productos con cantidad';
+        btn.className = `btn ${state.pedidoSemanalSoloConCantidad ? 'btn-primary' : 'btn-outline'} btn-sm`;
+      }
+      const hint = filtroEl.querySelector('.pedido-filtro-hint');
+      if (hint) hint.textContent = state.pedidoSemanalSoloConCantidad ? 'Mostrando solo productos cargados' : 'Mostrando todos los productos';
+    }
+  } else {
+    // No es morón → remover el filtro si existe
+    filtroEl?.remove();
+  }
+
+  const rows = getPedidoSemanalRowsForView(allRows);
   const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
 
   // Botón confirmar Alvear
