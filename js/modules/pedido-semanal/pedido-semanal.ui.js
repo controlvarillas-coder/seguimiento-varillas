@@ -132,6 +132,17 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
           ${canEditField('moronCantidad') ? '' : 'disabled'}
         />
       </td>
+      <td class="pedido-col-moron" style="min-width:130px;">
+        <select
+          class="pedido-tipo-select"
+          data-row="${rowIndex}"
+          data-field="moronTipo"
+          ${canEditField('moronCantidad') ? '' : 'disabled'}
+        >
+          <option value="bultos" ${(row.moronTipo || 'bultos') === 'bultos' ? 'selected' : ''}>📦 BULTOS</option>
+          <option value="carros" ${(row.moronTipo || 'bultos') === 'carros' ? 'selected' : ''}>🛒 CARROS</option>
+        </select>
+      </td>
       <td class="pedido-col-moron" style="min-width:220px;">
         <textarea
           class="pedido-textarea"
@@ -151,6 +162,7 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
       <tr>
         <th class="sticky-col">AROMA</th>
         <th class="pedido-col-moron">CANTIDAD SOLICITADA</th>
+        <th class="pedido-col-moron">TIPO</th>
         <th class="pedido-col-moron">OBSERVACIÓN</th>
       </tr>
     </thead>
@@ -179,7 +191,12 @@ function _renderTableAlvear(tableEl, rows, canEditField, onFieldChange, alvearCo
     return `
       <tr style="${completo ? 'background:rgba(61,220,151,0.05);' : ''}">
         <td class="sticky-col product-name-cell">${row.productoNombre || '-'}</td>
-        <td class="pedido-col-moron" style="text-align:center;font-weight:700;">${ped}</td>
+        <td class="pedido-col-moron" style="text-align:center;font-weight:700;">
+          ${ped}
+          <div class="pedido-tipo-badge pedido-tipo-badge-${row.moronTipo || 'bultos'}">
+            ${(row.moronTipo || 'bultos') === 'bultos' ? '📦 BULTOS' : '🛒 CARROS'}
+          </div>
+        </td>
         <td class="pedido-col-alvear" style="min-width:150px;">
           <input
             class="excel-input"
@@ -265,6 +282,17 @@ function _renderTableGerencia(tableEl, rows, canEditField, selectedRowIndex, onF
             ${canEditField('moronCantidad') ? '' : 'disabled'}
           />
         </td>
+        <td class="pedido-col-moron" style="min-width:130px;">
+          <select
+            class="pedido-tipo-select"
+            data-row="${rowIndex}"
+            data-field="moronTipo"
+            ${canEditField('moronCantidad') ? '' : 'disabled'}
+          >
+            <option value="bultos" ${(row.moronTipo || 'bultos') === 'bultos' ? 'selected' : ''}>📦 BULTOS</option>
+            <option value="carros" ${(row.moronTipo || 'bultos') === 'carros' ? 'selected' : ''}>🛒 CARROS</option>
+          </select>
+        </td>
         <td class="pedido-col-moron" style="min-width:180px;">
           <textarea class="pedido-textarea"
             data-row="${rowIndex}" data-field="moronObservacion"
@@ -322,6 +350,7 @@ function _renderTableGerencia(tableEl, rows, canEditField, selectedRowIndex, onF
       <tr>
         <th class="sticky-col">AROMA</th>
         <th class="pedido-col-moron">CANT. MORÓN</th>
+        <th class="pedido-col-moron">TIPO</th>
         <th class="pedido-col-moron">OBS. MORÓN</th>
         <th class="pedido-col-alvear">FECHA ENTREGA</th>
         <th class="pedido-col-alvear">CANT. ENTREGADA</th>
@@ -374,7 +403,7 @@ function _renderMotivos(rowIndex, selectedMotivos = [], canEdit = true) {
    Bind de inputs de texto / textarea / date
 ----------------------------------------------------------------- */
 function _bindInputs(tableEl, onFieldChange) {
-  tableEl.querySelectorAll('input[data-field]:not(.motivo-check), textarea[data-field]').forEach((el) => {
+  tableEl.querySelectorAll('input[data-field]:not(.motivo-check), textarea[data-field], select[data-field]').forEach((el) => {
     el.addEventListener('change', (e) => {
       const rowIndex = Number(e.target.dataset.row);
       const fieldKey = e.target.dataset.field;
