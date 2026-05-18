@@ -515,3 +515,41 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ─── PEDIDO SEMANAL: columna TIPO ─────────────────────────── */
+.pedido-tipo-select {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.pedido-tipo-select:focus  { border-color: #4f7cff; }
+.pedido-tipo-select:disabled { opacity: .5; cursor: not-allowed; }
+
+.pedido-tipo-badge {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+.pedido-tipo-badge-bultos {
+  background: rgba(99,135,255,.14);
+  color: #93c5fd;
+  border: 1px solid rgba(99,135,255,.3);
+}
+.pedido-tipo-badge-carros {
+  background: rgba(52,211,153,.12);
+  color: #34d399;
+  border: 1px solid rgba(52,211,153,.3);
+}
