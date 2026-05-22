@@ -306,11 +306,34 @@ function mountNavigation() {
   });
 }
 
-function applyRoleUI() {
-  const isGerencia = state.perfil?.rol === 'gerencia';
+// Roles que SOLO deben ver el módulo de tercerizados
+const ROLES_SOLO_TERC = ['control_calidad', 'planificacion', 'tercerizado'];
 
+function applyRoleUI() {
+  const rol = state.perfil?.rol;
+  const isGerencia = rol === 'gerencia';
+  const soloTerc = ROLES_SOLO_TERC.includes(rol);
+
+  // Ocultar/mostrar items de gerencia
   document.querySelectorAll('.gerencia-only').forEach((el) => {
     el.classList.toggle('hidden', !isGerencia);
+  });
+
+  // Roles que solo usan tercerizados: ocultar TODO el nav excepto tercerizados
+  document.querySelectorAll('.nav-link').forEach((el) => {
+    const section = el.dataset.section;
+    if (soloTerc) {
+      if (section === 'tercerizados') {
+        el.style.display = 'block'; // tercerizados-init.js lo muestra también
+      } else {
+        el.style.display = 'none';
+      }
+    } else {
+      // Restaurar visibilidad normal (no tocar #nav-tercerizados, lo maneja init.js)
+      if (section !== 'tercerizados') {
+        el.style.display = '';
+      }
+    }
   });
 
   const fabricaSelect = $('cargaFabrica');
@@ -3530,7 +3553,12 @@ onAuthStateChanged(auth, async (user) => {
 
     setMonthlyDefault();
     await refreshAll();
-    setSection('dashboard');
+    // Roles que solo usan tercerizados van directo a esa sección
+    if (ROLES_SOLO_TERC.includes(state.perfil?.rol)) {
+      setSection('tercerizados');
+    } else {
+      setSection('dashboard');
+    }
   } catch (error) {
     console.error('ERROR CARGANDO SISTEMA:', error);
     toast(`Error sistema: ${error.code || error.message || error}`);
@@ -3986,4 +4014,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+});
 });
