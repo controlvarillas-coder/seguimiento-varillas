@@ -3552,11 +3552,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     setMonthlyDefault();
-    await refreshAll();
-    // Roles que solo usan tercerizados van directo a esa sección
+
     if (ROLES_SOLO_TERC.includes(state.perfil?.rol)) {
+      // Estos roles solo necesitan tercerizados — no cargar todo el sistema
       setSection('tercerizados');
     } else {
+      await refreshAll();
       setSection('dashboard');
     }
   } catch (error) {
