@@ -3238,12 +3238,93 @@ function procesarCargaMasivaStockInicial() {
     }
 
     renderCargaDiaria();
-    if ($('estadoStockInicial')) {
-      $('estadoStockInicial').textContent = `✅ ${actualizados} productos actualizados. Guardá la planilla para confirmar.`;
-    }
-    toast(`Stock inicial cargado para ${actualizados} productos.`);
+
+    // ── Propagar el nuevo stock inicial a TODOS los reportes del mes ──
+    const monthValue = String(fecha).slice(0, 7);
+    actualizarStockInicialEnReportesMes(monthValue, state.reporteActual.rows)
+      .then((reportesActualizados) => {
+        const msg = `✅ ${actualizados} productos actualizados en ${reportesActualizados} planilla${reportesActualizados !== 1 ? 's' : ''} del mes ${monthValue}.`;
+        if ($('estadoStockInicial')) $('estadoStockInicial').textContent = msg;
+        toast(msg);
+      })
+      .catch((err) => {
+        console.error('Error actualizando reportes:', err);
+        if ($('estadoStockInicial')) {
+          $('estadoStockInicial').textContent = `✅ ${actualizados} productos actualizados en planilla actual. Guardá para confirmar.`;
+        }
+        toast(`Stock inicial cargado para ${actualizados} productos.`);
+      });
   };
   reader.readAsArrayBuffer(file);
+}
+
+// Actualiza el stockInicial en TODOS los reportes del mes en Firestore
+// sin tocar ningún otro dato (cantidades, estados, observaciones, etc.)
+async function actualizarStockInicialEnReportesMes(monthValue, rowsConNuevoStock) {
+  if (state.perfil?.rol !== 'gerencia') return 0;
+
+  // Construir mapa productoId → nuevo stockInicial
+  const nuevoStockMap = {};
+  rowsConNuevoStock.forEach((row) => {
+    if (!row.productoId || !row.stockInicial) return;
+    const tieneStock = Object.values(row.stockInicial).some((v) => num(v) !== 0);
+    if (tieneStock) nuevoStockMap[row.productoId] = { ...row.stockInicial };
+  });
+
+  if (!Object.keys(nuevoStockMap).length) return 0;
+
+  // Buscar todos los reportes del mes en Firestore
+  const { getDocs: _getDocs, collection: _collection, query: _query, where: _where } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+  const snap = await _getDocs(
+    _query(_collection(db, 'reportes_diarios'), _where('fecha', '>=', `${monthValue}-01`), _where('fecha', '<=', `${monthValue}-31`))
+  );
+
+  if (snap.empty) return 0;
+
+  // Actualizar cada reporte: solo cambiar stockInicial en cada fila
+  const lote = [];
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    const rows = data.rows || [];
+    let modified = false;
+
+    const updatedRows = rows.map((row) => {
+      if (nuevoStockMap[row.productoId]) {
+        modified = true;
+        return { ...row, stockInicial: { ...nuevoStockMap[row.productoId] } };
+      }
+      return row;
+    });
+
+    if (modified) {
+      lote.push({ ref: docSnap.ref, rows: updatedRows });
+    }
+  });
+
+  // Ejecutar actualizaciones
+  await Promise.all(lote.map(({ ref, rows }) =>
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+      .then(({ updateDoc }) => updateDoc(ref, { rows }))
+  ));
+
+  // Actualizar caché local también
+  state.reportes.forEach((r) => {
+    if (!r.fecha?.startsWith(monthValue)) return;
+    r.rows = (r.rows || []).map((row) => {
+      if (nuevoStockMap[row.productoId]) {
+        return { ...row, stockInicial: { ...nuevoStockMap[row.productoId] } };
+      }
+      return row;
+    });
+  });
+
+  // Actualizar stock_mensual también
+  const stocksObj = {};
+  Object.entries(nuevoStockMap).forEach(([id, st]) => { stocksObj[id] = st; });
+  await saveStockMensual(monthValue, stocksObj);
+
+  return lote.length;
 }
 
 
