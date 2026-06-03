@@ -45,6 +45,8 @@ const state = {
   currentUser: null,
   perfil: null,
   pedidoSemanalSoloConCantidad: false,  // filtro morón: solo productos con cantidad
+  cargaSoloConMovimientos: false,        // filtro carga diaria: solo títulos cargados
+  totalesSoloConValor: false,            // filtro totales: solo productos con valor > 0
   productos: [],
   usuarios: [],
   reportes: [],
@@ -259,7 +261,8 @@ function setSection(sectionId) {
     usuarios: 'Usuarios',
     'pedido-semanal': 'Orden de fabricación',
     reportes: 'Reportes',
-    backup: 'Copia de seguridad'
+    backup: 'Copia de seguridad',
+    totales: 'Totales por fábrica'
   };
 
   if ($('pageTitle')) $('pageTitle').textContent = titles[sectionId] || 'Varillas Control';
@@ -290,6 +293,10 @@ function setSection(sectionId) {
 
   if (sectionId === 'reportes') {
     renderReportesFiltros();
+  }
+
+  if (sectionId === 'totales') {
+    renderTotales();
   }
 
   if (sectionId === 'backup') {
@@ -1059,6 +1066,15 @@ async function registrarProducto(ev) {
   await refreshAll();
 }
 
+// Retorna true si la fila tiene al menos un movimiento en los grupos visibles para el usuario actual
+function rowTieneMovimientos(row) {
+  const visibleGroups = getVisibleGroupsForCurrentView();
+  return visibleGroups.some((group) => {
+    const groupData = row.groups?.[group.key] || {};
+    return group.columns.some((col) => num(groupData[col.key]) !== 0);
+  });
+}
+
 function getVisibleGroupsForCurrentView() {
   let fabrica = $('cargaFabrica')?.value;
 
@@ -1768,6 +1784,11 @@ function renderCargaDiaria() {
       });
     }
 
+    // Filtro "solo títulos cargados" — productos con movimientos en grupos visibles
+    if (state.cargaSoloConMovimientos) {
+      filtered = filtered.filter((r) => rowTieneMovimientos(r));
+    }
+
     return filtered;
   })();
   const editableGroups = getEditableGroupsForCurrentUser();
@@ -1817,6 +1838,45 @@ function renderCargaDiaria() {
   if ($('btnEnviarReporte')) $('btnEnviarReporte').disabled = locked;
 
   const isGerenciaView = state.perfil?.rol === 'gerencia';
+
+  // ── Botón "Solo títulos cargados" ──
+  let filtroCargaEl = document.getElementById('carga-filtro-movimientos-wrap');
+  if (!filtroCargaEl) {
+    filtroCargaEl = document.createElement('div');
+    filtroCargaEl.id = 'carga-filtro-movimientos-wrap';
+    filtroCargaEl.className = 'carga-filtro-wrap';
+    filtroCargaEl.innerHTML = `
+      <button id="btn-filtro-movimientos" class="btn btn-sm ${state.cargaSoloConMovimientos ? 'btn-primary' : 'btn-outline'}">
+        ${state.cargaSoloConMovimientos ? '✅' : '☐'} Solo títulos cargados
+      </button>
+      <span id="carga-filtro-hint" class="carga-filtro-hint">
+        ${state.cargaSoloConMovimientos ? 'Mostrando solo productos con movimientos' : 'Mostrando todos los productos'}
+      </span>
+    `;
+    const panelCarga = table.closest('.panel-card') || table.parentElement?.parentElement;
+    if (panelCarga?.parentElement) {
+      panelCarga.parentElement.insertBefore(filtroCargaEl, panelCarga);
+    }
+  } else {
+    const btn = document.getElementById('btn-filtro-movimientos');
+    if (btn) {
+      btn.textContent = (state.cargaSoloConMovimientos ? '✅' : '☐') + ' Solo títulos cargados';
+      btn.className = `btn btn-sm ${state.cargaSoloConMovimientos ? 'btn-primary' : 'btn-outline'}`;
+    }
+    const hint = document.getElementById('carga-filtro-hint');
+    if (hint) hint.textContent = state.cargaSoloConMovimientos
+      ? 'Mostrando solo productos con movimientos'
+      : 'Mostrando todos los productos';
+  }
+  // Registrar listener solo una vez
+  const filtroBtn = document.getElementById('btn-filtro-movimientos');
+  if (filtroBtn && !filtroBtn._bound) {
+    filtroBtn._bound = true;
+    filtroBtn.addEventListener('click', () => {
+      state.cargaSoloConMovimientos = !state.cargaSoloConMovimientos;
+      renderCargaDiaria();
+    });
+  }
 
   let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th>`;
   if (isGerenciaView) {
@@ -1986,6 +2046,146 @@ function renderCargaDiaria() {
   table.innerHTML = `<thead>${thead1}${thead2}${thead3}</thead><tbody>${body || '<tr><td colspan="999">Sin productos.</td></tr>'}</tbody><tfoot>${tfoot}</tfoot>`;
 
   bindCargaInputs();
+}
+
+/* ================================================================
+   SECCIÓN TOTALES — Solo gerencia
+   Muestra el total actualizado por producto de cada fábrica,
+   tomando el reporte más reciente de cada fábrica.
+================================================================ */
+function renderTotales() {
+  const root = document.getElementById('totales-root');
+  if (!root) return;
+
+  if (state.perfil?.rol !== 'gerencia') {
+    root.innerHTML = `<div class="hint-box">Esta sección es solo para gerencia.</div>`;
+    return;
+  }
+
+  const productos = state.productos || [];
+  if (!productos.length) {
+    root.innerHTML = `<div class="hint-box">Sin productos cargados.</div>`;
+    return;
+  }
+
+  // ── Obtener el reporte más reciente por fábrica ──
+  const fabricas = ['alvear', 'moron', 'banado'];
+  const ultimoReportePorFabrica = {};
+
+  fabricas.forEach((fab) => {
+    const reportesFab = (state.reportes || [])
+      .filter((r) => r.fabrica === fab && r.rows?.length > 0)
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    ultimoReportePorFabrica[fab] = reportesFab[0] || null;
+  });
+
+  // ── Columnas de totales por fábrica ──
+  const COLS_TOTALES = [
+    { key: 'alvear_chica',  fab: 'alvear', group: 'cajaChica',       col: 'total', label: 'ALV CHICA',  cls: 'tot-col-alv' },
+    { key: 'alvear_grande', fab: 'alvear', group: 'cajaGrandeAlv',   col: 'total', label: 'ALV GRANDE', cls: 'tot-col-alv' },
+    { key: 'moron_chica',   fab: 'moron',  group: 'moronChicaInterna',col: 'total', label: 'MOR CHICA',  cls: 'tot-col-mor' },
+    { key: 'moron_grande',  fab: 'moron',  group: 'moronGrandeInterna',col:'total', label: 'MOR GRANDE', cls: 'tot-col-mor' },
+    { key: 'banado_chica',  fab: 'banado', group: 'banadoChica',     col: 'total', label: 'BÑ CHICA',   cls: 'tot-col-ban' },
+    { key: 'banado_grande', fab: 'banado', group: 'banadoGrande',    col: 'total', label: 'BÑ GRANDE',  cls: 'tot-col-ban' },
+  ];
+
+  // ── Construir mapa productoId → totales por columna ──
+  const totalesMap = {};
+  productos.forEach((p) => { totalesMap[p.id] = {}; });
+
+  COLS_TOTALES.forEach((col) => {
+    const reporte = ultimoReportePorFabrica[col.fab];
+    if (!reporte) return;
+    (reporte.rows || []).forEach((row) => {
+      if (!totalesMap[row.productoId]) return;
+      const val = num(row.groups?.[col.group]?.[col.col]);
+      totalesMap[row.productoId][col.key] = val;
+    });
+  });
+
+  // ── Fechas de los últimos reportes ──
+  const fechaLabels = fabricas.map((fab) => {
+    const r = ultimoReportePorFabrica[fab];
+    return r ? `${fab.charAt(0).toUpperCase() + fab.slice(1)}: ${r.fecha}` : `${fab}: sin datos`;
+  }).join(' · ');
+
+  // ── Filtro: solo mostrar productos con al menos un total > 0 ──
+  const TOTAL_KEYS = COLS_TOTALES.map((c) => c.key);
+  const productosFiltrados = productos.filter((p) => {
+    if (!state.totalesSoloConValor) return true;
+    return TOTAL_KEYS.some((k) => num(totalesMap[p.id]?.[k]) !== 0);
+  });
+
+  // ── Render ──
+  root.innerHTML = `
+    <div class="tot-header">
+      <div>
+        <h2 class="tot-titulo">📊 Totales por fábrica</h2>
+        <div class="tot-subtitle">Datos del último reporte cargado por cada fábrica</div>
+        <div class="tot-fechas">${fechaLabels}</div>
+      </div>
+      <div class="tot-actions">
+        <button id="btn-tot-filtro" class="btn ${state.totalesSoloConValor ? 'btn-primary' : 'btn-outline'} btn-sm">
+          ${state.totalesSoloConValor ? '✅' : '☐'} Solo con valores
+        </button>
+        <button id="btn-tot-refresh" class="btn btn-outline btn-sm">🔄 Actualizar</button>
+      </div>
+    </div>
+
+    <div class="tot-table-wrap panel-card" style="margin-top:16px;">
+      <div class="table-wrap">
+        <table class="data-table tot-table">
+          <thead>
+            <tr>
+              <th class="sticky-col tot-th-prod" rowspan="2">PRODUCTO</th>
+              <th colspan="2" class="tot-th-fab tot-th-alv">ALVEAR</th>
+              <th colspan="2" class="tot-th-fab tot-th-mor">MORÓN</th>
+              <th colspan="2" class="tot-th-fab tot-th-ban">BAÑADO</th>
+            </tr>
+            <tr>
+              ${COLS_TOTALES.map((col) => `<th class="tot-th-col ${col.cls}">${col.label}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${productosFiltrados.map((p) => {
+              const tots = totalesMap[p.id] || {};
+              const filaVacia = TOTAL_KEYS.every((k) => !num(tots[k]));
+              return `
+                <tr class="${filaVacia ? 'tot-row-empty' : ''}">
+                  <td class="sticky-col tot-td-prod">${p.nombre || p.id}</td>
+                  ${COLS_TOTALES.map((col) => {
+                    const v = num(tots[col.key]);
+                    return `<td class="tot-td-val ${col.cls} ${v < 0 ? 'tot-neg' : v > 0 ? 'tot-pos' : 'tot-zero'}">${v !== 0 ? v : '—'}</td>`;
+                  }).join('')}
+                </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr class="tot-tfoot">
+              <th class="sticky-col">TOTAL</th>
+              ${COLS_TOTALES.map((col) => {
+                const total = productosFiltrados.reduce((s, p) => s + num(totalesMap[p.id]?.[col.key]), 0);
+                return `<th class="tot-td-val ${col.cls}">${total || '—'}</th>`;
+              }).join('')}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Botón filtro
+  document.getElementById('btn-tot-filtro')?.addEventListener('click', () => {
+    state.totalesSoloConValor = !state.totalesSoloConValor;
+    renderTotales();
+  });
+  // Botón refresh
+  document.getElementById('btn-tot-refresh')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-tot-refresh');
+    if (btn) { btn.disabled = true; btn.textContent = 'Actualizando…'; }
+    await refreshAll();
+    renderTotales();
+  });
 }
 
 function _parseDecimal(val) {
@@ -3522,11 +3722,13 @@ function bindEvents() {
 
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
+    state.cargaSoloConMovimientos = false; // reset filtro al cambiar fecha
+    // Limpiar botón del filtro para que se regenere
+    document.getElementById('carga-filtro-movimientos-wrap')?.remove();
     const fechaEl = $('cargaFecha');
     if (fechaEl) fechaEl.style.opacity = '0.5';
     cargarReporteDiario().finally(() => {
       if (fechaEl) fechaEl.style.opacity = '';
-      // Scroll al input de fecha para que siga visible
       fechaEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   });
