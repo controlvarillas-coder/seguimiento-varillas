@@ -60,6 +60,7 @@
           <button class="nav-link" data-section="pedido-semanal">Orden de fabricación</button>
           <button id="nav-tercerizados" class="nav-link terc-nav-link" data-section="tercerizados">Seguimiento tercerizados</button>
           <button class="nav-link gerencia-only" data-section="gerencia">Excel gerencia</button>
+          <button class="nav-link gerencia-only" data-section="totales">📊 Totales</button>
           <button class="nav-link gerencia-only" data-section="usuarios">Usuarios</button>
           <button class="nav-link gerencia-only" data-section="reportes">Reportes</button>
           <button class="nav-link gerencia-only" data-section="backup">Copia de seguridad</button>
@@ -672,6 +673,13 @@
           <!-- Roles con acceso: moron, control_calidad, gerencia -->
           <div id="terc-root">
             <div class="hint-box">Cargando módulo de tercerizados…</div>
+          </div>
+        </section>
+
+        <!-- ═══ SECCIÓN TOTALES — solo gerencia ═══ -->
+        <section id="section-totales" class="section">
+          <div id="totales-root">
+            <div style="color:var(--muted);padding:20px 0;">Cargando totales…</div>
           </div>
         </section>
 
