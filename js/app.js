@@ -2080,26 +2080,32 @@ function renderTotales() {
   });
 
   // ── Columnas de totales por fábrica ──
+  // group = key exacto del grupo en DAY_GROUPS / MORON_INTERNAL_GROUPS
+  // col   = key exacto de la columna dentro del grupo
   const COLS_TOTALES = [
-    { key: 'alvear_chica',  fab: 'alvear', group: 'cajaChica',       col: 'total', label: 'ALV CHICA',  cls: 'tot-col-alv' },
-    { key: 'alvear_grande', fab: 'alvear', group: 'cajaGrandeAlv',   col: 'total', label: 'ALV GRANDE', cls: 'tot-col-alv' },
-    { key: 'moron_chica',   fab: 'moron',  group: 'moronChicaInterna',col: 'total', label: 'MOR CHICA',  cls: 'tot-col-mor' },
-    { key: 'moron_grande',  fab: 'moron',  group: 'moronGrandeInterna',col:'total', label: 'MOR GRANDE', cls: 'tot-col-mor' },
-    { key: 'banado_chica',  fab: 'banado', group: 'banadoChica',     col: 'total', label: 'BÑ CHICA',   cls: 'tot-col-ban' },
-    { key: 'banado_grande', fab: 'banado', group: 'banadoGrande',    col: 'total', label: 'BÑ GRANDE',  cls: 'tot-col-ban' },
+    // ALVEAR: usa cajaChica (col total) y cajaGrandeAlv (col total)
+    { key: 'alvear_chica',  fab: 'alvear', group: 'cajaChica',        col: 'total', label: 'ALV CHICA',  cls: 'tot-col-alv' },
+    { key: 'alvear_grande', fab: 'alvear', group: 'cajaGrandeAlv',    col: 'total', label: 'ALV GRANDE', cls: 'tot-col-alv' },
+    // MORÓN: usa moronChicaInterna (col total) y moronGrandeInterna (col total)
+    { key: 'moron_chica',   fab: 'moron',  group: 'moronChicaInterna', col: 'total', label: 'MOR CHICA',  cls: 'tot-col-mor' },
+    { key: 'moron_grande',  fab: 'moron',  group: 'moronGrandeInterna',col: 'total', label: 'MOR GRANDE', cls: 'tot-col-mor' },
+    // BAÑADO: usa banadoChica y banadoGrande
+    { key: 'banado_chica',  fab: 'banado', group: 'banadoChica',      col: 'total', label: 'BÑ CHICA',   cls: 'tot-col-ban' },
+    { key: 'banado_grande', fab: 'banado', group: 'banadoGrande',     col: 'total', label: 'BÑ GRANDE',  cls: 'tot-col-ban' },
   ];
 
   // ── Construir mapa productoId → totales por columna ──
   const totalesMap = {};
   productos.forEach((p) => { totalesMap[p.id] = {}; });
 
-  COLS_TOTALES.forEach((col) => {
-    const reporte = ultimoReportePorFabrica[col.fab];
+  COLS_TOTALES.forEach((colDef) => {
+    const reporte = ultimoReportePorFabrica[colDef.fab];
     if (!reporte) return;
     (reporte.rows || []).forEach((row) => {
       if (!totalesMap[row.productoId]) return;
-      const val = num(row.groups?.[col.group]?.[col.col]);
-      totalesMap[row.productoId][col.key] = val;
+      // Intentar leer el valor calculado del grupo
+      const val = num(row.groups?.[colDef.group]?.[colDef.col]);
+      totalesMap[row.productoId][colDef.key] = val;
     });
   });
 
@@ -2153,9 +2159,9 @@ function renderTotales() {
               return `
                 <tr class="${filaVacia ? 'tot-row-empty' : ''}">
                   <td class="sticky-col tot-td-prod">${p.nombre || p.id}</td>
-                  ${COLS_TOTALES.map((col) => {
-                    const v = num(tots[col.key]);
-                    return `<td class="tot-td-val ${col.cls} ${v < 0 ? 'tot-neg' : v > 0 ? 'tot-pos' : 'tot-zero'}">${v !== 0 ? v : '—'}</td>`;
+                  ${COLS_TOTALES.map((colDef) => {
+                    const v = num(tots[colDef.key]);
+                    return `<td class="tot-td-val ${colDef.cls} ${v < 0 ? 'tot-neg' : v > 0 ? 'tot-pos' : 'tot-zero'}">${v !== 0 ? v : '—'}</td>`;
                   }).join('')}
                 </tr>`;
             }).join('')}
@@ -2163,9 +2169,9 @@ function renderTotales() {
           <tfoot>
             <tr class="tot-tfoot">
               <th class="sticky-col">TOTAL</th>
-              ${COLS_TOTALES.map((col) => {
-                const total = productosFiltrados.reduce((s, p) => s + num(totalesMap[p.id]?.[col.key]), 0);
-                return `<th class="tot-td-val ${col.cls}">${total || '—'}</th>`;
+              ${COLS_TOTALES.map((colDef) => {
+                const total = productosFiltrados.reduce((s, p) => s + num(totalesMap[p.id]?.[colDef.key]), 0);
+                return `<th class="tot-td-val ${colDef.cls}">${total || '—'}</th>`;
               }).join('')}
             </tr>
           </tfoot>
