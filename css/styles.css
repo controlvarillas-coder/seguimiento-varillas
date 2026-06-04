@@ -411,32 +411,26 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   font-weight: 600;
   white-space: nowrap;
 }
-
 .estado-nueva {
   background: rgba(255,255,255,.07);
   color: var(--muted);
   border: 1px solid var(--line);
 }
-
 .estado-borrador {
   background: rgba(251,191,36,.12);
   color: #fbbf24;
   border: 1px solid rgba(251,191,36,.28);
 }
-
 .estado-enviada {
   background: rgba(52,211,153,.12);
   color: #34d399;
   border: 1px solid rgba(52,211,153,.28);
 }
-
 .estado-guardando {
   background: rgba(110,168,255,.12);
   color: #6ea8ff;
   border: 1px solid rgba(110,168,255,.28);
 }
-
-/* Estado inline en el header de la card */
 .estado-box-inline {
   min-height: 0;
   padding: 0;
@@ -444,8 +438,6 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   background: transparent;
   font-size: 13px;
 }
-
-/* Botón volver a borrador (inline dentro del pill) */
 .btn-volver-borrador {
   display: inline-flex;
   align-items: center;
@@ -466,12 +458,11 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
 }
 
 /* =====================================================
-   CARGA DIARIA — header card
+   CARGA DIARIA — header card sticky
 ===================================================== */
 .carga-header-card .panel-header {
   align-items: flex-start;
 }
-
 .carga-hint-row {
   display: flex;
   align-items: flex-start;
@@ -490,8 +481,6 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   flex-shrink: 0;
   margin-top: 1px;
 }
-
-/* ─── CARGA DIARIA: header sticky para fabricas ─────────────── */
 .carga-header-card {
   position: sticky;
   top: 0;
@@ -499,7 +488,129 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   background: var(--bg);
 }
 
-/* ─── PEDIDO SEMANAL: filtro Morón ─────────────────────────── */
+/* ─── CARGA DIARIA: filtro solo títulos cargados ────────────── */
+.carga-filtro-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  background: rgba(99,135,255,.06);
+  border: 1px solid rgba(99,135,255,.18);
+  border-radius: 14px;
+}
+.carga-filtro-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ─── COMENTARIOS POR CELDA ──────────────────────────────────── */
+.cell-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cell-wrap .excel-input {
+  flex: 1;
+  min-width: 0;
+}
+.cell-comment-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,.2);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color .15s, background .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cell-comment-btn:hover {
+  color: #fbbf24;
+  background: rgba(251,191,36,.12);
+}
+.cell-comment-btn.has-comment { color: #fbbf24; }
+.cell-comment-indicator {
+  position: absolute;
+  top: 0; right: 0;
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 0 7px 7px 0;
+  border-color: transparent #fbbf24 transparent transparent;
+  pointer-events: none;
+}
+.cell-comment-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.cell-comment-modal-inner {
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  overflow: hidden;
+}
+.cell-comment-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(251,191,36,.08);
+  color: #fbbf24;
+}
+.cell-comment-modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background .15s;
+}
+.cell-comment-modal-close:hover { background: rgba(255,255,255,.08); }
+.cell-comment-textarea {
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  min-height: 100px;
+  box-sizing: border-box;
+}
+.cell-comment-textarea::placeholder { color: rgba(255,255,255,.25); }
+.cell-comment-modal-footer {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px;
+  flex-wrap: wrap;
+}
+
+/* ─── PEDIDO SEMANAL: filtro cantidad ───────────────────────── */
 .pedido-filtro-moron-wrap {
   display: flex;
   align-items: center;
@@ -516,7 +627,7 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   color: var(--muted);
 }
 
-/* ─── PEDIDO SEMANAL: columna TIPO ─────────────────────────── */
+/* ─── PEDIDO SEMANAL: columna TIPO BULTOS/CARROS ────────────── */
 .pedido-tipo-select {
   width: 100%;
   padding: 7px 10px;
@@ -531,9 +642,8 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   cursor: pointer;
   transition: border-color .2s;
 }
-.pedido-tipo-select:focus  { border-color: #4f7cff; }
-.pedido-tipo-select:disabled { opacity: .5; cursor: not-allowed; }
-
+.pedido-tipo-select:focus   { border-color: #4f7cff; }
+.pedido-tipo-select:disabled{ opacity: .5; cursor: not-allowed; }
 .pedido-tipo-badge {
   display: inline-block;
   margin-top: 5px;
@@ -553,3 +663,57 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   color: #34d399;
   border: 1px solid rgba(52,211,153,.3);
 }
+
+/* ─── SECCIÓN TOTALES ───────────────────────────────────────── */
+.tot-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.tot-titulo   { margin: 0; font-size: 22px; font-weight: 800; }
+.tot-subtitle { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.tot-fechas   { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic; }
+.tot-actions  { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tot-table    { width: 100%; }
+.tot-th-fab {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  padding: 10px 8px;
+  border-bottom: 2px solid;
+}
+.tot-th-alv { color: #34d399; border-color: rgba(52,211,153,.4);  background: rgba(52,211,153,.07);  }
+.tot-th-mor { color: #93c5fd; border-color: rgba(99,135,255,.4);  background: rgba(99,135,255,.07);  }
+.tot-th-ban { color: #fbbf24; border-color: rgba(251,191,36,.4);  background: rgba(251,191,36,.07);  }
+.tot-th-col {
+  text-align: center; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; padding: 8px 10px; white-space: nowrap;
+}
+.tot-th-prod { min-width: 200px; }
+.tot-td-prod { font-size: 13px; font-weight: 600; }
+.tot-td-val  {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+.tot-col-alv { border-left: 1px solid rgba(52,211,153,.15); }
+.tot-col-mor { border-left: 1px solid rgba(99,135,255,.15); }
+.tot-col-ban { border-left: 1px solid rgba(251,191,36,.15); }
+.tot-pos  { color: var(--text); }
+.tot-zero { color: rgba(255,255,255,.15); font-weight: 400; }
+.tot-neg  { color: #f87171; }
+.tot-row-empty td { opacity: .35; }
+.tot-tfoot th {
+  background: rgba(255,255,255,.04);
+  font-size: 13px;
+  font-weight: 800;
+  border-top: 2px solid var(--line);
+  padding: 12px;
+  text-align: center;
+}
+.tot-table-wrap { overflow: hidden; }
