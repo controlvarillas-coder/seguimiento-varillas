@@ -2079,33 +2079,62 @@ function renderTotales() {
     ultimoReportePorFabrica[fab] = reportesFab[0] || null;
   });
 
-  // ── Columnas de totales por fábrica ──
-  // group = key exacto del grupo en DAY_GROUPS / MORON_INTERNAL_GROUPS
-  // col   = key exacto de la columna dentro del grupo
+  // ── Columnas de totales — exactamente las columnas TOTAL de la tabla gerencial ──
   const COLS_TOTALES = [
-    // ALVEAR: usa cajaChica (col total) y cajaGrandeAlv (col total)
-    { key: 'alvear_chica',  fab: 'alvear', group: 'cajaChica',        col: 'total', label: 'ALV CHICA',  cls: 'tot-col-alv' },
-    { key: 'alvear_grande', fab: 'alvear', group: 'cajaGrandeAlv',    col: 'total', label: 'ALV GRANDE', cls: 'tot-col-alv' },
-    // MORÓN: usa moronChicaInterna (col total) y moronGrandeInterna (col total)
-    { key: 'moron_chica',   fab: 'moron',  group: 'moronChicaInterna', col: 'total', label: 'MOR CHICA',  cls: 'tot-col-mor' },
-    { key: 'moron_grande',  fab: 'moron',  group: 'moronGrandeInterna',col: 'total', label: 'MOR GRANDE', cls: 'tot-col-mor' },
-    // BAÑADO: usa banadoChica y banadoGrande
-    { key: 'banado_chica',  fab: 'banado', group: 'banadoChica',      col: 'total', label: 'BÑ CHICA',   cls: 'tot-col-ban' },
-    { key: 'banado_grande', fab: 'banado', group: 'banadoGrande',     col: 'total', label: 'BÑ GRANDE',  cls: 'tot-col-ban' },
+    { key: 'alv_caja_chica',  fab: 'alvear', group: 'cajaChica',         label: 'CAJA CHICA ALV',  cls: 'tot-col-alv' },
+    { key: 'alv_caja_grande', fab: 'alvear', group: 'cajaGrandeAlv',     label: 'CAJA GRANDE ALV', cls: 'tot-col-alv' },
+    { key: 'mor_chica',       fab: 'moron',  group: 'cajaChicaMor',      label: 'CAJA CHICA MOR',  cls: 'tot-col-mor' },
+    { key: 'mor_grande',      fab: 'moron',  group: 'cajaGrandeMor',     label: 'CAJA GRANDE MOR', cls: 'tot-col-mor' },
+    { key: 'mor_int_chica',   fab: 'moron',  group: 'moronChicaInterna', label: 'MORÓN CHICA',     cls: 'tot-col-mor' },
+    { key: 'mor_int_grande',  fab: 'moron',  group: 'moronGrandeInterna',label: 'MORÓN GRANDE',    cls: 'tot-col-mor' },
+    { key: 'ban_chica',       fab: 'banado', group: 'banadoChica',       label: 'BAÑADO CHICA',    cls: 'tot-col-ban' },
+    { key: 'ban_grande',      fab: 'banado', group: 'banadoGrande',      label: 'BAÑADO GRANDE',   cls: 'tot-col-ban' },
   ];
 
-  // ── Construir mapa productoId → totales por columna ──
+  // ── Construir mapa productoId → totales usando las mismas funciones que la tabla ──
   const totalesMap = {};
   productos.forEach((p) => { totalesMap[p.id] = {}; });
 
   COLS_TOTALES.forEach((colDef) => {
     const reporte = ultimoReportePorFabrica[colDef.fab];
     if (!reporte) return;
+    const fecha = reporte.fecha; // fecha del último reporte de esa fábrica
+
     (reporte.rows || []).forEach((row) => {
       if (!totalesMap[row.productoId]) return;
-      // El 'total' no está guardado en Firestore — se recalcula igual que en la tabla
-      const groupData = row.groups?.[colDef.group] || {};
-      const val = computeGroupTotal(colDef.group, groupData);
+      const stockInicial = row.stockInicial || {};
+      let val = 0;
+
+      // Usar exactamente las mismas funciones de running total que la tabla gerencial
+      switch (colDef.group) {
+        case 'cajaChica':
+          val = getCajaChicaAlvearRunningTotal(fecha, row.productoId, stockInicial);
+          break;
+        case 'cajaGrandeAlv':
+          val = getCajaGrandeAlvearRunningTotal(fecha, row.productoId, stockInicial);
+          break;
+        case 'cajaChicaMor':
+          val = getCajaChicaMoronRunningTotal(fecha, row.productoId, stockInicial);
+          break;
+        case 'cajaGrandeMor':
+          val = getCajaGrandeMoronRunningTotal(fecha, row.productoId, stockInicial);
+          break;
+        case 'moronChicaInterna':
+          val = getMoronRunningTotal(fecha, row.productoId, 'moronChicaInterna', stockInicial);
+          break;
+        case 'moronGrandeInterna':
+          val = getMoronRunningTotal(fecha, row.productoId, 'moronGrandeInterna', stockInicial);
+          break;
+        case 'banadoChica':
+          val = getBanadoRunningTotal(fecha, row.productoId, 'banadoChica', stockInicial);
+          break;
+        case 'banadoGrande':
+          val = getBanadoRunningTotal(fecha, row.productoId, 'banadoGrande', stockInicial);
+          break;
+        default:
+          val = computeGroupTotal(colDef.group, row.groups?.[colDef.group] || {});
+      }
+
       totalesMap[row.productoId][colDef.key] = val;
     });
   });
@@ -2146,7 +2175,7 @@ function renderTotales() {
             <tr>
               <th class="sticky-col tot-th-prod" rowspan="2">PRODUCTO</th>
               <th colspan="2" class="tot-th-fab tot-th-alv">ALVEAR</th>
-              <th colspan="2" class="tot-th-fab tot-th-mor">MORÓN</th>
+              <th colspan="4" class="tot-th-fab tot-th-mor">MORÓN</th>
               <th colspan="2" class="tot-th-fab tot-th-ban">BAÑADO</th>
             </tr>
             <tr>
