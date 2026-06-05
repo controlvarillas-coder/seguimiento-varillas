@@ -2103,8 +2103,9 @@ function renderTotales() {
     if (!reporte) return;
     (reporte.rows || []).forEach((row) => {
       if (!totalesMap[row.productoId]) return;
-      // Intentar leer el valor calculado del grupo
-      const val = num(row.groups?.[colDef.group]?.[colDef.col]);
+      // El 'total' no está guardado en Firestore — se recalcula igual que en la tabla
+      const groupData = row.groups?.[colDef.group] || {};
+      const val = computeGroupTotal(colDef.group, groupData);
       totalesMap[row.productoId][colDef.key] = val;
     });
   });
