@@ -2083,10 +2083,8 @@ function renderTotales() {
   const COLS_TOTALES = [
     { key: 'alv_caja_chica',  fab: 'alvear', group: 'cajaChica',         label: 'CAJA CHICA ALV',  cls: 'tot-col-alv' },
     { key: 'alv_caja_grande', fab: 'alvear', group: 'cajaGrandeAlv',     label: 'CAJA GRANDE ALV', cls: 'tot-col-alv' },
-    { key: 'mor_chica',       fab: 'moron',  group: 'cajaChicaMor',      label: 'CAJA CHICA MOR',  cls: 'tot-col-mor' },
-    { key: 'mor_grande',      fab: 'moron',  group: 'cajaGrandeMor',     label: 'CAJA GRANDE MOR', cls: 'tot-col-mor' },
-    { key: 'mor_int_chica',   fab: 'moron',  group: 'moronChicaInterna', label: 'MORÓN CHICA',     cls: 'tot-col-mor' },
-    { key: 'mor_int_grande',  fab: 'moron',  group: 'moronGrandeInterna',label: 'MORÓN GRANDE',    cls: 'tot-col-mor' },
+    { key: 'mor_int_chica',   fab: 'moron',  group: 'moronChicaInterna', label: 'CAJA CHICA MOR',  cls: 'tot-col-mor' },
+    { key: 'mor_int_grande',  fab: 'moron',  group: 'moronGrandeInterna',label: 'CAJA GRANDE MOR', cls: 'tot-col-mor' },
     { key: 'ban_chica',       fab: 'banado', group: 'banadoChica',       label: 'BAÑADO CHICA',    cls: 'tot-col-ban' },
     { key: 'ban_grande',      fab: 'banado', group: 'banadoGrande',      label: 'BAÑADO GRANDE',   cls: 'tot-col-ban' },
   ];
@@ -2175,7 +2173,7 @@ function renderTotales() {
             <tr>
               <th class="sticky-col tot-th-prod" rowspan="2">PRODUCTO</th>
               <th colspan="2" class="tot-th-fab tot-th-alv">ALVEAR</th>
-              <th colspan="4" class="tot-th-fab tot-th-mor">MORÓN</th>
+              <th colspan="2" class="tot-th-fab tot-th-mor">MORÓN</th>
               <th colspan="2" class="tot-th-fab tot-th-ban">BAÑADO</th>
             </tr>
             <tr>
