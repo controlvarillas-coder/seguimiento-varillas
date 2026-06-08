@@ -152,10 +152,15 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
           ${canEditField('moronObservacion') ? '' : 'disabled'}
         >${row.moronObservacion || ''}</textarea>
       </td>
+      <td class="pedido-col-alvear" style="min-width:140px;text-align:center;">
+        ${row.alvearFechaEntrega
+          ? `<div style="font-weight:700;color:#a78bfa;">${row.alvearFechaEntrega}</div>`
+          : '<span style="color:rgba(255,255,255,.25);font-size:12px;">Sin fecha</span>'}
+      </td>
     </tr>
   `).join('');
 
-  if (!body) body = '<tr><td colspan="3">Sin productos.</td></tr>';
+  if (!body) body = '<tr><td colspan="5">Sin productos.</td></tr>';
 
   tableEl.innerHTML = `
     <thead>
@@ -164,6 +169,7 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
         <th class="pedido-col-moron">CANTIDAD SOLICITADA</th>
         <th class="pedido-col-moron">TIPO</th>
         <th class="pedido-col-moron">OBSERVACIÓN</th>
+        <th class="pedido-col-alvear">FECHA ENTREGA (Alvear)</th>
       </tr>
     </thead>
     <tbody>${body}</tbody>
