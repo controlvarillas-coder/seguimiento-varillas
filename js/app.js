@@ -2081,19 +2081,23 @@ function renderTotales() {
 
   // ── Columnas de totales — exactamente las columnas TOTAL de la tabla gerencial ──
   const COLS_TOTALES = [
-    { key: 'alv_caja_chica',  fab: 'alvear', group: 'cajaChica',         label: 'CAJA CHICA ALV',  cls: 'tot-col-alv' },
-    { key: 'alv_caja_grande', fab: 'alvear', group: 'cajaGrandeAlv',     label: 'CAJA GRANDE ALV', cls: 'tot-col-alv' },
-    { key: 'mor_int_chica',   fab: 'moron',  group: 'moronChicaInterna', label: 'CAJA CHICA MOR',  cls: 'tot-col-mor' },
-    { key: 'mor_int_grande',  fab: 'moron',  group: 'moronGrandeInterna',label: 'CAJA GRANDE MOR', cls: 'tot-col-mor' },
-    { key: 'ban_chica',       fab: 'banado', group: 'banadoChica',       label: 'BAÑADO CHICA',    cls: 'tot-col-ban' },
-    { key: 'ban_grande',      fab: 'banado', group: 'banadoGrande',      label: 'BAÑADO GRANDE',   cls: 'tot-col-ban' },
+    { key: 'alv_caja_chica',  fab: 'alvear', group: 'cajaChica',         label: 'CAJA CHICA',  cls: 'tot-col-alv' },
+    { key: 'alv_caja_grande', fab: 'alvear', group: 'cajaGrandeAlv',     label: 'CAJA GRANDE', cls: 'tot-col-alv' },
+    { key: 'alv_total',       fab: null,     group: null,                 label: 'TOTAL ALV',   cls: 'tot-col-alv-total', isTotal: true, keys: ['alv_caja_chica','alv_caja_grande'] },
+    { key: 'mor_int_chica',   fab: 'moron',  group: 'moronChicaInterna', label: 'CAJA CHICA',  cls: 'tot-col-mor' },
+    { key: 'mor_int_grande',  fab: 'moron',  group: 'moronGrandeInterna',label: 'CAJA GRANDE', cls: 'tot-col-mor' },
+    { key: 'mor_total',       fab: null,     group: null,                 label: 'TOTAL MOR',   cls: 'tot-col-mor-total', isTotal: true, keys: ['mor_int_chica','mor_int_grande'] },
+    { key: 'ban_chica',       fab: 'banado', group: 'banadoChica',       label: 'BAÑADO CHICA',cls: 'tot-col-ban' },
+    { key: 'ban_grande',      fab: 'banado', group: 'banadoGrande',      label: 'BAÑADO GRANDE',cls: 'tot-col-ban' },
+    { key: 'ban_total',       fab: null,     group: null,                 label: 'TOTAL BÑ',    cls: 'tot-col-ban-total', isTotal: true, keys: ['ban_chica','ban_grande'] },
   ];
 
   // ── Construir mapa productoId → totales usando las mismas funciones que la tabla ──
   const totalesMap = {};
   productos.forEach((p) => { totalesMap[p.id] = {}; });
 
-  COLS_TOTALES.forEach((colDef) => {
+  // Primero calcular columnas con fab definido
+  COLS_TOTALES.filter(cd => !cd.isTotal).forEach((colDef) => {
     const reporte = ultimoReportePorFabrica[colDef.fab];
     if (!reporte) return;
     const fecha = reporte.fecha; // fecha del último reporte de esa fábrica
@@ -2137,11 +2141,22 @@ function renderTotales() {
     });
   });
 
+  // Calcular columnas TOTAL (suma de chica + grande)
+  COLS_TOTALES.filter(cd => cd.isTotal).forEach((colDef) => {
+    Object.keys(totalesMap).forEach((prodId) => {
+      const suma = (colDef.keys || []).reduce((s, k) => s + num(totalesMap[prodId]?.[k]), 0);
+      totalesMap[prodId][colDef.key] = suma;
+    });
+  });
+
   // ── Fechas de los últimos reportes ──
   const fechaLabels = fabricas.map((fab) => {
     const r = ultimoReportePorFabrica[fab];
-    return r ? `${fab.charAt(0).toUpperCase() + fab.slice(1)}: ${r.fecha}` : `${fab}: sin datos`;
-  }).join(' · ');
+    const nombre = { alvear: 'Alvear', moron: 'Morón', banado: 'Bañado' }[fab] || fab;
+    return r
+      ? `<span class="tot-fecha-item"><span class="tot-fecha-fab">${nombre}</span><span class="tot-fecha-val">${r.fecha}</span></span>`
+      : `<span class="tot-fecha-item tot-fecha-sin"><span class="tot-fecha-fab">${nombre}</span><span class="tot-fecha-val">Sin datos</span></span>`;
+  }).join('');
 
   // ── Filtro: solo mostrar productos con al menos un total > 0 ──
   const TOTAL_KEYS = COLS_TOTALES.map((c) => c.key);
@@ -2156,7 +2171,7 @@ function renderTotales() {
       <div>
         <h2 class="tot-titulo">📊 Totales por fábrica</h2>
         <div class="tot-subtitle">Datos del último reporte cargado por cada fábrica</div>
-        <div class="tot-fechas">${fechaLabels}</div>
+        <div class="tot-fechas-wrap">${fechaLabels}</div>
       </div>
       <div class="tot-actions">
         <button id="btn-tot-filtro" class="btn ${state.totalesSoloConValor ? 'btn-primary' : 'btn-outline'} btn-sm">
@@ -2172,9 +2187,9 @@ function renderTotales() {
           <thead>
             <tr>
               <th class="sticky-col tot-th-prod" rowspan="2">PRODUCTO</th>
-              <th colspan="2" class="tot-th-fab tot-th-alv">ALVEAR</th>
-              <th colspan="2" class="tot-th-fab tot-th-mor">MORÓN</th>
-              <th colspan="2" class="tot-th-fab tot-th-ban">BAÑADO</th>
+              <th colspan="3" class="tot-th-fab tot-th-alv">ALVEAR</th>
+              <th colspan="3" class="tot-th-fab tot-th-mor">MORÓN</th>
+              <th colspan="3" class="tot-th-fab tot-th-ban">BAÑADO</th>
             </tr>
             <tr>
               ${COLS_TOTALES.map((col) => `<th class="tot-th-col ${col.cls}">${col.label}</th>`).join('')}
