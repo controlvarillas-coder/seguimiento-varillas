@@ -157,10 +157,25 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
           ? `<div style="font-weight:700;color:#a78bfa;">${row.alvearFechaEntrega}</div>`
           : '<span style="color:rgba(255,255,255,.25);font-size:12px;">Sin fecha</span>'}
       </td>
+      <td class="pedido-col-alvear" style="min-width:120px;text-align:center;">
+        ${(() => {
+          const ped = Number(row.moronCantidad) || 0;
+          const ent = Number(row.alvearCantidadEntregada || 0);
+          if (ped === 0) return '<span style="color:rgba(255,255,255,.2);font-size:12px;">—</span>';
+          if (ent >= ped)  return '<span class="pedido-estado-pill pedido-estado-completo">✅ Completo</span>';
+          if (ent > 0)     return '<span class="pedido-estado-pill pedido-estado-parcial">⚠️ Parcial<br><small>' + ent + '/' + ped + '</small></span>';
+          return '<span class="pedido-estado-pill pedido-estado-pendiente">🕐 Pendiente</span>';
+        })()}
+      </td>
+      <td class="pedido-col-alvear" style="min-width:180px;">
+        ${row.alvearObservacion
+          ? `<div style="font-size:12px;color:#d8b4fe;padding:4px 6px;border-radius:8px;background:rgba(143,123,255,.10);border:1px solid rgba(143,123,255,.18);line-height:1.4;">${row.alvearObservacion}</div>`
+          : '<span style="color:rgba(255,255,255,.2);font-size:12px;">—</span>'}
+      </td>
     </tr>
   `).join('');
 
-  if (!body) body = '<tr><td colspan="5">Sin productos.</td></tr>';
+  if (!body) body = '<tr><td colspan="7">Sin productos.</td></tr>';
 
   tableEl.innerHTML = `
     <thead>
@@ -169,7 +184,9 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
         <th class="pedido-col-moron">CANTIDAD SOLICITADA</th>
         <th class="pedido-col-moron">TIPO</th>
         <th class="pedido-col-moron">OBSERVACIÓN</th>
-        <th class="pedido-col-alvear">FECHA ENTREGA (Alvear)</th>
+        <th class="pedido-col-alvear">FECHA ENTREGA</th>
+        <th class="pedido-col-alvear">ESTADO</th>
+        <th class="pedido-col-alvear">OBS. ALVEAR</th>
       </tr>
     </thead>
     <tbody>${body}</tbody>
