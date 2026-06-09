@@ -717,3 +717,56 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
   text-align: center;
 }
 .tot-table-wrap { overflow: hidden; }
+
+/* ─── TOTALES: columna TOTAL por fábrica ────────────────────── */
+.tot-col-alv-total {
+  border-left: 2px solid rgba(52,211,153,.4) !important;
+  background: rgba(52,211,153,.07) !important;
+}
+.tot-col-alv-total .tot-td-val,
+td.tot-col-alv-total { color: #34d399 !important; font-weight: 900 !important; }
+
+.tot-col-mor-total {
+  border-left: 2px solid rgba(99,135,255,.4) !important;
+  background: rgba(99,135,255,.07) !important;
+}
+.tot-col-mor-total .tot-td-val,
+td.tot-col-mor-total { color: #93c5fd !important; font-weight: 900 !important; }
+
+.tot-col-ban-total {
+  border-left: 2px solid rgba(251,191,36,.4) !important;
+  background: rgba(251,191,36,.07) !important;
+}
+.tot-col-ban-total .tot-td-val,
+td.tot-col-ban-total { color: #fbbf24 !important; font-weight: 900 !important; }
+
+/* ─── TOTALES: fechas reportes profesionales ────────────────── */
+.tot-fechas-wrap {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.tot-fecha-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.tot-fecha-fab {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+}
+.tot-fecha-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace, Inter, Arial, sans-serif;
+}
+.tot-fecha-sin .tot-fecha-val { color: var(--muted); }
