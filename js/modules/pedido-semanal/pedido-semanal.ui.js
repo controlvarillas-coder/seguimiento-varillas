@@ -239,6 +239,11 @@ function _renderTableAlvear(tableEl, rows, canEditField, onFieldChange, alvearCo
         <td style="text-align:center;font-weight:700;white-space:nowrap;color:${completo ? '#3ddc97' : '#ff5a5a'};">
           ${completo ? '✅ OK' : `Falta: ${faltante}`}
         </td>
+        <td class="pedido-col-moron" style="min-width:180px;">
+          ${row.moronObservacion
+            ? `<div style="font-size:12px;color:#bfdbfe;padding:4px 6px;border-radius:8px;background:rgba(111,168,255,.10);border:1px solid rgba(111,168,255,.18);line-height:1.4;">${row.moronObservacion}</div>`
+            : '<span style="color:rgba(255,255,255,.2);font-size:12px;">—</span>'}
+        </td>
       </tr>
     `;
   }).join('');
@@ -253,6 +258,7 @@ function _renderTableAlvear(tableEl, rows, canEditField, onFieldChange, alvearCo
         <th class="pedido-col-alvear">MOTIVOS</th>
         <th class="pedido-col-alvear">OBSERVACIÓN</th>
         <th>ESTADO</th>
+        <th class="pedido-col-moron">NOTAS MORÓN</th>
       </tr>
     </thead>
     <tbody>${body}</tbody>
