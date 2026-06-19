@@ -128,6 +128,28 @@ const DAY_GROUPS = [
     ]
   },
   {
+    key: 'linaresChica',
+    title: 'LINARES CAJA CHICA',
+    colorClass: 'group-linares-chica',
+    columns: [
+      { key: 'alvPlus',  label: 'LINARES ENTRADA' },
+      { key: 'alvMinus', label: 'LINARES SALIDA' },
+      { key: 'dif',      label: 'LINARES DIFERENCIA' },
+      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
+    ]
+  },
+  {
+    key: 'linaresGrande',
+    title: 'LINARES CAJA GRANDE',
+    colorClass: 'group-linares-grande',
+    columns: [
+      { key: 'alvPlus',  label: 'LINARES ENTRADA' },
+      { key: 'alvMinus', label: 'LINARES SALIDA' },
+      { key: 'dif',      label: 'LINARES DIFERENCIA' },
+      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
+    ]
+  },
+  {
     key: 'banadoChica',
     title: 'BAÑADO CAJA CHICA',
     colorClass: 'group-banado-chica',
@@ -199,16 +221,20 @@ const INITIAL_STOCK_COLUMNS = [
   { key: 'moronGrande', label: 'MORÓN CAJA GRANDE' },
   { key: 'secandoChica', label: 'SECANDO CAJA CHICA' },
   { key: 'secandoGrande', label: 'SECANDO CAJA GRANDE' },
-  { key: 'banadoChica', label: 'BAÑADO CAJA CHICA' },
-  { key: 'banadoGrande', label: 'BAÑADO CAJA GRANDE' }
+  { key: 'banadoChica',   label: 'BAÑADO CAJA CHICA' },
+  { key: 'banadoGrande',  label: 'BAÑADO CAJA GRANDE' },
+  { key: 'linaresChica',  label: 'LINARES CAJA CHICA' },
+  { key: 'linaresGrande', label: 'LINARES CAJA GRANDE' }
 ];
 
 const INPUT_GROUP_BY_FABRICA = {
   caja_chica: ['alvear', 'cajaChica'],
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
-  banado: ['banadoChica', 'banadoGrande'],
+  banado:   ['banadoChica', 'banadoGrande'],
+  linares:  ['linaresChica', 'linaresGrande'],
   alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
   moron: ['moronChicaInterna', 'moronGrandeInterna'],
+  linares: ['linaresChica', 'linaresGrande'],
   neutro: []
 };
 
@@ -522,6 +548,10 @@ function computeGroupTotal(groupKey, data = {}) {
 
     case 'cajaGrandeMor':
       return num(data.morPlus) - num(data.morMinus) + num(data.dif);
+
+    case 'linaresChica':
+    case 'linaresGrande':
+      return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
 
     case 'banadoChica':
       return (
@@ -1091,8 +1121,9 @@ function getVisibleGroupsForCurrentView() {
   }
 
   const groupsByFactory = {
-    alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-    banado: ['banadoChica', 'banadoGrande']
+    alvear:   ['alvear', 'cajaChica', 'cajaGrandeAlv'],
+    banado:   ['banadoChica', 'banadoGrande'],
+    linares:  ['linaresChica', 'linaresGrande']
   };
 
   const allowedKeys = groupsByFactory[fabrica] || [];
@@ -1114,6 +1145,7 @@ function getEditableGroupsForCurrentUser() {
     return MORON_INTERNAL_GROUPS.map((g) => g.key);
   }
 
+  // linares uses same editable groups as alvear-style
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
 
@@ -1240,7 +1272,7 @@ function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
   }
 
   const isCurrentReportGroup =
-    ['banadoChica', 'banadoGrande', 'moronChicaInterna', 'moronGrandeInterna', 'alvear', 'cajaChica', 'cajaGrandeAlv', 'cajaChicaMor', 'cajaGrandeMor']
+    ['banadoChica', 'banadoGrande', 'moronChicaInterna', 'moronGrandeInterna', 'alvear', 'cajaChica', 'cajaGrandeAlv', 'cajaChicaMor', 'cajaGrandeMor', 'linaresChica', 'linaresGrande']
       .includes(groupKey);
 
   if (
@@ -1270,6 +1302,27 @@ function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial
     const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
 
     total += num(rowData?.secando) - num(rowData?.cosecha);
+  }
+
+  return total;
+}
+
+function getLinaresRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+  const { year, month, day } = getDateParts(dayStr);
+
+  let total =
+    groupKey === 'linaresChica'
+      ? num(stockInicial?.linaresChica)
+      : num(stockInicial?.linaresGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total +=
+      num(rowData?.alvPlus) -
+      num(rowData?.alvMinus) +
+      num(rowData?.dif);
   }
 
   return total;
@@ -2069,7 +2122,7 @@ function renderTotales() {
   }
 
   // ── Obtener el reporte más reciente por fábrica ──
-  const fabricas = ['alvear', 'moron', 'banado'];
+  const fabricas = ['alvear', 'moron', 'banado', 'linares'];
   const ultimoReportePorFabrica = {};
 
   fabricas.forEach((fab) => {
@@ -2090,6 +2143,9 @@ function renderTotales() {
     { key: 'ban_chica',       fab: 'banado', group: 'banadoChica',       label: 'BAÑADO CHICA',cls: 'tot-col-ban' },
     { key: 'ban_grande',      fab: 'banado', group: 'banadoGrande',      label: 'BAÑADO GRANDE',cls: 'tot-col-ban' },
     { key: 'ban_total',       fab: null,     group: null,                 label: 'TOTAL BÑ',    cls: 'tot-col-ban-total', isTotal: true, keys: ['ban_chica','ban_grande'] },
+    { key: 'lin_chica',       fab: 'linares', group: 'linaresChica',      label: 'LIN CHICA',   cls: 'tot-col-lin' },
+    { key: 'lin_grande',      fab: 'linares', group: 'linaresGrande',     label: 'LIN GRANDE',  cls: 'tot-col-lin' },
+    { key: 'lin_total',       fab: null,      group: null,                 label: 'TOTAL LIN',   cls: 'tot-col-lin-total', isTotal: true, keys: ['lin_chica','lin_grande'] },
   ];
 
   // ── Construir mapa productoId → totales usando las mismas funciones que la tabla ──
@@ -2126,6 +2182,12 @@ function renderTotales() {
           break;
         case 'moronGrandeInterna':
           val = getMoronRunningTotal(fecha, row.productoId, 'moronGrandeInterna', stockInicial);
+          break;
+        case 'linaresChica':
+          val = getLinaresRunningTotal(fecha, row.productoId, 'linaresChica', row.stockInicial || {});
+          break;
+        case 'linaresGrande':
+          val = getLinaresRunningTotal(fecha, row.productoId, 'linaresGrande', row.stockInicial || {});
           break;
         case 'banadoChica':
           val = getBanadoRunningTotal(fecha, row.productoId, 'banadoChica', stockInicial);
@@ -2190,6 +2252,8 @@ function renderTotales() {
               <th colspan="3" class="tot-th-fab tot-th-alv">ALVEAR</th>
               <th colspan="3" class="tot-th-fab tot-th-mor">MORÓN</th>
               <th colspan="3" class="tot-th-fab tot-th-ban">BAÑADO</th>
+              <th colspan="3" class="tot-th-fab tot-th-lin">LINARES</th>
+              <th colspan="3" class="tot-th-fab tot-th-lin">LINARES</th>
             </tr>
             <tr>
               ${COLS_TOTALES.map((col) => `<th class="tot-th-col ${col.cls}">${col.label}</th>`).join('')}
@@ -2715,13 +2779,14 @@ function getPedidoSemanalViewMode() {
   const rol = state.perfil?.rol;
   if (rol === 'gerencia') return 'gerencia';
   const fab = state.perfil?.fabrica;
-  if (fab === 'moron') return 'moron';
-  if (fab === 'alvear') return 'alvear';
-  if (fab === 'banado' || fab === 'bañado') return 'banado';
-  // Fallback: si no tiene fábrica asignada pero es operativo, usar rol
-  if (rol === 'moron') return 'moron';
-  if (rol === 'alvear') return 'alvear';
-  return 'gerencia'; // fallback seguro: mostrar todo
+  if (fab === 'moron')                       return 'moron';
+  if (fab === 'alvear')                      return 'alvear';
+  if (fab === 'banado' || fab === 'bañado')  return 'banado';
+  if (fab === 'linares')                     return 'linares';
+  if (rol === 'moron')                       return 'moron';
+  if (rol === 'alvear')                      return 'alvear';
+  if (rol === 'linares')                     return 'linares';
+  return 'gerencia';
 }
 
 function getPedidoSemanalRowsForView(rows = []) {
@@ -2739,6 +2804,11 @@ function getPedidoSemanalRowsForView(rows = []) {
     return rows;
   }
   if (viewMode === 'banado')   return rows;
+  if (viewMode === 'linares') {
+    // Linares solo ve productos donde moronFabricaDestino === 'linares'
+    const filtradas = rows.filter((row) => row.moronFabricaDestino === 'linares' && num(row.moronCantidad) > 0);
+    return filtradas.length > 0 ? filtradas : [];
+  }
 
   if (viewMode === 'moron') {
     // Filtro opcional: solo productos con cantidad cargada
@@ -2754,8 +2824,12 @@ function getPedidoSemanalRowsForView(rows = []) {
   }
 
   if (viewMode === 'alvear') {
-    const filtradas = rows.filter((row) => num(row.moronCantidad) > 0);
-    return filtradas.length > 0 ? filtradas : rows;
+    // Alvear ve solo productos con fabricaDestino === 'alvear' (o sin destino = default)
+    const filtradas = rows.filter((row) =>
+      num(row.moronCantidad) > 0 &&
+      (!row.moronFabricaDestino || row.moronFabricaDestino === 'alvear')
+    );
+    return filtradas.length > 0 ? filtradas : rows.filter((row) => !row.moronFabricaDestino || row.moronFabricaDestino === 'alvear');
   }
 
   return rows;
