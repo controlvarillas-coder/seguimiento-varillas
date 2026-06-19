@@ -143,6 +143,18 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
           <option value="carros" ${(row.moronTipo || 'bultos') === 'carros' ? 'selected' : ''}>🛒 CARROS</option>
         </select>
       </td>
+      <td class="pedido-col-moron" style="min-width:140px;">
+        <select
+          class="pedido-tipo-select"
+          data-row="${rowIndex}"
+          data-field="moronFabricaDestino"
+          ${canEditField('moronCantidad') ? '' : 'disabled'}
+        >
+          <option value="alvear"  ${(row.moronFabricaDestino || 'alvear') === 'alvear'  ? 'selected' : ''}>🏭 Alvear</option>
+          <option value="banado"  ${(row.moronFabricaDestino || 'alvear') === 'banado'  ? 'selected' : ''}>💧 Bañado</option>
+          <option value="linares" ${(row.moronFabricaDestino || 'alvear') === 'linares' ? 'selected' : ''}>🌿 Linares</option>
+        </select>
+      </td>
       <td class="pedido-col-moron" style="min-width:220px;">
         <textarea
           class="pedido-textarea"
@@ -175,7 +187,7 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
     </tr>
   `).join('');
 
-  if (!body) body = '<tr><td colspan="7">Sin productos.</td></tr>';
+  if (!body) body = '<tr><td colspan="8">Sin productos.</td></tr>';
 
   tableEl.innerHTML = `
     <thead>
@@ -183,6 +195,7 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
         <th class="sticky-col">AROMA</th>
         <th class="pedido-col-moron">CANTIDAD SOLICITADA</th>
         <th class="pedido-col-moron">TIPO</th>
+        <th class="pedido-col-moron">FÁBRICA DESTINO</th>
         <th class="pedido-col-moron">OBSERVACIÓN</th>
         <th class="pedido-col-alvear">FECHA ENTREGA</th>
         <th class="pedido-col-alvear">ESTADO</th>
