@@ -1278,6 +1278,16 @@ const GROUP_FABRICA_OWNER = {
   linaresGrande:      'linares'
 };
 
+// ─── FUENTE DE VERDAD DEL STOCK INICIAL ──────────────────────────────────────
+// Siempre usa stock_mensual (Firestore cache) como fuente canónica.
+// NO usa row.stockInicial del reporte abierto, que puede variar según qué
+// planilla esté en pantalla. Esto elimina los totales cambiantes entre fechas.
+function getStockInicialCanonicoParaFecha(fecha, productoId) {
+  if (!fecha) return EMPTY_STOCK();
+  const monthValue = String(fecha).slice(0, 7);
+  return getStockMensualForProduct(monthValue, productoId);
+}
+
 function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
   // Solo usar el reporte en memoria si:
   //   1. La fecha coincide con el reporte abierto
@@ -1301,8 +1311,9 @@ function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
   return getMergedGroupDataForDay(fecha, productoId, groupKey);
 }
 
-function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
   let total =
     groupKey === 'banadoChica'
@@ -1319,8 +1330,9 @@ function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, stockInicial
   return total;
 }
 
-function getLinaresRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+function getLinaresRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
   let total =
     groupKey === 'linaresChica'
@@ -1340,8 +1352,9 @@ function getLinaresRunningTotal(dayStr, productoId, groupKey, stockInicial = {})
   return total;
 }
 
-function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+function getBanadoRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
   let total =
     groupKey === 'banadoChica'
@@ -1362,8 +1375,9 @@ function getBanadoRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) 
   return total;
 }
 
-function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
+function getMoronRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
   let total =
     groupKey === 'moronChicaInterna'
@@ -1384,8 +1398,9 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, stockInicial = {}) {
   return total;
 }
 
-function getCajaChicaAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+function getCajaChicaAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearChica);
 
   for (let d = 1; d <= day; d++) {
@@ -1401,8 +1416,9 @@ function getCajaChicaAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
   return total;
 }
 
-function getCajaGrandeAlvearRunningTotal(dayStr, productoId, stockInicial = {}) {
+function getCajaGrandeAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearGrande);
 
   for (let d = 1; d <= day; d++) {
@@ -1418,8 +1434,9 @@ function getCajaGrandeAlvearRunningTotal(dayStr, productoId, stockInicial = {}) 
   return total;
 }
 
-function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
+function getCajaChicaMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronChica);
 
   for (let d = 1; d <= day; d++) {
@@ -1438,8 +1455,9 @@ function getCajaChicaMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
   return total;
 }
 
-function getCajaGrandeMoronRunningTotal(dayStr, productoId, stockInicial = {}) {
+function getCajaGrandeMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
   const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronGrande);
 
   for (let d = 1; d <= day; d++) {
@@ -2761,7 +2779,7 @@ function canEditPedidoField(fieldKey) {
 
   if (isMoron) {
     if (moronLocked) return false;
-    return ['moronCantidad', 'moronObservacion'].includes(fieldKey);
+    return ['moronCantidad', 'moronObservacion', 'moronFabricaDestino', 'moronTipo'].includes(fieldKey);
   }
 
   if (isAlvear) {
