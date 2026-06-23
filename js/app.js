@@ -1263,22 +1263,34 @@ function getAnyRowForDateProduct(fecha, productoId) {
   return null;
 }
 
+// Mapa: groupKey → fábrica propietaria del dato
+const GROUP_FABRICA_OWNER = {
+  alvear:             'alvear',
+  cajaChica:          'alvear',
+  cajaGrandeAlv:      'alvear',
+  cajaChicaMor:       'moron',
+  cajaGrandeMor:      'moron',
+  moronChicaInterna:  'moron',
+  moronGrandeInterna: 'moron',
+  banadoChica:        'banado',
+  banadoGrande:       'banado',
+  linaresChica:       'linares',
+  linaresGrande:      'linares'
+};
+
 function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
-  const currentFecha = $('cargaFecha')?.value;
-  let currentFabrica = $('cargaFabrica')?.value;
-
-  if (!currentFabrica && state.perfil?.fabrica) {
-    currentFabrica = state.perfil.fabrica;
-  }
-
-  const isCurrentReportGroup =
-    ['banadoChica', 'banadoGrande', 'moronChicaInterna', 'moronGrandeInterna', 'alvear', 'cajaChica', 'cajaGrandeAlv', 'cajaChicaMor', 'cajaGrandeMor', 'linaresChica', 'linaresGrande']
-      .includes(groupKey);
+  // Solo usar el reporte en memoria si:
+  //   1. La fecha coincide con el reporte abierto
+  //   2. La fábrica del reporte coincide con la fábrica dueña del groupKey
+  // Esto evita que el reporte abierto de una fábrica contamine los
+  // running totals de grupos de otras fábricas.
+  const ownerFabrica = GROUP_FABRICA_OWNER[groupKey];
 
   if (
     state.reporteActual &&
     state.reporteActual.fecha === fecha &&
-    isCurrentReportGroup
+    ownerFabrica &&
+    state.reporteActual.fabrica === ownerFabrica
   ) {
     const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
     if (row?.groups?.[groupKey]) {
@@ -2803,7 +2815,13 @@ function getPedidoSemanalRowsForView(rows = []) {
     }
     return rows;
   }
-  if (viewMode === 'banado')   return rows;
+  if (viewMode === 'banado') {
+    // Bañado solo ve productos con fabricaDestino === 'banado' y cantidad > 0
+    const filtradas = rows.filter((row) =>
+      row.moronFabricaDestino === 'banado' && num(row.moronCantidad) > 0
+    );
+    return filtradas;
+  }
   if (viewMode === 'linares') {
     // Linares solo ve productos donde moronFabricaDestino === 'linares'
     const filtradas = rows.filter((row) => row.moronFabricaDestino === 'linares' && num(row.moronCantidad) > 0);
@@ -2824,12 +2842,13 @@ function getPedidoSemanalRowsForView(rows = []) {
   }
 
   if (viewMode === 'alvear') {
-    // Alvear ve solo productos con fabricaDestino === 'alvear' (o sin destino = default)
+    // Alvear ve solo productos con fabricaDestino === 'alvear' (o sin destino = default alvear)
+    // Excluye explícitamente los destinados a banado o linares
     const filtradas = rows.filter((row) =>
       num(row.moronCantidad) > 0 &&
       (!row.moronFabricaDestino || row.moronFabricaDestino === 'alvear')
     );
-    return filtradas.length > 0 ? filtradas : rows.filter((row) => !row.moronFabricaDestino || row.moronFabricaDestino === 'alvear');
+    return filtradas;
   }
 
   return rows;
