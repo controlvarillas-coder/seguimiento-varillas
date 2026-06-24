@@ -3130,6 +3130,45 @@ function renderPedidoSemanal() {
     btnConfirmarContainer.style.display = mostrar ? 'block' : 'none';
   }
 
+  // ── Botones Restablecer en Borrador (solo gerencia) ──────────────────
+  const isGerencia = state.perfil?.rol === 'gerencia';
+  let resetContainer = $('pedido-reset-borradores');
+  if (!resetContainer && isGerencia) {
+    // Crear el contenedor dinámicamente la primera vez y ubicarlo junto al btnConfirmarAlvear
+    resetContainer = document.createElement('div');
+    resetContainer.id = 'pedido-reset-borradores';
+    resetContainer.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;';
+    const ancla = $('btnConfirmarAlvear') || table;
+    ancla.parentNode?.insertBefore(resetContainer, ancla);
+  }
+  if (resetContainer) {
+    if (isGerencia) {
+      const ped = state.pedidoSemanalActual;
+      const btnsDef = [
+        { fabrica: 'moron',   label: '↩ Borrador Morón',   activo: !!ped?.moronLocked },
+        { fabrica: 'alvear',  label: '↩ Borrador Alvear',  activo: !!ped?.alvearConfirmado },
+        { fabrica: 'banado',  label: '↩ Borrador Bañado',  activo: !!ped?.banadoConfirmado },
+        { fabrica: 'linares', label: '↩ Borrador Linares', activo: !!ped?.linaresConfirmado },
+      ];
+      resetContainer.innerHTML = btnsDef.map(({ fabrica, label, activo }) => `
+        <button
+          class="btn btn-sm ${activo ? 'btn-danger' : 'btn-outline'}"
+          style="font-size:12px;opacity:${activo ? '1' : '0.45'};cursor:${activo ? 'pointer' : 'not-allowed'};"
+          data-reset-fabrica="${fabrica}"
+          ${activo ? '' : 'disabled'}
+          title="${activo ? `Restablecer ${fabrica} en borrador` : `${fabrica} ya está en borrador`}"
+        >${label}</button>
+      `).join('');
+      // Bind clicks (recreamos el contenido cada render, así no acumulamos listeners)
+      resetContainer.querySelectorAll('[data-reset-fabrica]').forEach((btn) => {
+        btn.addEventListener('click', () => restablecerPedidoEnBorrador(btn.dataset.resetFabrica));
+      });
+      resetContainer.style.display = 'flex';
+    } else {
+      resetContainer.style.display = 'none';
+    }
+  }
+
   renderPedidoSemanalTable(table, {
     rows,
     viewMode,
@@ -3234,8 +3273,61 @@ async function confirmarEntregaAlvear() {
 }
 
 /* ================================================================
-   REPORTES — filtros y tabla
+   RESTABLECER EN BORRADOR — solo gerencia
+   fabrica: 'moron' | 'alvear' | 'banado' | 'linares'
 ================================================================ */
+async function restablecerPedidoEnBorrador(fabrica) {
+  if (state.perfil?.rol !== 'gerencia') { toast('Solo gerencia puede restablecer.'); return; }
+  if (!state.pedidoSemanalActual) { toast('No hay pedido cargado.'); return; }
+
+  const nombres = { moron: 'Morón', alvear: 'Alvear', banado: 'Bañado', linares: 'Linares' };
+  const nombre = nombres[fabrica] || fabrica;
+
+  if (!confirm(`¿Restablecer borrador de ${nombre}? Esto le permite volver a editar su pedido/entrega.`)) return;
+
+  const monthValue = $('pedidoMes')?.value || '';
+  const weekMeta = state.pedidoSemanas.find((w) => w.key === state.pedidoSemanalActual?.weekKey)
+    || state.pedidoSemanas[0];
+  if (!weekMeta) { toast('No se encontró la semana.'); return; }
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+
+  // Campos a resetear según la fábrica
+  const resetPayload = { updatedAt: serverTimestamp() };
+  if (fabrica === 'moron') {
+    resetPayload.moronLocked = false;
+  } else if (fabrica === 'alvear') {
+    resetPayload.alvearConfirmado = false;
+    resetPayload.alvearConfirmadoPor = null;
+    resetPayload.alvearConfirmadoEn = null;
+  } else if (fabrica === 'banado') {
+    resetPayload.banadoConfirmado = false;
+    resetPayload.banadoConfirmadoPor = null;
+    resetPayload.banadoConfirmadoEn = null;
+  } else if (fabrica === 'linares') {
+    resetPayload.linaresConfirmado = false;
+    resetPayload.linaresConfirmadoPor = null;
+    resetPayload.linaresConfirmadoEn = null;
+  }
+
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, resetPayload);
+  } else {
+    await setDoc(ref, { ...state.pedidoSemanalActual, ...resetPayload, createdAt: serverTimestamp() });
+  }
+
+  // Actualizar estado local
+  Object.assign(state.pedidoSemanalActual, resetPayload);
+  delete state.pedidoSemanalActual.updatedAt;
+
+  toast(`✅ ${nombre} restablecido en borrador.`);
+  await refreshAll();
+  renderPedidoSemanal();
+}
+
+
 
 function renderReportesFiltros() {
   const selectCat = $('reporteCategoria');
