@@ -41,6 +41,16 @@ const $ = (id) => document.getElementById(id);
 
 const MANUAL_INITIAL_MONTH = '2026-04';
 
+/* ================================================================
+   PERFORMANCE — cache de running totals y TTL de colecciones estáticas
+================================================================ */
+const _runningTotalCache = new Map();
+function _invalidateRunningTotalCache() { _runningTotalCache.clear(); }
+
+let _lastProductosLoad = 0;
+let _lastUsuariosLoad  = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
 const state = {
   currentUser: null,
   perfil: null,
@@ -232,10 +242,9 @@ const INPUT_GROUP_BY_FABRICA = {
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
   banado:   ['banadoChica', 'banadoGrande'],
   linares:  ['linaresChica', 'linaresGrande'],
-  alvear: ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-  moron: ['moronChicaInterna', 'moronGrandeInterna'],
-  linares: ['linaresChica', 'linaresGrande'],
-  neutro: []
+  alvear:   ['alvear', 'cajaChica', 'cajaGrandeAlv'],
+  moron:    ['moronChicaInterna', 'moronGrandeInterna'],
+  neutro:   []
 };
 
 const PEDIDO_FIELDS = {
@@ -556,7 +565,7 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'banadoChica':
       return (
         num(data.banadoPlus) +
-        num(data.totalSecando) +
+        // totalSecando NO se suma: es readonly (running total acumulado), sumar causaría doble conteo
         num(data.cosecha) -
         num(data.salida) +
         num(data.dif)
@@ -565,7 +574,6 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'banadoGrande':
       return (
         num(data.banadoPlus) +
-        num(data.totalSecando) +
         num(data.cosecha) -
         num(data.salida) +
         num(data.dif)
@@ -1015,7 +1023,7 @@ function renderProductos() {
           updateDoc(doc(db, 'productos', id), { orden })
         ));
         toast('Orden guardado.');
-        await _refreshProductos(); renderProductos();
+        _lastProductosLoad = 0; await _refreshProductos(); renderProductos();
       } catch (err) {
         toast('Error al guardar orden.');
         console.error(err);
@@ -1031,7 +1039,7 @@ function renderProductos() {
       if (!item) return;
       await updateDoc(doc(db, 'productos', id), { activo: item.activo === false ? true : false });
       toast('Producto actualizado.');
-      await _refreshProductos(); renderProductos();
+      _lastProductosLoad = 0; await _refreshProductos(); renderProductos();
     });
   });
 
@@ -1046,7 +1054,7 @@ function renderProductos() {
 
       await updateDoc(doc(db, 'productos', id), { visiblePara, categoria });
       toast('Producto guardado.');
-      await _refreshProductos(); renderProductos();
+      _lastProductosLoad = 0; await _refreshProductos(); renderProductos();
     });
   });
 }
@@ -1093,7 +1101,7 @@ async function registrarProducto(ev) {
   });
 
   toast('Producto guardado.');
-  await _refreshProductos(); renderProductos();
+  _lastProductosLoad = 0; await _refreshProductos(); renderProductos();
 }
 
 // Retorna true si la fila tiene al menos un movimiento en los grupos visibles para el usuario actual
@@ -1289,18 +1297,17 @@ function getStockInicialCanonicoParaFecha(fecha, productoId) {
 }
 
 function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
-  // Solo usar el reporte en memoria si:
-  //   1. La fecha coincide con el reporte abierto
-  //   2. La fábrica del reporte coincide con la fábrica dueña del groupKey
-  // Esto evita que el reporte abierto de una fábrica contamine los
-  // running totals de grupos de otras fábricas.
   const ownerFabrica = GROUP_FABRICA_OWNER[groupKey];
 
   if (
     state.reporteActual &&
     state.reporteActual.fecha === fecha &&
     ownerFabrica &&
-    state.reporteActual.fabrica === ownerFabrica
+    state.reporteActual.fabrica === ownerFabrica &&
+    // BUG #3 FIX: solo usar datos en memoria si el reporte ya fue guardado
+    // en Firestore (idYaExistia=true) o fue guardado en esta sesión.
+    // Evita que ediciones sin guardar contaminen running totals.
+    (state.reporteActual.idYaExistia || state.reporteActual._guardadoEnSesion)
   ) {
     const row = state.reporteActual.rows?.find((r) => r.productoId === productoId);
     if (row?.groups?.[groupKey]) {
@@ -1312,6 +1319,7 @@ function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
 }
 
 function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
+  const _ck = `bsec|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
@@ -1327,10 +1335,12 @@ function getBanadoSecandoRunningTotal(dayStr, productoId, groupKey, _stockIgnora
     total += num(rowData?.secando) - num(rowData?.cosecha);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getLinaresRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
+  const _ck = `lin|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
@@ -1349,10 +1359,12 @@ function getLinaresRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {
       num(rowData?.dif);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getBanadoRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
+  const _ck = `ban|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
@@ -1372,10 +1384,12 @@ function getBanadoRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}
       num(rowData?.dif);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getMoronRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
+  const _ck = `mor|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
 
@@ -1395,10 +1409,12 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {})
       num(rowData?.diferencia);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getCajaChicaAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `ccalv|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearChica);
@@ -1413,10 +1429,12 @@ function getCajaChicaAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {})
       num(rowData?.dif);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getCajaGrandeAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `cgalv|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearGrande);
@@ -1431,10 +1449,12 @@ function getCajaGrandeAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}
       num(rowData?.dif);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getCajaChicaMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `ccmor|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronChica);
@@ -1452,10 +1472,12 @@ function getCajaChicaMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) 
       num(rowData?.diferencia);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
 function getCajaGrandeMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `cgmor|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronGrande);
@@ -1472,6 +1494,7 @@ function getCajaGrandeMoronRunningTotal(dayStr, productoId, _stockIgnorado = {})
       num(rowData?.diferencia);
   }
 
+  _runningTotalCache.set(_ck, total);
   return total;
 }
 
@@ -1524,7 +1547,12 @@ function applyPreviousMonthInitialStock(rows = [], monthValue = '', fecha = '') 
 }
 
 function getInitialStockForMonth(productoId, monthValue) {
-  // Buscar el primer reporte del mes que tenga stock inicial no-cero
+  // Prioridad 1: stock_mensual (fuente canónica, actualizada por gerencia)
+  const stockMensual = getStockMensualForProduct(monthValue, productoId);
+  const tieneStockMensual = Object.values(stockMensual).some((v) => num(v) !== 0);
+  if (tieneStockMensual) return stockMensual;
+
+  // Prioridad 2: primer reporte del mes con stock (fallback)
   const reportesDelMes = state.reportes
     .filter((r) => r.fecha?.startsWith(monthValue))
     .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
@@ -1540,15 +1568,13 @@ function getInitialStockForMonth(productoId, monthValue) {
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
-  return {
-    alvearChica: 0, alvearGrande: 0,
-    moronChica: 0, moronGrande: 0,
-    secandoChica: 0, secandoGrande: 0,
-    banadoChica: 0, banadoGrande: 0
-  };
+  return EMPTY_STOCK();
 }
 
 function getAlvearRunningTotal(dayStr, productoId) {
+  const cacheKey = `alv|${dayStr}|${productoId}`;
+  if (_runningTotalCache.has(cacheKey)) return _runningTotalCache.get(cacheKey);
+
   const { year, month, day } = getDateParts(dayStr);
   let total = 0;
 
@@ -1558,6 +1584,7 @@ function getAlvearRunningTotal(dayStr, productoId) {
     total += num(rowData?.alv);
   }
 
+  _runningTotalCache.set(cacheKey, total);
   return total;
 }
 
@@ -1598,12 +1625,7 @@ function getStockInitialAcumulado(fecha, productoId) {
   const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
   if (closing) return closing;
 
-  return {
-    alvearChica: 0, alvearGrande: 0,
-    moronChica: 0, moronGrande: 0,
-    secandoChica: 0, secandoGrande: 0,
-    banadoChica: 0, banadoGrande: 0
-  };
+  return EMPTY_STOCK();
 }
 
 
@@ -1662,7 +1684,9 @@ async function _aplicarStockInicialDesdeFirestore(rows, monthValue, fecha) {
           secandoChica: Number(stock.secandoChica || 0),
           secandoGrande:Number(stock.secandoGrande|| 0),
           banadoChica:  Number(stock.banadoChica  || 0),
-          banadoGrande: Number(stock.banadoGrande || 0)
+          banadoGrande: Number(stock.banadoGrande || 0),
+          linaresChica:  Number(stock.linaresChica  || 0),  // FIX BUG#8
+          linaresGrande: Number(stock.linaresGrande || 0)   // FIX BUG#8
         }
       };
     });
@@ -1685,7 +1709,8 @@ const EMPTY_STOCK = () => ({
   alvearChica: 0, alvearGrande: 0,
   moronChica: 0, moronGrande: 0,
   secandoChica: 0, secandoGrande: 0,
-  banadoChica: 0, banadoGrande: 0
+  banadoChica: 0, banadoGrande: 0,
+  linaresChica: 0, linaresGrande: 0   // FIX BUG#1: faltaban en EMPTY_STOCK
 });
 
 // Lee el stock mensual de Firestore y lo guarda en cache
@@ -1740,7 +1765,9 @@ async function _migrarStockDesdereportes(monthValue) {
             secandoChica: Number(st.secandoChica || 0),
             secandoGrande: Number(st.secandoGrande || 0),
             banadoChica: Number(st.banadoChica || 0),
-            banadoGrande: Number(st.banadoGrande || 0)
+            banadoGrande: Number(st.banadoGrande || 0),
+            linaresChica:  Number(st.linaresChica  || 0),  // FIX BUG#8
+            linaresGrande: Number(st.linaresGrande || 0)   // FIX BUG#8
           };
         });
       });
@@ -1766,7 +1793,9 @@ function getStockMensualForProduct(monthValue, productoId) {
     secandoChica:  Number(s.secandoChica  || 0),
     secandoGrande: Number(s.secandoGrande || 0),
     banadoChica:   Number(s.banadoChica   || 0),
-    banadoGrande:  Number(s.banadoGrande  || 0)
+    banadoGrande:  Number(s.banadoGrande  || 0),
+    linaresChica:  Number(s.linaresChica  || 0),  // FIX BUG#1
+    linaresGrande: Number(s.linaresGrande || 0)   // FIX BUG#1
   };
 }
 
@@ -1826,7 +1855,9 @@ async function generarStockProximoMes(monthValue) {
       secandoChica:  getBanadoSecandoRunningTotal(lastDate, producto.id, 'banadoChica', stockMes),
       secandoGrande: getBanadoSecandoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes),
       banadoChica:   getBanadoRunningTotal(lastDate, producto.id, 'banadoChica', stockMes),
-      banadoGrande:  getBanadoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes)
+      banadoGrande:  getBanadoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes),
+      linaresChica:  getLinaresRunningTotal(lastDate, producto.id, 'linaresChica', stockMes),  // FIX BUG#1
+      linaresGrande: getLinaresRunningTotal(lastDate, producto.id, 'linaresGrande', stockMes)  // FIX BUG#1
     };
   });
 
@@ -2283,7 +2314,6 @@ function renderTotales() {
               <th colspan="3" class="tot-th-fab tot-th-mor">MORÓN</th>
               <th colspan="3" class="tot-th-fab tot-th-ban">BAÑADO</th>
               <th colspan="3" class="tot-th-fab tot-th-lin">LINARES</th>
-              <th colspan="3" class="tot-th-fab tot-th-lin">LINARES</th>
             </tr>
             <tr>
               ${COLS_TOTALES.map((col) => `<th class="tot-th-col ${col.cls}">${col.label}</th>`).join('')}
@@ -2465,6 +2495,7 @@ function bindCargaInputs() {
 
 
 async function cargarReporteDiario() {
+  _invalidateRunningTotalCache(); // PERF: invalidar cache al cargar nuevo reporte
   const fecha = $('cargaFecha')?.value;
   let fabrica = $('cargaFabrica')?.value;
 
@@ -2549,6 +2580,7 @@ async function cargarReporteDiario() {
 }
 
 async function guardarReporte(estado = 'borrador') {
+  _invalidateRunningTotalCache(); // PERF: invalidar cache al guardar
   const fecha = $('cargaFecha')?.value;
   let fabrica = $('cargaFabrica')?.value;
 
@@ -2581,6 +2613,7 @@ async function guardarReporte(estado = 'borrador') {
     if (snapEstado === 'enviada') {
       toast('Esta planilla ya fue publicada y no puede modificarse.');
       state.reporteActual.idYaExistia = true;
+      state.reporteActual._guardadoEnSesion = true;
       state.reporteActual.estado = 'enviada';
       renderCargaDiaria();
       return;
@@ -2630,6 +2663,7 @@ async function guardarReporte(estado = 'borrador') {
 
   state.reporteActual.estado = estado;
   state.reporteActual.idYaExistia = true;
+      state.reporteActual._guardadoEnSesion = true;
 
   toast(estado === 'enviada' ? 'Planilla enviada.' : 'Planilla guardada.');
   await _refreshReportes(); await _refreshStock();
@@ -3355,20 +3389,30 @@ function _renderSeccionActiva() {
 }
 
 async function _refreshProductos() {
+  if (Date.now() - _lastProductosLoad < CACHE_TTL) return; // usar cache si es reciente
   state.productos = (await loadCollection('productos'))
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  _lastProductosLoad = Date.now();
 }
 
 async function _refreshReportes() {
   const now = new Date();
   const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const mesCarga  = $('cargaFecha')?.value?.slice(0, 7) || mesActual;
-  const meses = [...new Set([mesActual, mesCarga])];
 
-  const snaps = await Promise.all(meses.map((m) =>
+  // BUG #4 FIX: incluir el mes anterior al mes de carga para que los
+  // running totals del día 1 tengan los reportes completos del mes anterior
+  const [y, m] = mesCarga.split('-').map(Number);
+  const mesAnteriorAlCarga = m === 1
+    ? `${y - 1}-12`
+    : `${y}-${String(m - 1).padStart(2, '0')}`;
+
+  const meses = [...new Set([mesActual, mesCarga, mesAnteriorAlCarga])];
+
+  const snaps = await Promise.all(meses.map((mes) =>
     getDocs(query(collection(db, 'reportes_diarios'),
-      where('fecha', '>=', `${m}-01`),
-      where('fecha', '<=', `${m}-31`)
+      where('fecha', '>=', `${mes}-01`),
+      where('fecha', '<=', `${mes}-31`)
     ))
   ));
 
@@ -3619,6 +3663,7 @@ async function _autoGuardarReporte() {
 
   state.reporteActual.estado = 'borrador';
   state.reporteActual.idYaExistia = true;
+      state.reporteActual._guardadoEnSesion = true;
 
   // Indicador visual silencioso
   const estadoEl = $('estadoCarga');
@@ -3657,6 +3702,7 @@ async function volverABorrador() {
 
   state.reporteActual.estado = 'borrador';
   state.reporteActual.idYaExistia = true;
+      state.reporteActual._guardadoEnSesion = true;
 
   toast('Planilla vuelta a borrador. Ahora podés editarla.');
   renderCargaDiaria();
@@ -3970,7 +4016,12 @@ async function refreshAll() {
   // Carga en paralelo todo lo que no depende entre sí
   await Promise.all([
     _refreshProductos(),
-    loadCollection('usuarios').then((u) => { state.usuarios = u; }),
+    (async () => {
+      if (Date.now() - _lastUsuariosLoad >= CACHE_TTL) {
+        state.usuarios = await loadCollection('usuarios');
+        _lastUsuariosLoad = Date.now();
+      }
+    })(),
     _refreshStock(),
     _refreshReportes(),
     _refreshPedidos(),
