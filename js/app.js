@@ -1015,7 +1015,7 @@ function renderProductos() {
           updateDoc(doc(db, 'productos', id), { orden })
         ));
         toast('Orden guardado.');
-        await refreshAll();
+        await _refreshProductos(); renderProductos();
       } catch (err) {
         toast('Error al guardar orden.');
         console.error(err);
@@ -1031,7 +1031,7 @@ function renderProductos() {
       if (!item) return;
       await updateDoc(doc(db, 'productos', id), { activo: item.activo === false ? true : false });
       toast('Producto actualizado.');
-      await refreshAll();
+      await _refreshProductos(); renderProductos();
     });
   });
 
@@ -1046,7 +1046,7 @@ function renderProductos() {
 
       await updateDoc(doc(db, 'productos', id), { visiblePara, categoria });
       toast('Producto guardado.');
-      await refreshAll();
+      await _refreshProductos(); renderProductos();
     });
   });
 }
@@ -1093,7 +1093,7 @@ async function registrarProducto(ev) {
   });
 
   toast('Producto guardado.');
-  await refreshAll();
+  await _refreshProductos(); renderProductos();
 }
 
 // Retorna true si la fila tiene al menos un movimiento en los grupos visibles para el usuario actual
@@ -2632,7 +2632,7 @@ async function guardarReporte(estado = 'borrador') {
   state.reporteActual.idYaExistia = true;
 
   toast(estado === 'enviada' ? 'Planilla enviada.' : 'Planilla guardada.');
-  await refreshAll();
+  await _refreshReportes(); await _refreshStock();
   await cargarReporteDiario();
 }
 
@@ -3026,7 +3026,7 @@ async function guardarPedidoSemanal() {
 
   if (isMoron) toast('✅ Pedido confirmado y enviado a Alvear.');
   else toast('Pedido semanal guardado.');
-  await refreshAll();
+  await _refreshPedidos();
   renderPedidoSemanal();
 }
 
@@ -3268,7 +3268,7 @@ async function confirmarEntregaAlvear() {
 
   state.pedidoSemanalActual = { id, ...payload };
   toast('✅ Semana cerrada. El calendario se actualizará.');
-  await refreshAll();
+  await _refreshPedidos();
   renderPedidoSemanal();
 }
 
@@ -3323,11 +3323,82 @@ async function restablecerPedidoEnBorrador(fabrica) {
   delete state.pedidoSemanalActual.updatedAt;
 
   toast(`✅ ${nombre} restablecido en borrador.`);
-  await refreshAll();
+  await _refreshPedidos();
   renderPedidoSemanal();
 }
 
 
+
+/* ================================================================
+   REFRESH PARCIALES — cada función solo recarga lo mínimo necesario
+   y re-renderiza solo el módulo visible.
+================================================================ */
+
+function _seccionActiva() {
+  const active = document.querySelector('.section.active');
+  return active?.id?.replace('section-', '') || '';
+}
+
+function _renderSeccionActiva() {
+  const sec = _seccionActiva();
+  if (sec === 'dashboard')           renderDashboard();
+  else if (sec === 'productos')      renderProductos();
+  else if (sec === 'usuarios')       renderUsuarios();
+  else if (sec === 'carga')          renderCargaDiaria();
+  else if (sec === 'gerencia')       renderGerenciaExcel();
+  else if (sec === 'pedido-semanal') renderPedidoSemanal();
+  else if (sec === 'totales')        renderTotales();
+  else if (sec === 'reportes')       renderReportesFiltros();
+  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
+  renderGerenciaMenuBadge(state.alertas);
+  renderGerenciaAlertsPanel(state.alertas);
+}
+
+async function _refreshProductos() {
+  state.productos = (await loadCollection('productos'))
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+}
+
+async function _refreshReportes() {
+  const now = new Date();
+  const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const mesCarga  = $('cargaFecha')?.value?.slice(0, 7) || mesActual;
+  const meses = [...new Set([mesActual, mesCarga])];
+
+  const snaps = await Promise.all(meses.map((m) =>
+    getDocs(query(collection(db, 'reportes_diarios'),
+      where('fecha', '>=', `${m}-01`),
+      where('fecha', '<=', `${m}-31`)
+    ))
+  ));
+
+  // Merge: conservar meses anteriores ya cargados, reemplazar solo los traídos
+  const porId = new Map(state.reportes.map((r) => [r.id, r]));
+  snaps.forEach((snap) => {
+    snap.forEach((d) => {
+      porId.set(d.id, { id: d.id, ...d.data(), rows: (d.data().rows || []).map(normalizeExistingRow) });
+    });
+  });
+  state.reportes = [...porId.values()];
+}
+
+async function _refreshPedidos() {
+  const pedidosSemanales = await loadCollection('pedidos_semanales');
+  state.pedidosSemanalesCache = {};
+  pedidosSemanales.forEach((item) => {
+    state.pedidosSemanalesCache[item.id] = item;
+  });
+}
+
+async function _refreshStock() {
+  const now = new Date();
+  const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const mesAnterior = (() => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  await Promise.all([loadStockMensual(mesActual), loadStockMensual(mesAnterior)]);
+}
 
 function renderReportesFiltros() {
   const selectCat = $('reporteCategoria');
@@ -3502,7 +3573,7 @@ function procesarCargaMasivaCategorias() {
     }
 
     toast(`${actualizados} categorías actualizadas.`);
-    await refreshAll();
+    await _refreshProductos();
   };
 
   reader.readAsArrayBuffer(file);
@@ -3896,45 +3967,22 @@ async function seedBaseData() {
 }
 
 async function refreshAll() {
-  state.productos = (await loadCollection('productos'))
-    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  // Carga en paralelo todo lo que no depende entre sí
+  await Promise.all([
+    _refreshProductos(),
+    loadCollection('usuarios').then((u) => { state.usuarios = u; }),
+    _refreshStock(),
+    _refreshReportes(),
+    _refreshPedidos(),
+  ]);
 
-  state.usuarios = await loadCollection('usuarios');
-
-  // Cargar stock mensual del mes actual y del anterior
-  const now = new Date();
-  const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const mesAnterior = (() => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
-  await loadStockMensual(mesActual);
-  await loadStockMensual(mesAnterior);
-
-  state.reportes = (await loadCollection('reportes_diarios')).map((reporte) => ({
-    ...reporte,
-    rows: (reporte.rows || []).map(normalizeExistingRow)
-  }));
-
- const pedidosSemanales = await loadCollection('pedidos_semanales');
-  state.pedidosSemanalesCache = {};
-  pedidosSemanales.forEach((item) => {
-    state.pedidosSemanalesCache[item.id] = item;
-  });
-
-  state.alertas = computeAlvearMoronAlerts(state.reportes, state.productos);
-
-  renderDashboard();
-  renderProductos();
-  renderUsuarios();
-  renderCargaDiaria();
   _actualizarSelectCategoriaCarga();
-  renderGerenciaExcel();
-  renderPedidoSemanal();
 
-  renderGerenciaMenuBadge(state.alertas);
-  renderGerenciaAlertsPanel(state.alertas);
-  renderReportesFiltros();
+  // Renderiza SOLO la sección visible + badges — no re-renderiza todo
+  _renderSeccionActiva();
+
+  // Dashboard siempre actualizado (es liviano)
+  if (_seccionActiva() !== 'dashboard') renderDashboard();
 }
 
 function bindEvents() {
