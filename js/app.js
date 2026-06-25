@@ -1414,7 +1414,7 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {})
 }
 
 function getCajaChicaAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
-  const _ck = `ccalv|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const _ck = `ccalv|${dayStr}|${productoId}|cajaChica`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearChica);
@@ -1434,7 +1434,7 @@ function getCajaChicaAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {})
 }
 
 function getCajaGrandeAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
-  const _ck = `cgalv|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const _ck = `cgalv|${dayStr}|${productoId}|cajaGrandeAlv`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.alvearGrande);
@@ -1454,7 +1454,7 @@ function getCajaGrandeAlvearRunningTotal(dayStr, productoId, _stockIgnorado = {}
 }
 
 function getCajaChicaMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
-  const _ck = `ccmor|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const _ck = `ccmor|${dayStr}|${productoId}|moronChicaInterna`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronChica);
@@ -1477,7 +1477,7 @@ function getCajaChicaMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) 
 }
 
 function getCajaGrandeMoronRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
-  const _ck = `cgmor|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const _ck = `cgmor|${dayStr}|${productoId}|moronGrandeInterna`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
   const { year, month, day } = getDateParts(dayStr);
   const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
   let total = num(stockInicial?.moronGrande);
