@@ -2436,6 +2436,159 @@ function showCommentModal(btn) {
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
+/* ================================================================
+   ACTUALIZACIÓN EN VIVO — solo celdas calculadas, sin re-render
+   Se llama cuando el usuario cambia un valor. Actualiza:
+   - Celdas readonly (totales acumulados) de la fila afectada
+   - Total de fila
+   - Totales de columna (pie de tabla)
+   - Grand total
+   Sin tocar los inputs editables → no se pierde el foco
+================================================================ */
+function _updateCargaReadonlyCells(changedRowIndex) {
+  const table = $('tablaCargaDiaria');
+  if (!table) return;
+
+  const fecha = $('cargaFecha')?.value || '';
+  const visibleGroups = getVisibleGroupsForCurrentView();
+  const isGerenciaView = state.perfil?.rol === 'gerencia';
+
+  const baseRows = state.reporteActual?.rows || buildDefaultRows($('cargaFabrica')?.value);
+  const filterQuery = state.cargaAromaFilter?.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') || '';
+  const rows = baseRows.filter((r) => {
+    if (!filterQuery) return true;
+    const nombre = String(r.productoNombre || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return nombre.includes(filterQuery);
+  });
+
+  // ── Actualizar celdas readonly de la fila cambiada ──────────────
+  const tbodyRows = table.querySelectorAll('tbody tr');
+  rows.forEach((row, rowIndex) => {
+    const tr = tbodyRows[rowIndex];
+    if (!tr) return;
+    // Para rendimiento, solo actualizar la fila que cambió
+    // y la fila de totales (siempre)
+    if (rowIndex !== changedRowIndex) return;
+
+    const readonlyCells = tr.querySelectorAll('.readonly-cell');
+    let cellIdx = 0;
+
+    visibleGroups.forEach((group) => {
+      group.columns.forEach((col) => {
+        if (!col.readonly) return;
+        const td = readonlyCells[cellIdx++];
+        if (!td) return;
+
+        let val = 0;
+        if (group.key === 'moronChicaInterna' || group.key === 'moronGrandeInterna') {
+          if (col.key === 'salidaTotal') {
+            val = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+          } else if (col.key === 'total') {
+            val = getMoronRunningTotal(fecha, row.productoId, group.key);
+          }
+        } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
+          if (col.key === 'totalSecando') {
+            val = getBanadoSecandoRunningTotal(fecha, row.productoId, group.key);
+          } else if (col.key === 'total') {
+            val = getBanadoRunningTotal(fecha, row.productoId, group.key);
+          }
+        } else if (group.key === 'linaresChica' || group.key === 'linaresGrande') {
+          if (col.key === 'total') {
+            val = getLinaresRunningTotal(fecha, row.productoId, group.key);
+          }
+        } else if (group.key === 'alvear') {
+          val = getAlvearRunningTotal(fecha, row.productoId);
+        } else if (group.key === 'cajaChica') {
+          val = getCajaChicaAlvearRunningTotal(fecha, row.productoId);
+        } else if (group.key === 'cajaGrandeAlv') {
+          val = getCajaGrandeAlvearRunningTotal(fecha, row.productoId);
+        } else if (group.key === 'cajaChicaMor') {
+          val = getCajaChicaMoronRunningTotal(fecha, row.productoId);
+        } else if (group.key === 'cajaGrandeMor') {
+          val = getCajaGrandeMoronRunningTotal(fecha, row.productoId);
+        } else {
+          val = computeGroupTotal(group.key, row.groups?.[group.key] || {});
+        }
+        td.textContent = val;
+      });
+    });
+
+    // Actualizar total de fila
+    const totalCell = tr.querySelector('.total-cell');
+    if (totalCell) {
+      const rowTotal =
+        computeStockInitialTotal(row.stockInicial) +
+        visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups?.[g.key] || {}), 0);
+      totalCell.textContent = rowTotal;
+    }
+  });
+
+  // ── Recalcular totales de columna (tfoot) ────────────────────────
+  const tfoot = table.querySelector('tfoot tr');
+  if (!tfoot) return;
+
+  const columnTotals = {};
+  if (isGerenciaView) {
+    INITIAL_STOCK_COLUMNS.forEach((c) => { columnTotals[`stock_${c.key}`] = 0; });
+  }
+  visibleGroups.forEach((g) => g.columns.forEach((c) => {
+    columnTotals[`${g.key}_${c.key}`] = 0;
+  }));
+  let grandTotal = 0;
+
+  rows.forEach((row) => {
+    if (isGerenciaView) {
+      INITIAL_STOCK_COLUMNS.forEach((c) => {
+        columnTotals[`stock_${c.key}`] += num(row.stockInicial?.[c.key]);
+      });
+    }
+    visibleGroups.forEach((g) => {
+      g.columns.forEach((c) => {
+        if (c.readonly) {
+          // Leer el valor ya renderizado en la celda para no recalcular todo
+          const trEl = table.querySelectorAll('tbody tr')[rows.indexOf(row)];
+          const readonlyCells = trEl?.querySelectorAll('.readonly-cell') || [];
+          let rIdx = 0;
+          visibleGroups.forEach((gg) => {
+            gg.columns.forEach((cc) => {
+              if (!cc.readonly) return;
+              if (gg.key === g.key && cc.key === c.key) {
+                columnTotals[`${g.key}_${c.key}`] += Number(readonlyCells[rIdx]?.textContent || 0);
+              }
+              rIdx++;
+            });
+          });
+        } else {
+          columnTotals[`${g.key}_${c.key}`] += num(row.groups?.[g.key]?.[c.key]);
+        }
+      });
+    });
+    grandTotal +=
+      computeStockInitialTotal(row.stockInicial) +
+      visibleGroups.reduce((acc, g) => acc + computeGroupTotal(g.key, row.groups?.[g.key] || {}), 0);
+  });
+
+  // Actualizar celdas del tfoot
+  const tfootCells = tfoot.querySelectorAll('th');
+  let tfIdx = 1; // 0 = label "TOTAL"
+  if (isGerenciaView) {
+    INITIAL_STOCK_COLUMNS.forEach((c) => {
+      if (tfootCells[tfIdx]) tfootCells[tfIdx].textContent = columnTotals[`stock_${c.key}`];
+      tfIdx++;
+    });
+  }
+  visibleGroups.forEach((g) => {
+    g.columns.forEach((c) => {
+      if (tfootCells[tfIdx]) tfootCells[tfIdx].textContent = columnTotals[`${g.key}_${c.key}`];
+      tfIdx++;
+    });
+  });
+  // Grand total (última celda del tfoot)
+  if (tfootCells[tfIdx]) tfootCells[tfIdx].textContent = grandTotal;
+}
+
 function bindCargaInputs() {
   // Handler comentarios por celda
   document.querySelectorAll('#tablaCargaDiaria .cell-comment-btn').forEach((btn) => {
@@ -2481,7 +2634,11 @@ function bindCargaInputs() {
         state.reporteActual.rows[rowIndex].groups[e.target.dataset.group][e.target.dataset.key] = numericValue;
       }
 
-      renderCargaDiaria();
+      // Invalidar cache de running totals para este producto
+      _invalidateRunningTotalCache();
+
+      // Actualizar solo celdas calculadas — sin re-renderizar toda la tabla
+      _updateCargaReadonlyCells(rowIndex);
 
       if (!currentReporteIsLocked()) {
         clearTimeout(state.autoSaveTimer);
