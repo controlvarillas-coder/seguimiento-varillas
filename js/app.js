@@ -1,4 +1,4 @@
-import { auth, db } from './firebase-config.js';
+ import { auth, db } from './firebase-config.js';
 import { computeAlvearMoronAlerts } from './modules/alertas/alertas.service.js';
 import { renderGerenciaAlertsPanel, renderGerenciaMenuBadge } from './modules/alertas/alertas.ui.js';
 import {
@@ -960,6 +960,10 @@ function renderProductos() {
             <label>
               <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="banado" ${visibles.includes('banado') ? 'checked' : ''}>
               Bañado
+            </label>
+            <label>
+              <input type="checkbox" class="visibilidad-check" data-id="${p.id}" value="linares" ${visibles.includes('linares') ? 'checked' : ''}>
+              Linares
             </label>
           </div>
         </div>
