@@ -142,8 +142,8 @@ const DAY_GROUPS = [
     title: 'LINARES CAJA CHICA',
     colorClass: 'group-linares-chica',
     columns: [
-      { key: 'alvPlus',  label: 'LINARES ENTRADA' },
-      { key: 'alvMinus', label: 'LINARES SALIDA' },
+      { key: 'linPlus',  label: 'LINARES ENTRADA' },
+      { key: 'linMinus', label: 'LINARES SALIDA' },
       { key: 'dif',      label: 'LINARES DIFERENCIA' },
       { key: 'total',    label: 'LINARES TOTAL', readonly: true }
     ]
@@ -153,8 +153,8 @@ const DAY_GROUPS = [
     title: 'LINARES CAJA GRANDE',
     colorClass: 'group-linares-grande',
     columns: [
-      { key: 'alvPlus',  label: 'LINARES ENTRADA' },
-      { key: 'alvMinus', label: 'LINARES SALIDA' },
+      { key: 'linPlus',  label: 'LINARES ENTRADA' },
+      { key: 'linMinus', label: 'LINARES SALIDA' },
       { key: 'dif',      label: 'LINARES DIFERENCIA' },
       { key: 'total',    label: 'LINARES TOTAL', readonly: true }
     ]
@@ -560,7 +560,7 @@ function computeGroupTotal(groupKey, data = {}) {
 
     case 'linaresChica':
     case 'linaresGrande':
-      return num(data.alvPlus) - num(data.alvMinus) + num(data.dif);
+      return num(data.linPlus) - num(data.linMinus) + num(data.dif);
 
     case 'banadoChica':
       return (
@@ -1358,8 +1358,8 @@ function getLinaresRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {
     const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
 
     total +=
-      num(rowData?.alvPlus) -
-      num(rowData?.alvMinus) +
+      num(rowData?.linPlus) -
+      num(rowData?.linMinus) +
       num(rowData?.dif);
   }
 
