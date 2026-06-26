@@ -269,6 +269,8 @@ select option{background:#1a2540;color:#eef2ff}
 .group-caja-grande-2{background:rgba(90,140,255,.18);color:#a5b4fc}
 .group-banado-chica{background:rgba(80,200,130,.16);color:#a7f3d0}
 .group-banado-grande{background:rgba(50,180,200,.16);color:#99f6e4}
+.group-linares-chica{background:rgba(240,100,180,.16);color:#fbcfe8}
+.group-linares-grande{background:rgba(200,80,160,.18);color:#f9a8d4}
 
 .readonly-cell{font-weight:700}
 .total-cell,.total-head{background:rgba(255,255,255,.06);font-weight:800}
@@ -308,6 +310,41 @@ select option{background:#1a2540;color:#eef2ff}
 #tablaCargaDiaria .readonly-cell.group-banado-grande,
 #tablaGerenciaExcel .readonly-cell.group-banado-grande{
   background:rgba(50,180,200,.24) !important;color:#5eead4 !important;font-weight:700;
+}
+
+/* ─── LINARES OVERRIDES ──────────────────────────────── */
+#tablaCargaDiaria th.group-linares-chica,
+#tablaCargaDiaria td.group-linares-chica,
+#tablaGerenciaExcel th.group-linares-chica,
+#tablaGerenciaExcel td.group-linares-chica{
+  background:rgba(240,100,180,.16) !important;color:#fbcfe8 !important;
+  border-color:rgba(240,100,180,.22) !important;
+}
+#tablaCargaDiaria input.group-linares-chica,
+#tablaGerenciaExcel input.group-linares-chica{
+  background:rgba(240,100,180,.10) !important;color:#fce7f3 !important;
+  border:1px solid rgba(240,100,180,.26) !important;
+}
+#tablaCargaDiaria .readonly-cell.group-linares-chica,
+#tablaGerenciaExcel .readonly-cell.group-linares-chica{
+  background:rgba(240,100,180,.24) !important;color:#f472b6 !important;font-weight:700;
+}
+
+#tablaCargaDiaria th.group-linares-grande,
+#tablaCargaDiaria td.group-linares-grande,
+#tablaGerenciaExcel th.group-linares-grande,
+#tablaGerenciaExcel td.group-linares-grande{
+  background:rgba(200,80,160,.16) !important;color:#f9a8d4 !important;
+  border-color:rgba(200,80,160,.22) !important;
+}
+#tablaCargaDiaria input.group-linares-grande,
+#tablaGerenciaExcel input.group-linares-grande{
+  background:rgba(200,80,160,.10) !important;color:#fce7f3 !important;
+  border:1px solid rgba(200,80,160,.26) !important;
+}
+#tablaCargaDiaria .readonly-cell.group-linares-grande,
+#tablaGerenciaExcel .readonly-cell.group-linares-grande{
+  background:rgba(200,80,160,.24) !important;color:#ec4899 !important;font-weight:700;
 }
 
 /* ─── PEDIDO SEMANAL ─────────────────────────────────── */
