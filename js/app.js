@@ -224,6 +224,41 @@ const MORON_INTERNAL_GROUPS = [
   }
 ];
 
+const LINARES_INTERNAL_GROUPS = [
+  {
+    key: 'linaresChicaInterna',
+    title: 'CAJA CHICA',
+    colorClass: 'group-linares-chica',
+    columns: [
+      { key: 'totalBase',   label: 'TOTAL' },
+      { key: 'entrada',     label: 'ENTRADA' },
+      { key: 'sobrante',    label: 'SOBRANTE' },
+      { key: 'pEmpaq',      label: 'P/EMPAQ' },
+      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
+      { key: 'diferencia',  label: 'DIFERENCIA' },
+      { key: 'fallados',    label: 'FALLADOS' },
+      { key: 'devoluciones',label: 'DEVOLUCIONES' },
+      { key: 'total',       label: 'TOTAL', readonly: true }
+    ]
+  },
+  {
+    key: 'linaresGrandeInterna',
+    title: 'CAJA GRANDE',
+    colorClass: 'group-linares-grande',
+    columns: [
+      { key: 'totalBase',   label: 'TOTAL' },
+      { key: 'entrada',     label: 'ENTRADA' },
+      { key: 'sobrante',    label: 'SOBRANTE' },
+      { key: 'pEmpaq',      label: 'P/EMPAQ' },
+      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
+      { key: 'diferencia',  label: 'DIFERENCIA' },
+      { key: 'fallados',    label: 'FALLADOS' },
+      { key: 'devoluciones',label: 'DEVOLUCIONES' },
+      { key: 'total',       label: 'TOTAL', readonly: true }
+    ]
+  }
+];
+
 const INITIAL_STOCK_COLUMNS = [
   { key: 'alvearChica', label: 'ALVEAR CAJA CHICA' },
   { key: 'alvearGrande', label: 'ALVEAR CAJA GRANDE' },
@@ -589,6 +624,16 @@ function computeGroupTotal(groupKey, data = {}) {
       );
 
     case 'moronGrandeInterna':
+      return (
+        num(data.totalBase) +
+        num(data.entrada) +
+        num(data.sobrante) -
+        num(data.pEmpaq) +
+        num(data.diferencia)
+      );
+
+    case 'linaresChicaInterna':
+    case 'linaresGrandeInterna':
       return (
         num(data.totalBase) +
         num(data.entrada) +
@@ -1119,23 +1164,18 @@ function rowTieneMovimientos(row) {
 
 function getVisibleGroupsForCurrentView() {
   let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-  }
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
 
   if (state.perfil?.rol === 'gerencia') {
-    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS];
+    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS, ...LINARES_INTERNAL_GROUPS];
   }
 
-  if (fabrica === 'moron') {
-    return MORON_INTERNAL_GROUPS;
-  }
+  if (fabrica === 'moron') return MORON_INTERNAL_GROUPS;
+  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS;
 
   const groupsByFactory = {
-    alvear:   ['alvear', 'cajaChica', 'cajaGrandeAlv'],
-    banado:   ['banadoChica', 'banadoGrande'],
-    linares:  ['linaresChica', 'linaresGrande']
+    alvear:  ['alvear', 'cajaChica', 'cajaGrandeAlv'],
+    banado:  ['banadoChica', 'banadoGrande'],
   };
 
   const allowedKeys = groupsByFactory[fabrica] || [];
@@ -1144,20 +1184,15 @@ function getVisibleGroupsForCurrentView() {
 
 function getEditableGroupsForCurrentUser() {
   let fabrica = $('cargaFabrica')?.value;
-
-  if (!fabrica && state.perfil?.fabrica) {
-    fabrica = state.perfil.fabrica;
-  }
+  if (!fabrica && state.perfil?.fabrica) fabrica = state.perfil.fabrica;
 
   if (state.perfil?.rol === 'gerencia') {
-    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS].map((g) => g.key);
+    return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS, ...LINARES_INTERNAL_GROUPS].map((g) => g.key);
   }
 
-  if (fabrica === 'moron') {
-    return MORON_INTERNAL_GROUPS.map((g) => g.key);
-  }
+  if (fabrica === 'moron')   return MORON_INTERNAL_GROUPS.map((g) => g.key);
+  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS.map((g) => g.key);
 
-  // linares uses same editable groups as alvear-style
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
 
@@ -1277,17 +1312,19 @@ function getAnyRowForDateProduct(fecha, productoId) {
 
 // Mapa: groupKey → fábrica propietaria del dato
 const GROUP_FABRICA_OWNER = {
-  alvear:             'alvear',
-  cajaChica:          'alvear',
-  cajaGrandeAlv:      'alvear',
-  cajaChicaMor:       'moron',
-  cajaGrandeMor:      'moron',
-  moronChicaInterna:  'moron',
-  moronGrandeInterna: 'moron',
-  banadoChica:        'banado',
-  banadoGrande:       'banado',
-  linaresChica:       'linares',
-  linaresGrande:      'linares'
+  alvear:               'alvear',
+  cajaChica:            'alvear',
+  cajaGrandeAlv:        'alvear',
+  cajaChicaMor:         'moron',
+  cajaGrandeMor:        'moron',
+  moronChicaInterna:    'moron',
+  moronGrandeInterna:   'moron',
+  banadoChica:          'banado',
+  banadoGrande:         'banado',
+  linaresChica:         'linares',
+  linaresGrande:        'linares',
+  linaresChicaInterna:  'linares',
+  linaresGrandeInterna: 'linares'
 };
 
 // ─── FUENTE DE VERDAD DEL STOCK INICIAL ──────────────────────────────────────
@@ -1401,6 +1438,32 @@ function getMoronRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {})
     groupKey === 'moronChicaInterna'
       ? num(stockInicial?.moronChica)
       : num(stockInicial?.moronGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, groupKey);
+
+    total +=
+      num(rowData?.entrada) +
+      num(rowData?.sobrante) -
+      num(rowData?.pEmpaq) +
+      num(rowData?.diferencia);
+  }
+
+  _runningTotalCache.set(_ck, total);
+  return total;
+}
+
+
+function getLinaresInternalRunningTotal(dayStr, productoId, groupKey, _stockIgnorado = {}) {
+  const _ck = `linint|${dayStr}|${productoId}|${groupKey||""}`;  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
+
+  let total =
+    groupKey === 'linaresChicaInterna'
+      ? num(stockInicial?.linaresChica)
+      : num(stockInicial?.linaresGrande);
 
   for (let d = 1; d <= day; d++) {
     const currentDate = buildDateStr(year, month, d);
@@ -2248,6 +2311,12 @@ function renderTotales() {
         case 'moronGrandeInterna':
           val = getMoronRunningTotal(fecha, row.productoId, 'moronGrandeInterna', stockInicial);
           break;
+        case 'linaresChicaInterna':
+          val = getLinaresInternalRunningTotal(fecha, row.productoId, 'linaresChicaInterna', stockInicial);
+          break;
+        case 'linaresGrandeInterna':
+          val = getLinaresInternalRunningTotal(fecha, row.productoId, 'linaresGrandeInterna', stockInicial);
+          break;
         case 'linaresChica':
           val = getLinaresRunningTotal(fecha, row.productoId, 'linaresChica', row.stockInicial || {});
           break;
@@ -2491,6 +2560,12 @@ function _updateCargaReadonlyCells(changedRowIndex) {
             val = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
           } else if (col.key === 'total') {
             val = getMoronRunningTotal(fecha, row.productoId, group.key);
+          }
+        } else if (group.key === 'linaresChicaInterna' || group.key === 'linaresGrandeInterna') {
+          if (col.key === 'salidaTotal') {
+            val = computeMoronInternalReadonly(group.key, col.key, row.groups?.[group.key] || {});
+          } else if (col.key === 'total') {
+            val = getLinaresInternalRunningTotal(fecha, row.productoId, group.key);
           }
         } else if (group.key === 'banadoChica' || group.key === 'banadoGrande') {
           if (col.key === 'totalSecando') {
@@ -4811,4 +4886,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-
