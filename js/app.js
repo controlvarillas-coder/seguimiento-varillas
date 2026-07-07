@@ -226,15 +226,8 @@ const LINARES_INTERNAL_GROUPS = [
     title: 'CAJA CHICA',
     colorClass: 'group-linares-chica',
     columns: [
-      { key: 'totalBase',   label: 'TOTAL' },
-      { key: 'entrada',     label: 'ENTRADA' },
-      { key: 'sobrante',    label: 'SOBRANTE' },
-      { key: 'pEmpaq',      label: 'P/EMPAQ' },
-      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
-      { key: 'diferencia',  label: 'DIFERENCIA' },
-      { key: 'fallados',    label: 'FALLADOS' },
-      { key: 'devoluciones',label: 'DEVOLUCIONES' },
-      { key: 'total',       label: 'TOTAL', readonly: true }
+      { key: 'linPlus', label: 'ENTRADA' },
+      { key: 'total',   label: 'TOTAL', readonly: true }
     ]
   },
   {
@@ -242,15 +235,8 @@ const LINARES_INTERNAL_GROUPS = [
     title: 'CAJA GRANDE',
     colorClass: 'group-linares-grande',
     columns: [
-      { key: 'totalBase',   label: 'TOTAL' },
-      { key: 'entrada',     label: 'ENTRADA' },
-      { key: 'sobrante',    label: 'SOBRANTE' },
-      { key: 'pEmpaq',      label: 'P/EMPAQ' },
-      { key: 'salidaTotal', label: 'SALIDA TOTAL', readonly: true },
-      { key: 'diferencia',  label: 'DIFERENCIA' },
-      { key: 'fallados',    label: 'FALLADOS' },
-      { key: 'devoluciones',label: 'DEVOLUCIONES' },
-      { key: 'total',       label: 'TOTAL', readonly: true }
+      { key: 'linPlus', label: 'ENTRADA' },
+      { key: 'total',   label: 'TOTAL', readonly: true }
     ]
   }
 ];
@@ -630,13 +616,7 @@ function computeGroupTotal(groupKey, data = {}) {
 
     case 'linaresChicaInterna':
     case 'linaresGrandeInterna':
-      return (
-        num(data.totalBase) +
-        num(data.entrada) +
-        num(data.sobrante) -
-        num(data.pEmpaq) +
-        num(data.diferencia)
-      );
+      return num(data.linPlus);
 
     default:
       return 0;
@@ -2055,28 +2035,92 @@ function renderCargaDiaria() {
     });
   }
 
-  let thead1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th>`;
-  if (isGerenciaView) {
-    thead1 += `<th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
-  }
-  let thead2 = '<tr>';
-  let thead3 = '<tr>';
+  // ── Íconos y colores por fábrica para encabezados premium ──
+  const FAB_META = {
+    'group-alvear':         { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-chica':     { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-grande':    { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-chica-2':   { icon: '🔧', fab: 'MORÓN',    accent: '#8b5cf6' },
+    'group-caja-grande-2':  { icon: '🔧', fab: 'MORÓN',    accent: '#8b5cf6' },
+    'group-linares-chica':  { icon: '🌿', fab: 'LINARES',  accent: '#ec4899' },
+    'group-linares-grande': { icon: '🌿', fab: 'LINARES',  accent: '#ec4899' },
+    'group-banado-chica':   { icon: '💧', fab: 'BAÑADO',   accent: '#10b981' },
+    'group-banado-grande':  { icon: '💧', fab: 'BAÑADO',   accent: '#10b981' },
+  };
 
-  if (isGerenciaView) {
-    INITIAL_STOCK_COLUMNS.forEach((col) => {
-      thead2 += `<th rowspan="2" class="stock-head">${col.label}</th>`;
-    });
-  }
-
+  // Fila 1: fábricas agrupadas con ícono + nombre + colspan total
+  // Agrupar grupos consecutivos de la misma fábrica
+  const fabGroups = [];
   visibleGroups.forEach((group) => {
-    thead1 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
-    group.columns.forEach((col) => {
-      thead2 += `<th class="${group.colorClass}" rowspan="2">${col.label}</th>`;
-    });
+    const meta = FAB_META[group.colorClass] || { icon: '📋', fab: group.title, accent: '#64748b' };
+    const last = fabGroups[fabGroups.length - 1];
+    if (last && last.fab === meta.fab) {
+      last.colspan += group.columns.length;
+      last.groups.push(group);
+    } else {
+      fabGroups.push({ fab: meta.fab, icon: meta.icon, accent: meta.accent, colspan: group.columns.length, groups: [group] });
+    }
   });
 
-  thead1 += '<th rowspan="3" class="total-head">TOTAL FILA</th></tr>';
+  let thead1 = `<tr>
+    <th class="sticky-col th-producto" rowspan="3" style="vertical-align:middle;text-align:center;font-size:11px;letter-spacing:.08em;font-weight:700;color:var(--text-muted);">PRODUCTO</th>`;
+
+  if (isGerenciaView) {
+    thead1 += `<th colspan="${INITIAL_STOCK_COLUMNS.length}" style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);border-bottom:0.5px solid var(--border);">📦 STOCK INICIAL</th>`;
+  }
+
+  fabGroups.forEach((fg, i) => {
+    const borderLeft = i > 0 ? 'border-left:2px solid rgba(255,255,255,.07);' : '';
+    thead1 += `<th colspan="${fg.colspan}"
+      style="text-align:center;padding:9px 14px;font-size:12px;font-weight:700;letter-spacing:.05em;
+      color:${fg.accent};${borderLeft}
+      border-bottom:2px solid ${fg.accent}33;
+      background:${fg.accent}11;">
+      ${fg.icon} ${fg.fab}
+    </th>`;
+  });
+
+  thead1 += `<th rowspan="3" class="total-head" style="vertical-align:middle;text-align:center;font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--text-muted);">TOTAL<br>FILA</th></tr>`;
+
+  // Fila 2: subgrupos (CAJA CHICA / CAJA GRANDE / etc.)
+  let thead2 = '<tr>';
+  if (isGerenciaView) {
+    INITIAL_STOCK_COLUMNS.forEach((col) => {
+      thead2 += `<th rowspan="2" class="stock-head" style="font-size:10px;text-align:center;white-space:nowrap;padding:6px 8px;">${col.label}</th>`;
+    });
+  }
+
+  let prevFab = null;
+  visibleGroups.forEach((group) => {
+    const meta = FAB_META[group.colorClass] || { accent: '#64748b' };
+    const borderLeft = (prevFab && prevFab !== meta.fab) ? `border-left:2px solid rgba(255,255,255,.07);` : '';
+    prevFab = meta.fab || group.colorClass;
+    thead2 += `<th colspan="${group.columns.length}" class="${group.colorClass}"
+      style="text-align:center;padding:6px 10px;font-size:11px;font-weight:600;
+      letter-spacing:.04em;white-space:nowrap;${borderLeft}">
+      ${group.title}
+    </th>`;
+  });
   thead2 += '</tr>';
+
+  // Fila 3: columnas individuales
+  let thead3 = '<tr>';
+  prevFab = null;
+  visibleGroups.forEach((group) => {
+    const meta = FAB_META[group.colorClass] || { accent: '#64748b' };
+    group.columns.forEach((col, ci) => {
+      const borderLeft = (ci === 0 && prevFab && prevFab !== meta.fab) ? 'border-left:2px solid rgba(255,255,255,.07);' : '';
+      const readonlyStyle = col.readonly
+        ? `background:${meta.accent}18;color:${meta.accent};font-style:italic;`
+        : '';
+      thead3 += `<th class="${group.colorClass}"
+        style="font-size:10px;padding:5px 8px;text-align:center;white-space:nowrap;
+        letter-spacing:.03em;${borderLeft}${readonlyStyle}">
+        ${col.readonly ? '⟳ ' : ''}${col.label}
+      </th>`;
+      prevFab = meta.fab || group.colorClass;
+    });
+  });
   thead3 += '</tr>';
 
   let body = '';
@@ -2915,24 +2959,52 @@ function renderGerenciaExcel() {
   const [year, month] = monthValue.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  let header1 = `<tr><th class="sticky-col" rowspan="3">PRODUCTO</th><th colspan="${INITIAL_STOCK_COLUMNS.length}">STOCK INICIAL</th>`;
+  const GER_FAB_META = {
+    'group-alvear':         { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-chica':     { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-grande':    { icon: '🏭', fab: 'ALVEAR',   accent: '#f97316' },
+    'group-caja-chica-2':   { icon: '🔧', fab: 'MORÓN',    accent: '#8b5cf6' },
+    'group-caja-grande-2':  { icon: '🔧', fab: 'MORÓN',    accent: '#8b5cf6' },
+    'group-linares-chica':  { icon: '🌿', fab: 'LINARES',  accent: '#ec4899' },
+    'group-linares-grande': { icon: '🌿', fab: 'LINARES',  accent: '#ec4899' },
+    'group-banado-chica':   { icon: '💧', fab: 'BAÑADO',   accent: '#10b981' },
+    'group-banado-grande':  { icon: '💧', fab: 'BAÑADO',   accent: '#10b981' },
+  };
+
+  let header1 = `<tr>
+    <th class="sticky-col" rowspan="3" style="vertical-align:middle;text-align:center;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text-muted);">PRODUCTO</th>
+    <th colspan="${INITIAL_STOCK_COLUMNS.length}" style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);">📦 STOCK INICIAL</th>`;
   let header2 = '<tr>';
   let header3 = '<tr>';
 
   INITIAL_STOCK_COLUMNS.forEach((col) => {
-    header2 += `<th class="stock-head" rowspan="2">${col.label}</th>`;
+    header2 += `<th class="stock-head" rowspan="2" style="font-size:10px;text-align:center;white-space:nowrap;padding:6px 8px;">${col.label}</th>`;
   });
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dayColspan = 1 + DAY_GROUPS.reduce((acc, g) => acc + g.columns.length, 0);
-    header1 += `<th colspan="${dayColspan}" class="day-block">DÍA ${day}</th>`;
+    header1 += `<th colspan="${dayColspan}" class="day-block"
+      style="text-align:center;padding:8px 6px;font-size:12px;font-weight:700;letter-spacing:.04em;">
+      📅 DÍA ${day}
+    </th>`;
 
-    header2 += `<th class="stock-head" rowspan="2">AROMA</th>`;
+    header2 += `<th class="stock-head" rowspan="2" style="font-size:10px;text-align:center;padding:5px 6px;">AROMA</th>`;
 
     DAY_GROUPS.forEach((group) => {
-      header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}">${group.title}</th>`;
+      const meta = GER_FAB_META[group.colorClass] || { accent: '#64748b' };
+      header2 += `<th colspan="${group.columns.length}" class="${group.colorClass}"
+        style="text-align:center;padding:5px 8px;font-size:10px;font-weight:600;
+        letter-spacing:.04em;white-space:nowrap;border-bottom:2px solid ${meta.accent}33;">
+        ${group.title}
+      </th>`;
       group.columns.forEach((col) => {
-        header3 += `<th class="${group.colorClass}">${col.label}</th>`;
+        const readonlyStyle = col.readonly
+          ? `background:${meta.accent}18;color:${meta.accent};font-style:italic;`
+          : '';
+        header3 += `<th class="${group.colorClass}"
+          style="font-size:9px;padding:4px 6px;text-align:center;white-space:nowrap;${readonlyStyle}">
+          ${col.readonly ? '⟳ ' : ''}${col.label}
+        </th>`;
       });
     });
   }
