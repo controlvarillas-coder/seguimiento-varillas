@@ -142,10 +142,8 @@ const DAY_GROUPS = [
     title: 'LINARES CAJA CHICA',
     colorClass: 'group-linares-chica',
     columns: [
-      { key: 'linPlus',  label: 'LINARES ENTRADA' },
-      { key: 'linMinus', label: 'LINARES SALIDA' },
-      { key: 'dif',      label: 'LINARES DIFERENCIA' },
-      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
+      { key: 'linPlus', label: 'LINARES ENTRADA' },
+      { key: 'total',   label: 'LINARES TOTAL', readonly: true }
     ]
   },
   {
@@ -153,10 +151,8 @@ const DAY_GROUPS = [
     title: 'LINARES CAJA GRANDE',
     colorClass: 'group-linares-grande',
     columns: [
-      { key: 'linPlus',  label: 'LINARES ENTRADA' },
-      { key: 'linMinus', label: 'LINARES SALIDA' },
-      { key: 'dif',      label: 'LINARES DIFERENCIA' },
-      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
+      { key: 'linPlus', label: 'LINARES ENTRADA' },
+      { key: 'total',   label: 'LINARES TOTAL', readonly: true }
     ]
   },
   {
@@ -595,7 +591,7 @@ function computeGroupTotal(groupKey, data = {}) {
 
     case 'linaresChica':
     case 'linaresGrande':
-      return num(data.linPlus) - num(data.linMinus) + num(data.dif);
+      return num(data.linPlus);
 
     case 'banadoChica':
       return (
@@ -3040,10 +3036,15 @@ function getPedidoDocId() {
 
 function canEditPedidoField(fieldKey) {
   const isGerencia = state.perfil?.rol === 'gerencia';
-  const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
-  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
-  const moronLocked = !!state.pedidoSemanalActual?.moronLocked;
+  const isMoron    = state.perfil?.fabrica === 'moron'   && state.perfil?.rol !== 'gerencia';
+  const isAlvear   = state.perfil?.fabrica === 'alvear'  && state.perfil?.rol !== 'gerencia';
+  const isBanado   = state.perfil?.fabrica === 'banado'  && state.perfil?.rol !== 'gerencia';
+  const isLinares  = state.perfil?.fabrica === 'linares' && state.perfil?.rol !== 'gerencia';
+
+  const moronLocked      = !!state.pedidoSemanalActual?.moronLocked;
   const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
+  const banadoConfirmado = !!state.pedidoSemanalActual?.banadoConfirmado;
+  const linaresConfirmado= !!state.pedidoSemanalActual?.linaresConfirmado;
 
   if (isGerencia) return true;
 
@@ -3054,12 +3055,17 @@ function canEditPedidoField(fieldKey) {
 
   if (isAlvear) {
     if (alvearConfirmado) return false;
-    return [
-      'alvearFechaEntrega',
-      'alvearCantidadEntregada',
-      'alvearMotivos',
-      'alvearObservacion'
-    ].includes(fieldKey);
+    return ['alvearFechaEntrega', 'alvearCantidadEntregada', 'alvearMotivos', 'alvearObservacion'].includes(fieldKey);
+  }
+
+  if (isBanado) {
+    if (banadoConfirmado) return false;
+    return ['banadoFechaEntrega', 'banadoCantidadEntregada', 'banadoObservacion'].includes(fieldKey);
+  }
+
+  if (isLinares) {
+    if (linaresConfirmado) return false;
+    return ['linaresFechaEntrega', 'linaresCantidadEntregada', 'linaresObservacion'].includes(fieldKey);
   }
 
   return false;
@@ -3320,7 +3326,9 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
     'moronPedidoChica',
     'moronPedidoGrande',
     'moronCantidad',
-    'alvearCantidadEntregada'
+    'alvearCantidadEntregada',
+    'banadoCantidadEntregada',
+    'linaresCantidadEntregada'
   ].includes(fieldKey)) {
     normalizedNewValue = num(newValue);
   } else if ([
