@@ -258,24 +258,59 @@ select option{background:#1a2540;color:#eef2ff}
 #tablaGerenciaExcel td.product-name-cell,#tablaGerenciaExcel td.sticky-col.product-name-cell{min-width:220px;max-width:220px}
 #tablaCargaDiaria td.product-name-cell,#tablaCargaDiaria td.sticky-col.product-name-cell{min-width:220px;max-width:220px}
 
-.stock-head{background:#d6d6d6;color:#000}
-.day-block{background:#efefef;color:#000;font-weight:800}
+/* ─── ENCABEZADOS PREMIUM ────────────────────────────── */
+.stock-head{
+  background:rgba(255,255,255,.06);
+  color:rgba(255,255,255,.55);
+  font-size:10px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.08);
+}
+.day-block{
+  background:rgba(255,255,255,.04);
+  color:rgba(255,255,255,.7);
+  font-weight:700;letter-spacing:.05em;
+  border-left:2px solid rgba(255,255,255,.08);
+  border-bottom:2px solid rgba(255,255,255,.10);
+}
+#tablaCargaDiaria thead th,
+#tablaGerenciaExcel thead th{
+  border-bottom:0.5px solid rgba(255,255,255,.07);
+  transition:background .15s;
+}
+#tablaCargaDiaria thead tr:first-child th,
+#tablaGerenciaExcel thead tr:first-child th{
+  border-bottom:1.5px solid rgba(255,255,255,.10);
+}
 
-/* ─── COLORES DE BLOQUES — paleta suave ──────────────── */
-.group-alvear    {background:rgba(255,171,100,.18);color:#ffd4a8}
-.group-caja-chica{background:rgba(250,210,120,.16);color:#fce8a0}
-.group-caja-grande{background:rgba(160,100,220,.20);color:#d8b4fe}
-.group-caja-chica-2{background:rgba(120,180,255,.16);color:#bfdbfe}
-.group-caja-grande-2{background:rgba(90,140,255,.18);color:#a5b4fc}
-.group-banado-chica{background:rgba(80,200,130,.16);color:#a7f3d0}
-.group-banado-grande{background:rgba(50,180,200,.16);color:#99f6e4}
-.group-linares-chica{background:rgba(240,100,180,.16);color:#fbcfe8}
-.group-linares-grande{background:rgba(200,80,160,.18);color:#f9a8d4}
+/* ─── COLORES DE BLOQUES — paleta suave premium ──────── */
+.group-alvear    {background:rgba(249,115,22,.16);color:#fdba74}
+.group-caja-chica{background:rgba(249,115,22,.12);color:#fed7aa}
+.group-caja-grande{background:rgba(249,115,22,.10);color:#ffedd5}
+.group-caja-chica-2{background:rgba(139,92,246,.16);color:#c4b5fd}
+.group-caja-grande-2{background:rgba(139,92,246,.12);color:#ddd6fe}
+.group-banado-chica{background:rgba(16,185,129,.16);color:#6ee7b7}
+.group-banado-grande{background:rgba(16,185,129,.12);color:#a7f3d0}
+.group-linares-chica{background:rgba(236,72,153,.16);color:#f9a8d4}
+.group-linares-grande{background:rgba(236,72,153,.12);color:#fbcfe8}
 
-.readonly-cell{font-weight:700}
-.total-cell,.total-head{background:rgba(255,255,255,.06);font-weight:800}
+.readonly-cell{font-weight:700;font-style:italic;opacity:.85}
+.total-cell,.total-head{
+  background:rgba(255,255,255,.05);
+  font-weight:800;
+  border-left:1px solid rgba(255,255,255,.08);
+}
 .stock-input{background:rgba(255,255,255,.07)}
-.excel-input{width:100%;min-width:58px;padding:6px;border-radius:8px;font-size:12px;text-align:center;border:1px solid rgba(255,255,255,.08)}
+.excel-input{
+  width:100%;min-width:58px;padding:6px;border-radius:8px;
+  font-size:12px;text-align:center;
+  border:1px solid rgba(255,255,255,.08);
+  transition:border-color .15s, box-shadow .15s;
+}
+.excel-input:focus{
+  border-color:rgba(255,255,255,.25);
+  box-shadow:0 0 0 2px rgba(255,255,255,.06);
+  outline:none;
+}
 
 /* ─── BAÑADO OVERRIDES ───────────────────────────────── */
 #tablaCargaDiaria th.group-banado-chica,
