@@ -138,21 +138,34 @@ const DAY_GROUPS = [
     ]
   },
   {
-    key: 'linaresChica',
-    title: 'LINARES CAJA CHICA',
+    key: 'linares',
+    title: 'LINARES',
     colorClass: 'group-linares-chica',
     columns: [
-      { key: 'linPlus', label: 'LINARES ENTRADA' },
-      { key: 'total',   label: 'LINARES TOTAL', readonly: true }
+      { key: 'lin',   label: 'LINARES ENTRADA' },
+      { key: 'total', label: 'LINARES TOTAL', readonly: true }
+    ]
+  },
+  {
+    key: 'linaresChica',
+    title: 'CAJA CHICA',
+    colorClass: 'group-linares-chica',
+    columns: [
+      { key: 'linPlus',  label: 'LINARES ENTRADA' },
+      { key: 'linMinus', label: 'LINARES SALIDA' },
+      { key: 'dif',      label: 'LINARES DIFERENCIA' },
+      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
     ]
   },
   {
     key: 'linaresGrande',
-    title: 'LINARES CAJA GRANDE',
+    title: 'CAJA GRANDE',
     colorClass: 'group-linares-grande',
     columns: [
-      { key: 'linPlus', label: 'LINARES ENTRADA' },
-      { key: 'total',   label: 'LINARES TOTAL', readonly: true }
+      { key: 'linPlus',  label: 'LINARES ENTRADA' },
+      { key: 'linMinus', label: 'LINARES SALIDA' },
+      { key: 'dif',      label: 'LINARES DIFERENCIA' },
+      { key: 'total',    label: 'LINARES TOTAL', readonly: true }
     ]
   },
   {
@@ -258,7 +271,7 @@ const INPUT_GROUP_BY_FABRICA = {
   caja_chica: ['alvear', 'cajaChica'],
   caja_grande: ['cajaGrandeAlv', 'cajaGrandeMor'],
   banado:   ['banadoChica', 'banadoGrande'],
-  linares:  ['linaresChica', 'linaresGrande'],
+  linares:  ['linares', 'linaresChica', 'linaresGrande'],
   alvear:   ['alvear', 'cajaChica', 'cajaGrandeAlv'],
   moron:    ['moronChicaInterna', 'moronGrandeInterna'],
   neutro:   []
@@ -575,9 +588,12 @@ function computeGroupTotal(groupKey, data = {}) {
     case 'cajaGrandeMor':
       return num(data.morPlus) - num(data.morMinus) + num(data.dif);
 
+    case 'linares':
+      return num(data.lin);
+
     case 'linaresChica':
     case 'linaresGrande':
-      return num(data.linPlus);
+      return num(data.linPlus) - num(data.linMinus) + num(data.dif);
 
     case 'banadoChica':
       return (
@@ -1299,6 +1315,7 @@ const GROUP_FABRICA_OWNER = {
   banadoGrande:         'banado',
   linaresChica:         'linares',
   linaresGrande:        'linares',
+  linares:              'linares',
   linaresChicaInterna:  'linares',
   linaresGrandeInterna: 'linares'
 };
@@ -1631,6 +1648,57 @@ function getAlvearRunningTotal(dayStr, productoId) {
   return total;
 }
 
+function getLinaresMainRunningTotal(dayStr, productoId) {
+  const cacheKey = `linmain|${dayStr}|${productoId}`;
+  if (_runningTotalCache.has(cacheKey)) return _runningTotalCache.get(cacheKey);
+
+  const { year, month, day } = getDateParts(dayStr);
+  let total = 0;
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'linares');
+    total += num(rowData?.lin);
+  }
+
+  _runningTotalCache.set(cacheKey, total);
+  return total;
+}
+
+function getCajaChicaLinaresRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `cclin|${dayStr}|${productoId}|linaresChica`;
+  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
+  let total = num(stockInicial?.linaresChica);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'linaresChica');
+    total += num(rowData?.linPlus) - num(rowData?.linMinus) + num(rowData?.dif);
+  }
+
+  _runningTotalCache.set(_ck, total);
+  return total;
+}
+
+function getCajaGrandeLinaresRunningTotal(dayStr, productoId, _stockIgnorado = {}) {
+  const _ck = `cglin|${dayStr}|${productoId}|linaresGrande`;
+  if (_runningTotalCache.has(_ck)) return _runningTotalCache.get(_ck);
+  const { year, month, day } = getDateParts(dayStr);
+  const stockInicial = getStockInicialCanonicoParaFecha(dayStr, productoId);
+  let total = num(stockInicial?.linaresGrande);
+
+  for (let d = 1; d <= day; d++) {
+    const currentDate = buildDateStr(year, month, d);
+    const rowData = getEffectiveGroupDataForDay(currentDate, productoId, 'linaresGrande');
+    total += num(rowData?.linPlus) - num(rowData?.linMinus) + num(rowData?.dif);
+  }
+
+  _runningTotalCache.set(_ck, total);
+  return total;
+}
+
 
 /* ================================================================
    STOCK INICIAL PARA UNA FECHA DADA
@@ -1899,8 +1967,8 @@ async function generarStockProximoMes(monthValue) {
       secandoGrande: getBanadoSecandoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes),
       banadoChica:   getBanadoRunningTotal(lastDate, producto.id, 'banadoChica', stockMes),
       banadoGrande:  getBanadoRunningTotal(lastDate, producto.id, 'banadoGrande', stockMes),
-      linaresChica:  getLinaresRunningTotal(lastDate, producto.id, 'linaresChica', stockMes),  // FIX BUG#1
-      linaresGrande: getLinaresRunningTotal(lastDate, producto.id, 'linaresGrande', stockMes)  // FIX BUG#1
+      linaresChica:  getCajaChicaLinaresRunningTotal(lastDate, producto.id, stockMes),  // FIX BUG#1
+      linaresGrande: getCajaGrandeLinaresRunningTotal(lastDate, producto.id, stockMes)  // FIX BUG#1
     };
   });
 
@@ -2357,11 +2425,14 @@ function renderTotales() {
         case 'linaresGrandeInterna':
           val = getLinaresInternalRunningTotal(fecha, row.productoId, 'linaresGrandeInterna', stockInicial);
           break;
+        case 'linares':
+          val = getLinaresMainRunningTotal(fecha, row.productoId);
+          break;
         case 'linaresChica':
-          val = getLinaresRunningTotal(fecha, row.productoId, 'linaresChica', row.stockInicial || {});
+          val = getCajaChicaLinaresRunningTotal(fecha, row.productoId, stockInicial);
           break;
         case 'linaresGrande':
-          val = getLinaresRunningTotal(fecha, row.productoId, 'linaresGrande', row.stockInicial || {});
+          val = getCajaGrandeLinaresRunningTotal(fecha, row.productoId, stockInicial);
           break;
         case 'banadoChica':
           val = getBanadoRunningTotal(fecha, row.productoId, 'banadoChica', stockInicial);
@@ -2615,8 +2686,12 @@ function _updateCargaReadonlyCells(changedRowIndex) {
           }
         } else if (group.key === 'linaresChica' || group.key === 'linaresGrande') {
           if (col.key === 'total') {
-            val = getLinaresRunningTotal(fecha, row.productoId, group.key);
+            val = group.key === 'linaresChica'
+              ? getCajaChicaLinaresRunningTotal(fecha, row.productoId)
+              : getCajaGrandeLinaresRunningTotal(fecha, row.productoId);
           }
+        } else if (group.key === 'linares') {
+          val = getLinaresMainRunningTotal(fecha, row.productoId);
         } else if (group.key === 'alvear') {
           val = getAlvearRunningTotal(fecha, row.productoId);
         } else if (group.key === 'cajaChica') {
