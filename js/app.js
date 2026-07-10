@@ -1163,11 +1163,11 @@ function getVisibleGroupsForCurrentView() {
   }
 
   if (fabrica === 'moron') return MORON_INTERNAL_GROUPS;
-  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS;
 
   const groupsByFactory = {
     alvear:  ['alvear', 'cajaChica', 'cajaGrandeAlv'],
     banado:  ['banadoChica', 'banadoGrande'],
+    linares: ['linares', 'linaresChica', 'linaresGrande'],
   };
 
   const allowedKeys = groupsByFactory[fabrica] || [];
@@ -1182,8 +1182,7 @@ function getEditableGroupsForCurrentUser() {
     return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS, ...LINARES_INTERNAL_GROUPS].map((g) => g.key);
   }
 
-  if (fabrica === 'moron')   return MORON_INTERNAL_GROUPS.map((g) => g.key);
-  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS.map((g) => g.key);
+  if (fabrica === 'moron') return MORON_INTERNAL_GROUPS.map((g) => g.key);
 
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
