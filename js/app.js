@@ -1161,7 +1161,7 @@ function _bindDashboardKpiCards({ hoy, productosActivos, usuariosActivos, usuari
       const f = FABRICAS_LABELS[r.fabrica] || r.fabrica || 'Otro';
       porFabrica[f] = (porFabrica[f] || 0) + 1;
     });
-    const recent = enviadas.slice().sort((a,b) => String(b.fecha||'').localeCompare(String(a.fecha||''))).slice(0,10);
+    const recent = enviadas.slice().sort((a,b) => String(b.fecha||'').localeCompare(String(a.fecha||'')));
     const rows = recent.map((r) => `
       <tr>
         <td style="color:rgba(255,255,255,.6);font-size:12px">${r.fecha||'-'}</td>
