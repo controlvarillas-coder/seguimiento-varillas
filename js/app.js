@@ -830,7 +830,6 @@ function renderDashboard() {
   const pendientesHoy = fabricasOperativas.filter((f) => !fabricasHoy.has(f));
 
   if (!isGerencia) {
-    // Vista simplificada para operativos
     _renderDashboardOperativo(hoy);
     return;
   }
@@ -870,9 +869,6 @@ function renderDashboard() {
       const ultimo = state.reportes
         .filter((r) => r.fabrica === f)
         .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))[0];
-
-      const estadoHoy = fabricasHoy.has(f) ? 'Cargó' : 'Pendiente';
-
       const cargó = fabricasHoy.has(f);
       return `
         <tr>
@@ -894,7 +890,6 @@ function renderDashboard() {
   }
 
   const resumen = computeDashboardLogisticsSummary(state.reportes, state.productos, hoy);
-
   if ($('statEsperadoChica')) $('statEsperadoChica').textContent = resumen.esperadoChica;
   if ($('statIngresadoChica')) $('statIngresadoChica').textContent = resumen.ingresadoChica;
   if ($('statEsperadoGrande')) $('statEsperadoGrande').textContent = resumen.esperadoGrande;
@@ -915,10 +910,329 @@ function renderDashboard() {
       `).join('') || '<tr><td colspan="4" style="color:var(--muted);">Sin alertas.</td></tr>';
   }
 
-  // Panel productividad Alvear — solo gerencia
   if (state.perfil?.rol === 'gerencia') {
     renderDashboardProductividad();
   }
+
+  // ── KPI cards interactivas ────────────────────────────────────────
+  _bindDashboardKpiCards({
+    hoy, productosActivos, usuariosActivos, usuariosOperativos,
+    fabricasOperativas, reportesHoy, pendientesHoy
+  });
+}
+
+/* ================================================================
+   MODAL SISTEMA — KPI interactivos
+================================================================ */
+function _showDashModal(title, icon, color, contentHtml) {
+  // Remover modal previo si existe
+  const prev = document.getElementById('dash-kpi-modal');
+  if (prev) prev.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'dash-kpi-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;z-index:9000;
+    background:rgba(0,0,0,.72);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;padding:24px;
+    animation:fadeInModal .18s ease;
+  `;
+
+  modal.innerHTML = `
+    <style>
+      @keyframes fadeInModal{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+      @keyframes slideUpModal{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+      #dash-kpi-modal-inner{animation:slideUpModal .2s ease}
+      #dash-kpi-modal table{width:100%;border-collapse:collapse;font-size:13px}
+      #dash-kpi-modal th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;
+        letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);
+        border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03)}
+      #dash-kpi-modal td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+      #dash-kpi-modal tbody tr:last-child td{border-bottom:none}
+      #dash-kpi-modal tbody tr:hover td{background:rgba(255,255,255,.03)}
+      #dash-kpi-modal .modal-empty{padding:24px;text-align:center;color:rgba(255,255,255,.3);font-size:13px}
+    </style>
+    <div id="dash-kpi-modal-inner" style="
+      width:100%;max-width:640px;max-height:80vh;
+      background:rgba(10,16,34,.98);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:22px;
+      box-shadow:0 32px 80px rgba(0,0,0,.7);
+      overflow:hidden;display:flex;flex-direction:column;
+    ">
+      <div style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:18px 22px;border-bottom:1px solid rgba(255,255,255,.08);
+        background:${color}12;
+        flex-shrink:0;
+      ">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">${icon}</span>
+          <div>
+            <div style="font-size:16px;font-weight:800;color:${color};letter-spacing:-.01em">${title}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">Detalle del indicador</div>
+          </div>
+        </div>
+        <button id="dash-kpi-modal-close" style="
+          background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+          color:rgba(255,255,255,.5);border-radius:10px;width:34px;height:34px;
+          cursor:pointer;font-size:16px;display:grid;place-items:center;
+          transition:.15s;
+        ">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:0 0 8px;flex:1">
+        ${contentHtml}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Cerrar con X o click fuera
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.getElementById('dash-kpi-modal-close').addEventListener('click', () => modal.remove());
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', esc); }
+  });
+}
+
+function _bindDashboardKpiCards({ hoy, productosActivos, usuariosActivos, usuariosOperativos, fabricasOperativas, reportesHoy, pendientesHoy }) {
+
+  const FABRICAS_LABELS = { alvear:'Alvear', moron:'Morón', banado:'Bañado', linares:'Linares' };
+
+  // Helper para agregar click a kpi-card por texto del label
+  const bindCard = (statId, handler) => {
+    const el = $(statId);
+    if (!el) return;
+    const card = el.closest('.kpi-card');
+    if (!card) return;
+    card.style.cursor = 'pointer';
+    card.style.transition = 'transform .15s, box-shadow .15s, border-color .15s';
+    card.addEventListener('mouseenter', () => { card.style.transform = 'translateY(-3px)'; card.style.boxShadow = '0 12px 36px rgba(0,0,0,.35)'; });
+    card.addEventListener('mouseleave', () => { card.style.transform = ''; card.style.boxShadow = ''; });
+    card.addEventListener('click', handler);
+  };
+
+  // ── Productos activos ──
+  bindCard('statProductos', () => {
+    const cats = {};
+    productosActivos.forEach((p) => {
+      const c = p.categoria || 'Sin categoría';
+      cats[c] = (cats[c] || 0) + 1;
+    });
+    const rows = Object.entries(cats).sort((a,b) => b[1]-a[1]).map(([c,n]) => `
+      <tr>
+        <td>${c}</td>
+        <td style="text-align:right;font-weight:700;color:#6ea8ff">${n}</td>
+        <td style="text-align:right;color:rgba(255,255,255,.4);font-size:12px">${Math.round(n/productosActivos.length*100)}%</td>
+      </tr>`).join('');
+    _showDashModal('Productos activos', '📦', '#6ea8ff', `
+      <div style="padding:16px 22px 8px;display:flex;gap:16px;flex-wrap:wrap">
+        <div style="background:rgba(110,168,255,.1);border:1px solid rgba(110,168,255,.2);border-radius:12px;padding:12px 18px;flex:1;min-width:120px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">ACTIVOS</div>
+          <div style="font-size:28px;font-weight:900;color:#6ea8ff">${productosActivos.length}</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 18px;flex:1;min-width:120px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">TOTAL</div>
+          <div style="font-size:28px;font-weight:900;color:rgba(255,255,255,.6)">${state.productos.length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Categoría</th><th style="text-align:right">Cantidad</th><th style="text-align:right">%</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="modal-empty">Sin datos</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Reportes cargados ──
+  bindCard('statReportes', () => {
+    const porFabrica = {};
+    const porEstado = { enviada: 0, borrador: 0 };
+    state.reportes.forEach((r) => {
+      const f = FABRICAS_LABELS[r.fabrica] || r.fabrica || 'Otro';
+      porFabrica[f] = (porFabrica[f] || 0) + 1;
+      if (r.estado === 'enviada') porEstado.enviada++;
+      else porEstado.borrador++;
+    });
+    const rows = Object.entries(porFabrica).sort((a,b) => b[1]-a[1]).map(([f,n]) => `
+      <tr><td>${f}</td><td style="text-align:right;font-weight:700;color:#a78bfa">${n}</td></tr>`).join('');
+    _showDashModal('Reportes cargados', '📋', '#a78bfa', `
+      <div style="padding:16px 22px 8px;display:flex;gap:10px;flex-wrap:wrap">
+        <div style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">TOTAL</div>
+          <div style="font-size:28px;font-weight:900;color:#a78bfa">${state.reportes.length}</div>
+        </div>
+        <div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.18);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">ENVIADAS</div>
+          <div style="font-size:28px;font-weight:900;color:#34d399">${porEstado.enviada}</div>
+        </div>
+        <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.18);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">BORRADOR</div>
+          <div style="font-size:28px;font-weight:900;color:#fbbf24">${porEstado.borrador}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Fábrica</th><th style="text-align:right">Reportes</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="2" class="modal-empty">Sin datos</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Alertas activas ──
+  bindCard('statAlertas', () => {
+    const rows = state.alertas.slice().sort((a,b) => String(b.fecha||'').localeCompare(String(a.fecha||''))).map((a) => `
+      <tr>
+        <td style="color:rgba(255,255,255,.6);font-size:12px">${a.fecha||'-'}</td>
+        <td style="font-weight:600">${a.productoNombre||'-'}</td>
+        <td style="color:rgba(255,255,255,.5);font-size:12px">${a.bloque||'-'}</td>
+        <td style="font-weight:800;color:#f87171;text-align:right">${a.diferencia||0}</td>
+      </tr>`).join('');
+    _showDashModal('Alertas activas', '⚠️', '#f87171', `
+      <div style="padding:14px 22px 8px">
+        <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:12px;padding:12px 18px;display:inline-block">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">ALERTAS ACTIVAS</div>
+          <div style="font-size:28px;font-weight:900;color:#f87171">${state.alertas.length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Fecha</th><th>Producto</th><th>Bloque</th><th style="text-align:right">Diferencia</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" class="modal-empty">✅ Sin alertas activas</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Fábricas pendientes hoy ──
+  bindCard('statPendientesHoy', () => {
+    const rows = fabricasOperativas.map((f) => {
+      const cargó = fabricasHoy.has(f);
+      const rep = reportesHoy.find((r) => r.fabrica === f);
+      return `
+        <tr>
+          <td style="font-weight:600">${FABRICAS_LABELS[f] || f}</td>
+          <td>
+            <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;
+              background:${cargó?'rgba(52,211,153,.12)':'rgba(248,113,113,.12)'};
+              color:${cargó?'#34d399':'#f87171'};">
+              ${cargó ? '✅ Cargó' : '⏳ Pendiente'}
+            </span>
+          </td>
+          <td style="color:rgba(255,255,255,.5);font-size:12px">${rep ? (rep.estado === 'enviada' ? '✅ Enviada' : '📝 Borrador') : '—'}</td>
+        </tr>`;
+    }).join('');
+    _showDashModal('Estado fábricas hoy', '🏭', '#fb923c', `
+      <div style="padding:14px 22px 8px;display:flex;gap:10px;flex-wrap:wrap">
+        <div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.18);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">CARGARON</div>
+          <div style="font-size:28px;font-weight:900;color:#34d399">${reportesHoy.length}</div>
+        </div>
+        <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.18);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">PENDIENTES</div>
+          <div style="font-size:28px;font-weight:900;color:#f87171">${pendientesHoy.length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Fábrica</th><th>Estado hoy</th><th>Planilla</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="modal-empty">Sin fábricas registradas</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Planillas cargadas hoy ──
+  bindCard('statHoyCargadas', () => {
+    const rows = reportesHoy.map((r) => `
+      <tr>
+        <td style="font-weight:600">${FABRICAS_LABELS[r.fabrica] || r.fabrica || '-'}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;
+          background:${r.estado==='enviada'?'rgba(52,211,153,.12)':'rgba(251,191,36,.12)'};
+          color:${r.estado==='enviada'?'#34d399':'#fbbf24'};">
+          ${r.estado === 'enviada' ? '✅ Enviada' : '📝 Borrador'}
+        </span></td>
+        <td style="color:rgba(255,255,255,.4);font-size:12px">${r.creadoPor || '-'}</td>
+      </tr>`).join('');
+    _showDashModal('Planillas de hoy', '📅', '#34d399', `
+      <div style="padding:14px 22px 8px">
+        <div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.18);border-radius:12px;padding:12px 18px;display:inline-block">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">CARGADAS HOY — ${hoy}</div>
+          <div style="font-size:28px;font-weight:900;color:#34d399">${reportesHoy.length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Fábrica</th><th>Estado</th><th>Usuario</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="modal-empty">Ninguna planilla cargada hoy aún</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Enviadas ──
+  bindCard('statEnviados', () => {
+    const enviadas = state.reportes.filter((r) => r.estado === 'enviada');
+    const porFabrica = {};
+    enviadas.forEach((r) => {
+      const f = FABRICAS_LABELS[r.fabrica] || r.fabrica || 'Otro';
+      porFabrica[f] = (porFabrica[f] || 0) + 1;
+    });
+    const recent = enviadas.slice().sort((a,b) => String(b.fecha||'').localeCompare(String(a.fecha||''))).slice(0,10);
+    const rows = recent.map((r) => `
+      <tr>
+        <td style="color:rgba(255,255,255,.6);font-size:12px">${r.fecha||'-'}</td>
+        <td style="font-weight:600">${FABRICAS_LABELS[r.fabrica]||r.fabrica||'-'}</td>
+        <td style="color:rgba(255,255,255,.4);font-size:12px">${r.creadoPor||'-'}</td>
+      </tr>`).join('');
+    const summary = Object.entries(porFabrica).map(([f,n]) =>
+      `<div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.14);border-radius:10px;padding:10px 14px;flex:1;min-width:90px">
+        <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:3px">${f.toUpperCase()}</div>
+        <div style="font-size:22px;font-weight:900;color:#34d399">${n}</div>
+      </div>`).join('');
+    _showDashModal('Planillas enviadas', '✅', '#34d399', `
+      <div style="padding:14px 22px 8px;display:flex;gap:8px;flex-wrap:wrap">${summary}</div>
+      <div style="padding:0 22px 8px;font-size:11px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.06em">Últimas enviadas</div>
+      <table><thead><tr><th>Fecha</th><th>Fábrica</th><th>Usuario</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="modal-empty">Sin planillas enviadas</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── En borrador ──
+  bindCard('statBorradores', () => {
+    const borradores = state.reportes.filter((r) => r.estado === 'borrador');
+    const rows = borradores.slice().sort((a,b) => String(b.fecha||'').localeCompare(String(a.fecha||''))).map((r) => `
+      <tr>
+        <td style="color:rgba(255,255,255,.6);font-size:12px">${r.fecha||'-'}</td>
+        <td style="font-weight:600">${FABRICAS_LABELS[r.fabrica]||r.fabrica||'-'}</td>
+        <td style="color:rgba(255,255,255,.4);font-size:12px">${r.creadoPor||'-'}</td>
+      </tr>`).join('');
+    _showDashModal('Planillas en borrador', '📝', '#fbbf24', `
+      <div style="padding:14px 22px 8px">
+        <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:12px 18px;display:inline-block">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">EN BORRADOR</div>
+          <div style="font-size:28px;font-weight:900;color:#fbbf24">${borradores.length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Fecha</th><th>Fábrica</th><th>Usuario</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="modal-empty">Sin borradores</td></tr>'}</tbody></table>
+    `);
+  });
+
+  // ── Usuarios activos ──
+  bindCard('statUsuariosActivos', () => {
+    const rows = usuariosActivos.map((u) => `
+      <tr>
+        <td style="font-weight:600">${u.nombre||u.email||'-'}</td>
+        <td style="color:rgba(255,255,255,.5);font-size:12px">${u.email||'-'}</td>
+        <td><span style="display:inline-flex;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;
+          background:rgba(110,168,255,.1);color:#6ea8ff;border:1px solid rgba(110,168,255,.2)">
+          ${u.rol||'operativo'}
+        </span></td>
+        <td style="color:rgba(255,255,255,.5);font-size:12px">${FABRICAS_LABELS[u.fabrica]||u.fabrica||'—'}</td>
+      </tr>`).join('');
+    _showDashModal('Usuarios activos', '👥', '#818cf8', `
+      <div style="padding:14px 22px 8px;display:flex;gap:10px;flex-wrap:wrap">
+        <div style="background:rgba(129,140,248,.1);border:1px solid rgba(129,140,248,.2);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">ACTIVOS</div>
+          <div style="font-size:28px;font-weight:900;color:#818cf8">${usuariosActivos.length}</div>
+        </div>
+        <div style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.16);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">OPERATIVOS</div>
+          <div style="font-size:28px;font-weight:900;color:#34d399">${usuariosOperativos.length}</div>
+        </div>
+        <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.16);border-radius:12px;padding:12px 18px;flex:1;min-width:100px">
+          <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px">GERENCIA</div>
+          <div style="font-size:28px;font-weight:900;color:#fb923c">${usuariosActivos.filter(u=>u.rol==='gerencia').length}</div>
+        </div>
+      </div>
+      <table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Fábrica</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" class="modal-empty">Sin usuarios</td></tr>'}</tbody></table>
+    `);
+  });
 }
 
 function renderProductos() {
@@ -1163,11 +1477,11 @@ function getVisibleGroupsForCurrentView() {
   }
 
   if (fabrica === 'moron') return MORON_INTERNAL_GROUPS;
+  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS;
 
   const groupsByFactory = {
     alvear:  ['alvear', 'cajaChica', 'cajaGrandeAlv'],
     banado:  ['banadoChica', 'banadoGrande'],
-    linares: ['linares', 'linaresChica', 'linaresGrande'],
   };
 
   const allowedKeys = groupsByFactory[fabrica] || [];
@@ -1182,7 +1496,8 @@ function getEditableGroupsForCurrentUser() {
     return [...DAY_GROUPS, ...MORON_INTERNAL_GROUPS, ...LINARES_INTERNAL_GROUPS].map((g) => g.key);
   }
 
-  if (fabrica === 'moron') return MORON_INTERNAL_GROUPS.map((g) => g.key);
+  if (fabrica === 'moron')   return MORON_INTERNAL_GROUPS.map((g) => g.key);
+  if (fabrica === 'linares') return LINARES_INTERNAL_GROUPS.map((g) => g.key);
 
   return INPUT_GROUP_BY_FABRICA[fabrica] || [];
 }
