@@ -3698,6 +3698,44 @@ async function cargarPedidoSemanal() {
   renderPedidoSemanal();
 }
 
+async function _autoGuardarPedidoSemanal() {
+  if (!state.pedidoSemanalActual) return;
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+  if (!monthValue || !weekMeta) return;
+
+  const id = getWeekDocId(monthValue, weekMeta.key);
+  const ref = doc(db, 'pedidos_semanales', id);
+  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+
+  const payload = {
+    monthValue,
+    weekKey:   weekMeta.key,
+    weekLabel: weekMeta.label,
+    weekStart: weekMeta.start,
+    weekEnd:   weekMeta.end,
+    moronLocked:       !!state.pedidoSemanalActual.moronLocked,
+    alvearConfirmado:  !!state.pedidoSemanalActual.alvearConfirmado,
+    banadoConfirmado:  !!state.pedidoSemanalActual.banadoConfirmado,
+    linaresConfirmado: !!state.pedidoSemanalActual.linaresConfirmado,
+    updatedBy:     state.currentUser?.email || '',
+    updatedAtText: new Date().toISOString(),
+    updatedAt:     serverTimestamp(),
+    rows: currentRows
+  };
+
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, payload);
+    } else {
+      await setDoc(ref, { ...payload, createdAt: serverTimestamp(), createdBy: state.currentUser?.email || '' });
+    }
+  } catch (e) {
+    console.warn('Autosave pedido semanal error:', e);
+  }
+}
+
 async function guardarPedidoSemanal() {
   const monthValue = $('pedidoMes')?.value;
   const weekMeta = getSelectedWeekMeta();
@@ -3713,17 +3751,26 @@ async function guardarPedidoSemanal() {
     return;
   }
 
-  const isMoron = state.perfil?.fabrica === 'moron' && state.perfil?.rol !== 'gerencia';
-  const isAlvear = state.perfil?.fabrica === 'alvear' && state.perfil?.rol !== 'gerencia';
+  const isMoron   = state.perfil?.fabrica === 'moron'   && state.perfil?.rol !== 'gerencia';
+  const isAlvear  = state.perfil?.fabrica === 'alvear'  && state.perfil?.rol !== 'gerencia';
+  const isBanado  = state.perfil?.fabrica === 'banado'  && state.perfil?.rol !== 'gerencia';
+  const isLinares = state.perfil?.fabrica === 'linares' && state.perfil?.rol !== 'gerencia';
   const isGerencia = state.perfil?.rol === 'gerencia';
 
   if (isMoron && state.pedidoSemanalActual.moronLocked) {
     toast('Morón ya confirmó esta semana y no puede modificarla.');
     return;
   }
-
   if (isAlvear && state.pedidoSemanalActual.alvearConfirmado) {
     toast('La semana ya está cerrada.');
+    return;
+  }
+  if (isBanado && state.pedidoSemanalActual.banadoConfirmado) {
+    toast('Bañado ya confirmó esta semana.');
+    return;
+  }
+  if (isLinares && state.pedidoSemanalActual.linaresConfirmado) {
+    toast('Linares ya confirmó esta semana.');
     return;
   }
 
@@ -3733,15 +3780,17 @@ async function guardarPedidoSemanal() {
 
   const payload = {
     monthValue,
-    weekKey: weekMeta.key,
+    weekKey:   weekMeta.key,
     weekLabel: weekMeta.label,
     weekStart: weekMeta.start,
-    weekEnd: weekMeta.end,
-    moronLocked: isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
-    alvearConfirmado: !!state.pedidoSemanalActual.alvearConfirmado,
-    updatedBy: state.currentUser?.email || '',
+    weekEnd:   weekMeta.end,
+    moronLocked:       isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
+    alvearConfirmado:  isAlvear  ? true : !!state.pedidoSemanalActual.alvearConfirmado,
+    banadoConfirmado:  isBanado  ? true : !!state.pedidoSemanalActual.banadoConfirmado,
+    linaresConfirmado: isLinares ? true : !!state.pedidoSemanalActual.linaresConfirmado,
+    updatedBy:     state.currentUser?.email || '',
     updatedAtText: new Date().toISOString(),
-    updatedAt: serverTimestamp(),
+    updatedAt:     serverTimestamp(),
     rows: currentRows
   };
 
@@ -3756,13 +3805,13 @@ async function guardarPedidoSemanal() {
     });
   }
 
-  state.pedidoSemanalActual = {
-    id,
-    ...payload
-  };
+  state.pedidoSemanalActual = { id, ...payload };
 
-  if (isMoron) toast('✅ Pedido confirmado y enviado a Alvear.');
+  if (isMoron)   toast('✅ Pedido confirmado y enviado a Alvear.');
+  else if (isBanado)  toast('✅ Bañado confirmó la semana.');
+  else if (isLinares) toast('✅ Linares confirmó la semana.');
   else toast('Pedido semanal guardado.');
+
   await _refreshPedidos();
   renderPedidoSemanal();
 }
@@ -3809,6 +3858,19 @@ function handlePedidoFieldChange(rowIndex, fieldKey, newValue) {
   pushWeeklyHistory(row, fieldKey, oldValue, normalizedNewValue, actor);
 
   state.pedidoSemanalSelectedRow = rowIndex;
+
+  // Autosave para Bañado y Linares (no tienen botón de guardar parcial)
+  const isBanadoOrLinares =
+    (state.perfil?.fabrica === 'banado' || state.perfil?.fabrica === 'linares') &&
+    state.perfil?.rol !== 'gerencia';
+
+  if (isBanadoOrLinares) {
+    clearTimeout(state.autoSaveTimer);
+    state.autoSaveTimer = setTimeout(async () => {
+      await _autoGuardarPedidoSemanal();
+    }, 1500);
+  }
+
   renderPedidoSemanal();
 }
 
@@ -3858,18 +3920,72 @@ function renderPedidoSemanal() {
   }
 
   const rows = getPedidoSemanalRowsForView(allRows);
-  const alvearConfirmado = !!state.pedidoSemanalActual?.alvearConfirmado;
+  const alvearConfirmado  = !!state.pedidoSemanalActual?.alvearConfirmado;
+  const banadoConfirmado  = !!state.pedidoSemanalActual?.banadoConfirmado;
+  const linaresConfirmado = !!state.pedidoSemanalActual?.linaresConfirmado;
+  const moronLocked       = !!state.pedidoSemanalActual?.moronLocked;
 
-  // Botón confirmar Alvear
+  // ── Botón confirmar Alvear ──────────────────────────────────────────
   const btnConfirmarContainer = $('btnConfirmarAlvear');
   if (btnConfirmarContainer) {
     const mostrar = (viewMode === 'alvear' || viewMode === 'gerencia')
-      && !!state.pedidoSemanalActual?.moronLocked
-      && !alvearConfirmado;
+      && moronLocked && !alvearConfirmado;
     btnConfirmarContainer.style.display = mostrar ? 'block' : 'none';
   }
 
-  // ── Botones Restablecer en Borrador (solo gerencia) ──────────────────
+  // ── Botones confirmar Bañado y Linares — creados dinámicamente ──────
+  const _ensureConfirmBtn = (id, label, color, fabrica, confirmado, mostrar) => {
+    let btn = $(id);
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = id;
+      btn.className = 'btn btn-primary btn-sm';
+      btn.style.cssText = `margin:8px 0;background:${color};border:none`;
+      btn.textContent = label;
+      btn.addEventListener('click', () => guardarPedidoSemanal());
+      const ancla = $('btnConfirmarAlvear') || table;
+      ancla.parentNode?.insertBefore(btn, ancla.nextSibling);
+    }
+    btn.style.display = mostrar && !confirmado ? 'inline-flex' : 'none';
+    btn.textContent = label;
+  };
+
+  _ensureConfirmBtn(
+    'btnConfirmarBanado',
+    '💧 Confirmar semana — Bañado',
+    'linear-gradient(135deg,#059669,#10b981)',
+    'banado',
+    banadoConfirmado,
+    viewMode === 'banado' && moronLocked
+  );
+
+  _ensureConfirmBtn(
+    'btnConfirmarLinares',
+    '🌿 Confirmar semana — Linares',
+    'linear-gradient(135deg,#be185d,#ec4899)',
+    'linares',
+    linaresConfirmado,
+    viewMode === 'linares' && moronLocked
+  );
+
+  // ── Mensaje cuando ya confirmó ──────────────────────────────────────
+  let confirmedMsg = $('pedido-confirmed-msg');
+  const showConfirmed =
+    (viewMode === 'banado'  && banadoConfirmado)  ||
+    (viewMode === 'linares' && linaresConfirmado) ||
+    (viewMode === 'alvear'  && alvearConfirmado);
+
+  if (!confirmedMsg) {
+    confirmedMsg = document.createElement('div');
+    confirmedMsg.id = 'pedido-confirmed-msg';
+    confirmedMsg.style.cssText = 'display:none;margin:8px 0;padding:10px 16px;border-radius:12px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#34d399;font-size:13px;font-weight:600';
+    const ancla = $('btnConfirmarAlvear') || table;
+    ancla.parentNode?.insertBefore(confirmedMsg, ancla.nextSibling);
+  }
+  confirmedMsg.style.display = showConfirmed ? 'flex' : 'none';
+  confirmedMsg.textContent = showConfirmed ? '✅ Esta semana ya fue confirmada. Gerencia puede restablecerla en borrador si es necesario.' : '';
+
+  // ── Botones Restablecer en Borrador (solo gerencia) ─────────────────
   const isGerencia = state.perfil?.rol === 'gerencia';
   let resetContainer = $('pedido-reset-borradores');
   if (!resetContainer && isGerencia) {
@@ -5355,3 +5471,4 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
+
