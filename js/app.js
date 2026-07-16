@@ -3737,19 +3737,40 @@ async function _autoGuardarPedidoSemanal() {
 }
 
 async function guardarPedidoSemanal() {
+  // Guarda en borrador SIN cerrar la semana — para cualquier fábrica
   const monthValue = $('pedidoMes')?.value;
   const weekMeta = getSelectedWeekMeta();
 
-  if (!monthValue || !weekMeta) {
-    toast('Seleccioná mes y semana.');
-    return;
-  }
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
 
   ensurePedidoDraft();
-  if (!state.pedidoSemanalActual) {
-    toast('Primero cargá la semana.');
-    return;
-  }
+  if (!state.pedidoSemanalActual) { toast('Primero cargá la semana.'); return; }
+
+  const isMoron   = state.perfil?.fabrica === 'moron'   && state.perfil?.rol !== 'gerencia';
+  const isAlvear  = state.perfil?.fabrica === 'alvear'  && state.perfil?.rol !== 'gerencia';
+  const isBanado  = state.perfil?.fabrica === 'banado'  && state.perfil?.rol !== 'gerencia';
+  const isLinares = state.perfil?.fabrica === 'linares' && state.perfil?.rol !== 'gerencia';
+
+  if (isMoron   && state.pedidoSemanalActual.moronLocked)      { toast('Morón ya confirmó esta semana.'); return; }
+  if (isAlvear  && state.pedidoSemanalActual.alvearConfirmado) { toast('La semana ya está cerrada.'); return; }
+  if (isBanado  && state.pedidoSemanalActual.banadoConfirmado) { toast('Bañado ya confirmó esta semana.'); return; }
+  if (isLinares && state.pedidoSemanalActual.linaresConfirmado){ toast('Linares ya confirmó esta semana.'); return; }
+
+  await _autoGuardarPedidoSemanal();
+  toast('💾 Guardado.');
+  await _refreshPedidos();
+  renderPedidoSemanal();
+}
+
+async function confirmarPedidoSemanal() {
+  // Cierra/confirma la semana según la fábrica — acción irreversible sin gerencia
+  const monthValue = $('pedidoMes')?.value;
+  const weekMeta = getSelectedWeekMeta();
+
+  if (!monthValue || !weekMeta) { toast('Seleccioná mes y semana.'); return; }
+
+  ensurePedidoDraft();
+  if (!state.pedidoSemanalActual) { toast('Primero cargá la semana.'); return; }
 
   const isMoron   = state.perfil?.fabrica === 'moron'   && state.perfil?.rol !== 'gerencia';
   const isAlvear  = state.perfil?.fabrica === 'alvear'  && state.perfil?.rol !== 'gerencia';
@@ -3757,22 +3778,10 @@ async function guardarPedidoSemanal() {
   const isLinares = state.perfil?.fabrica === 'linares' && state.perfil?.rol !== 'gerencia';
   const isGerencia = state.perfil?.rol === 'gerencia';
 
-  if (isMoron && state.pedidoSemanalActual.moronLocked) {
-    toast('Morón ya confirmó esta semana y no puede modificarla.');
-    return;
-  }
-  if (isAlvear && state.pedidoSemanalActual.alvearConfirmado) {
-    toast('La semana ya está cerrada.');
-    return;
-  }
-  if (isBanado && state.pedidoSemanalActual.banadoConfirmado) {
-    toast('Bañado ya confirmó esta semana.');
-    return;
-  }
-  if (isLinares && state.pedidoSemanalActual.linaresConfirmado) {
-    toast('Linares ya confirmó esta semana.');
-    return;
-  }
+  if (isMoron   && state.pedidoSemanalActual.moronLocked)      { toast('Morón ya confirmó esta semana.'); return; }
+  if (isAlvear  && state.pedidoSemanalActual.alvearConfirmado) { toast('La semana ya está cerrada.'); return; }
+  if (isBanado  && state.pedidoSemanalActual.banadoConfirmado) { toast('Bañado ya confirmó esta semana.'); return; }
+  if (isLinares && state.pedidoSemanalActual.linaresConfirmado){ toast('Linares ya confirmó esta semana.'); return; }
 
   const id = getWeekDocId(monthValue, weekMeta.key);
   const ref = doc(db, 'pedidos_semanales', id);
@@ -3784,7 +3793,8 @@ async function guardarPedidoSemanal() {
     weekLabel: weekMeta.label,
     weekStart: weekMeta.start,
     weekEnd:   weekMeta.end,
-    moronLocked:       isGerencia ? !!state.pedidoSemanalActual.moronLocked : (isMoron ? true : !!state.pedidoSemanalActual.moronLocked),
+    // Solo marca como confirmada la fábrica actual
+    moronLocked:       isMoron   ? true : !!state.pedidoSemanalActual.moronLocked,
     alvearConfirmado:  isAlvear  ? true : !!state.pedidoSemanalActual.alvearConfirmado,
     banadoConfirmado:  isBanado  ? true : !!state.pedidoSemanalActual.banadoConfirmado,
     linaresConfirmado: isLinares ? true : !!state.pedidoSemanalActual.linaresConfirmado,
@@ -3798,19 +3808,16 @@ async function guardarPedidoSemanal() {
   if (snap.exists()) {
     await updateDoc(ref, payload);
   } else {
-    await setDoc(ref, {
-      ...payload,
-      createdAt: serverTimestamp(),
-      createdBy: state.currentUser?.email || ''
-    });
+    await setDoc(ref, { ...payload, createdAt: serverTimestamp(), createdBy: state.currentUser?.email || '' });
   }
 
   state.pedidoSemanalActual = { id, ...payload };
 
-  if (isMoron)   toast('✅ Pedido confirmado y enviado a Alvear.');
+  if (isMoron)        toast('✅ Pedido confirmado y enviado a las fábricas.');
   else if (isBanado)  toast('✅ Bañado confirmó la semana.');
   else if (isLinares) toast('✅ Linares confirmó la semana.');
-  else toast('Pedido semanal guardado.');
+  else if (isAlvear)  toast('✅ Alvear confirmó la entrega.');
+  else toast('Semana confirmada.');
 
   await _refreshPedidos();
   renderPedidoSemanal();
@@ -3942,7 +3949,7 @@ function renderPedidoSemanal() {
       btn.className = 'btn btn-primary btn-sm';
       btn.style.cssText = `margin:8px 0;background:${color};border:none`;
       btn.textContent = label;
-      btn.addEventListener('click', () => guardarPedidoSemanal());
+      btn.addEventListener('click', () => confirmarPedidoSemanal());
       const ancla = $('btnConfirmarAlvear') || table;
       ancla.parentNode?.insertBefore(btn, ancla.nextSibling);
     }
@@ -5471,4 +5478,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-
