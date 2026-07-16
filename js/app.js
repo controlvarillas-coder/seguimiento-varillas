@@ -3706,7 +3706,31 @@ async function _autoGuardarPedidoSemanal() {
 
   const id = getWeekDocId(monthValue, weekMeta.key);
   const ref = doc(db, 'pedidos_semanales', id);
-  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+
+  // Guardar rows DIRECTAMENTE desde el estado en memoria
+  // sin pasar por normalizeWeeklyRows que descarta campos de Bañado/Linares
+  const rows = (state.pedidoSemanalActual.rows || []).map((row) => ({
+    productoId:              row.productoId || '',
+    productoNombre:          row.productoNombre || '',
+    categoria:               row.categoria || '',
+    moronCantidad:           Number(row.moronCantidad ?? 0),
+    moronTipo:               row.moronTipo || 'bultos',
+    moronFabricaDestino:     row.moronFabricaDestino || 'alvear',
+    moronObservacion:        String(row.moronObservacion || ''),
+    alvearFechaEntrega:      String(row.alvearFechaEntrega || ''),
+    alvearCantidadEntregada: Number(row.alvearCantidadEntregada ?? 0),
+    alvearMotivos:           Array.isArray(row.alvearMotivos) ? row.alvearMotivos : [],
+    alvearObservacion:       String(row.alvearObservacion || ''),
+    banadoFechaEntrega:      String(row.banadoFechaEntrega || ''),
+    banadoCantidadEntregada: Number(row.banadoCantidadEntregada ?? 0),
+    banadoObservacion:       String(row.banadoObservacion || ''),
+    linaresFechaEntrega:     String(row.linaresFechaEntrega || ''),
+    linaresCantidadEntregada:Number(row.linaresCantidadEntregada ?? 0),
+    linaresObservacion:      String(row.linaresObservacion || ''),
+    gerenciaObservacion:     String(row.gerenciaObservacion || ''),
+    alvearConfirmado:        !!row.alvearConfirmado,
+    historial:               Array.isArray(row.historial) ? row.historial : []
+  }));
 
   const payload = {
     monthValue,
@@ -3721,7 +3745,7 @@ async function _autoGuardarPedidoSemanal() {
     updatedBy:     state.currentUser?.email || '',
     updatedAtText: new Date().toISOString(),
     updatedAt:     serverTimestamp(),
-    rows: currentRows
+    rows
   };
 
   try {
@@ -3785,7 +3809,28 @@ async function confirmarPedidoSemanal() {
 
   const id = getWeekDocId(monthValue, weekMeta.key);
   const ref = doc(db, 'pedidos_semanales', id);
-  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+  const currentRows = (state.pedidoSemanalActual.rows || []).map((row) => ({
+    productoId:              row.productoId || '',
+    productoNombre:          row.productoNombre || '',
+    categoria:               row.categoria || '',
+    moronCantidad:           Number(row.moronCantidad ?? 0),
+    moronTipo:               row.moronTipo || 'bultos',
+    moronFabricaDestino:     row.moronFabricaDestino || 'alvear',
+    moronObservacion:        String(row.moronObservacion || ''),
+    alvearFechaEntrega:      String(row.alvearFechaEntrega || ''),
+    alvearCantidadEntregada: Number(row.alvearCantidadEntregada ?? 0),
+    alvearMotivos:           Array.isArray(row.alvearMotivos) ? row.alvearMotivos : [],
+    alvearObservacion:       String(row.alvearObservacion || ''),
+    banadoFechaEntrega:      String(row.banadoFechaEntrega || ''),
+    banadoCantidadEntregada: Number(row.banadoCantidadEntregada ?? 0),
+    banadoObservacion:       String(row.banadoObservacion || ''),
+    linaresFechaEntrega:     String(row.linaresFechaEntrega || ''),
+    linaresCantidadEntregada:Number(row.linaresCantidadEntregada ?? 0),
+    linaresObservacion:      String(row.linaresObservacion || ''),
+    gerenciaObservacion:     String(row.gerenciaObservacion || ''),
+    alvearConfirmado:        !!row.alvearConfirmado,
+    historial:               Array.isArray(row.historial) ? row.historial : []
+  }));
 
   const payload = {
     monthValue,
@@ -4107,7 +4152,28 @@ async function confirmarEntregaAlvear() {
 
   const id = getWeekDocId(monthValue, weekMeta.key);
   const ref = doc(db, 'pedidos_semanales', id);
-  const currentRows = normalizeWeeklyRows(state.pedidoSemanalActual.rows || [], getWeeklyProducts());
+  const currentRows = (state.pedidoSemanalActual.rows || []).map((row) => ({
+    productoId:              row.productoId || '',
+    productoNombre:          row.productoNombre || '',
+    categoria:               row.categoria || '',
+    moronCantidad:           Number(row.moronCantidad ?? 0),
+    moronTipo:               row.moronTipo || 'bultos',
+    moronFabricaDestino:     row.moronFabricaDestino || 'alvear',
+    moronObservacion:        String(row.moronObservacion || ''),
+    alvearFechaEntrega:      String(row.alvearFechaEntrega || ''),
+    alvearCantidadEntregada: Number(row.alvearCantidadEntregada ?? 0),
+    alvearMotivos:           Array.isArray(row.alvearMotivos) ? row.alvearMotivos : [],
+    alvearObservacion:       String(row.alvearObservacion || ''),
+    banadoFechaEntrega:      String(row.banadoFechaEntrega || ''),
+    banadoCantidadEntregada: Number(row.banadoCantidadEntregada ?? 0),
+    banadoObservacion:       String(row.banadoObservacion || ''),
+    linaresFechaEntrega:     String(row.linaresFechaEntrega || ''),
+    linaresCantidadEntregada:Number(row.linaresCantidadEntregada ?? 0),
+    linaresObservacion:      String(row.linaresObservacion || ''),
+    gerenciaObservacion:     String(row.gerenciaObservacion || ''),
+    alvearConfirmado:        !!row.alvearConfirmado,
+    historial:               Array.isArray(row.historial) ? row.historial : []
+  }));
 
   const payload = {
     ...state.pedidoSemanalActual,
@@ -5478,3 +5544,4 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
+
