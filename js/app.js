@@ -3671,12 +3671,35 @@ async function cargarPedidoSemanal() {
   const ref = doc(db, 'pedidos_semanales', id);
   const snap = await getDoc(ref);
 
+  const _mapRow = (row) => ({
+    productoId:              row.productoId || '',
+    productoNombre:          row.productoNombre || '',
+    categoria:               row.categoria || '',
+    moronCantidad:           Number(row.moronCantidad ?? 0),
+    moronTipo:               row.moronTipo || 'bultos',
+    moronFabricaDestino:     row.moronFabricaDestino || 'alvear',
+    moronObservacion:        String(row.moronObservacion || ''),
+    alvearFechaEntrega:      String(row.alvearFechaEntrega || ''),
+    alvearCantidadEntregada: Number(row.alvearCantidadEntregada ?? 0),
+    alvearMotivos:           Array.isArray(row.alvearMotivos) ? row.alvearMotivos : [],
+    alvearObservacion:       String(row.alvearObservacion || ''),
+    banadoFechaEntrega:      String(row.banadoFechaEntrega || ''),
+    banadoCantidadEntregada: Number(row.banadoCantidadEntregada ?? 0),
+    banadoObservacion:       String(row.banadoObservacion || ''),
+    linaresFechaEntrega:     String(row.linaresFechaEntrega || ''),
+    linaresCantidadEntregada:Number(row.linaresCantidadEntregada ?? 0),
+    linaresObservacion:      String(row.linaresObservacion || ''),
+    gerenciaObservacion:     String(row.gerenciaObservacion || ''),
+    alvearConfirmado:        !!row.alvearConfirmado,
+    historial:               Array.isArray(row.historial) ? row.historial : []
+  });
+
   if (snap.exists()) {
     const data = snap.data() || {};
     state.pedidoSemanalActual = {
       id,
       ...data,
-      rows: normalizeWeeklyRows(data.rows || [], getWeeklyProducts())
+      rows: (data.rows || []).map(_mapRow)
     };
     toast('Pedido semanal cargado.');
   } else {
@@ -3689,6 +3712,8 @@ async function cargarPedidoSemanal() {
       weekEnd: weekMeta.end,
       moronLocked: false,
       alvearConfirmado: false,
+      banadoConfirmado: false,
+      linaresConfirmado: false,
       rows: buildDefaultWeeklyRows(getWeeklyProducts())
     };
     toast('Nueva semana preparada.');
@@ -5544,4 +5569,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-
