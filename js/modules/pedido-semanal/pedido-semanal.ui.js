@@ -9,6 +9,19 @@
 import { getHistoryTitle, MOTIVOS_PREDEFINIDOS } from './pedido-semanal.service.js';
 
 /* -----------------------------------------------------------------
+   Calcula el total entregado según la fábrica destino del pedido.
+   Bañado y Linares tienen sus propios campos de entrega.
+----------------------------------------------------------------- */
+function _calcEntregado(row) {
+  const dest = row.moronFabricaDestino || 'alvear';
+  if (dest === 'banado')  return Number(row.banadoCantidadEntregada  || 0);
+  if (dest === 'linares') return Number(row.linaresCantidadEntregada || 0);
+  return Number(row.alvearCantidadEntregada || 0);
+}
+
+
+
+/* -----------------------------------------------------------------
    Select de semanas — fix de texto invisible en tema oscuro
 ----------------------------------------------------------------- */
 export function renderWeekOptions(selectEl, weeks = []) {
@@ -58,8 +71,20 @@ export function renderWeekCalendar(containerEl, weeks = [], pedidosCache = {}, m
       color = '#ffd166'; bg = 'rgba(255,209,102,0.12)'; icon = '⏳'; label = 'Pendiente Alvear';
     } else {
       const pedidas = rows.filter((r) => Number(r.moronCantidad) > 0);
-      const todas = pedidas.every((r) => Number(r.alvearCantidadEntregada) >= Number(r.moronCantidad));
-      const alguna = pedidas.some((r) => Number(r.alvearCantidadEntregada) >= Number(r.moronCantidad));
+      const todas = pedidas.every((r) => {
+        const dest = r.moronFabricaDestino || 'alvear';
+        const ent = dest === 'banado'  ? Number(r.banadoCantidadEntregada  || 0)
+                  : dest === 'linares' ? Number(r.linaresCantidadEntregada || 0)
+                  : Number(r.alvearCantidadEntregada || 0);
+        return ent >= Number(r.moronCantidad);
+      });
+      const alguna = pedidas.some((r) => {
+        const dest = r.moronFabricaDestino || 'alvear';
+        const ent = dest === 'banado'  ? Number(r.banadoCantidadEntregada  || 0)
+                  : dest === 'linares' ? Number(r.linaresCantidadEntregada || 0)
+                  : Number(r.alvearCantidadEntregada || 0);
+        return ent >= Number(r.moronCantidad);
+      });
 
       if (todas) { color = '#3ddc97'; bg = 'rgba(61,220,151,0.14)'; icon = '✅'; label = 'Completo'; }
       else if (alguna) { color = '#f9a825'; bg = 'rgba(249,168,37,0.14)'; icon = '🟡'; label = 'Parcial'; }
@@ -177,7 +202,7 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
       <td class="pedido-col-alvear" style="min-width:120px;text-align:center;">
         ${(() => {
           const ped = Number(row.moronCantidad) || 0;
-          const ent = Number(row.alvearCantidadEntregada || 0);
+          const ent = _calcEntregado(row);
           if (ped === 0) return '<span style="color:rgba(255,255,255,.2);font-size:12px;">—</span>';
           if (ent >= ped)  return '<span class="pedido-estado-pill pedido-estado-completo">✅ Completo</span>';
           if (ent > 0)     return '<span class="pedido-estado-pill pedido-estado-parcial">⚠️ Parcial<br><small>' + ent + '/' + ped + '</small></span>';
@@ -224,7 +249,7 @@ function _renderTableAlvear(tableEl, rows, canEditField, onFieldChange, alvearCo
 
   let body = rows.map((row, rowIndex) => {
     const ped = Number(row.moronCantidad);
-    const ent = Number(row.alvearCantidadEntregada || 0);
+    const ent = _calcEntregado(row);
     const faltante = ped - ent;
     const completo = faltante <= 0;
 
@@ -405,7 +430,7 @@ function _renderTableGerencia(tableEl, rows, canEditField, selectedRowIndex, onF
     const historyCount = Array.isArray(row.historial) ? row.historial.length : 0;
     const isSelected = selectedRowIndex === rowIndex;
     const ped = Number(row.moronCantidad);
-    const ent = Number(row.alvearCantidadEntregada || 0);
+    const ent = _calcEntregado(row);
     const faltante = ped - ent;
     const completo = ped > 0 && faltante <= 0;
 
