@@ -4392,7 +4392,10 @@ function renderReportes() {
         if (ped === 0) return;
         if (categoria && row.categoria !== categoria) return;
 
-        const ent = num(row.alvearCantidadEntregada ?? 0);
+        const dest = row.moronFabricaDestino || 'alvear';
+        const ent = dest === 'banado'  ? num(row.banadoCantidadEntregada  ?? 0)
+                  : dest === 'linares' ? num(row.linaresCantidadEntregada ?? 0)
+                  : num(row.alvearCantidadEntregada ?? 0);
         const pct = ped > 0 ? Math.round((ent / ped) * 100) : 0;
         const motivos = Array.isArray(row.alvearMotivos) ? row.alvearMotivos.join(', ') : '';
 
