@@ -1640,7 +1640,17 @@ const GROUP_FABRICA_OWNER = {
 function getStockInicialCanonicoParaFecha(fecha, productoId) {
   if (!fecha) return EMPTY_STOCK();
   const monthValue = String(fecha).slice(0, 7);
-  return getStockMensualForProduct(monthValue, productoId);
+
+  // Prioridad 1: stock_mensual de Firestore (fuente canónica)
+  const stockMensual = getStockMensualForProduct(monthValue, productoId);
+  const tieneStockMensual = Object.values(stockMensual).some((v) => num(v) !== 0);
+  if (tieneStockMensual) return stockMensual;
+
+  // Prioridad 2: cierre calculado del mes anterior (fallback cuando no se generó stock_mensual)
+  const closing = getClosingStockFromPreviousMonth(productoId, monthValue);
+  if (closing) return closing;
+
+  return EMPTY_STOCK();
 }
 
 function getEffectiveGroupDataForDay(fecha, productoId, groupKey) {
@@ -1875,6 +1885,45 @@ function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!monthValue || monthValue === MANUAL_INITIAL_MONTH) return null;
 
   const previousMonth = getPreviousMonthValue(monthValue);
+
+  // Primero intentar stock_mensual del mes anterior (ya calculado y guardado)
+  const stockMensualPrev = getStockMensualForProduct(previousMonth, productoId);
+  const tieneStockMensualPrev = Object.values(stockMensualPrev).some((v) => num(v) !== 0);
+  if (tieneStockMensualPrev) {
+    // Calcular el cierre del mes anterior usando ese stock como base
+    const lastDate = getLastAvailableDateForMonth(previousMonth);
+    if (!lastDate) return stockMensualPrev; // Si no hay reportes, devolver el stock inicial del mes anterior
+
+    // Usar las funciones de running total pero pasando el stockMensualPrev directamente
+    // para evitar recursión en getStockInicialCanonicoParaFecha
+    const { year, month } = getDateParts(lastDate);
+    const lastDay = parseInt(lastDate.slice(8, 10));
+
+    const _calcGroup = (groupKey, stockField, fields) => {
+      let total = num(stockMensualPrev?.[stockField]);
+      for (let d = 1; d <= lastDay; d++) {
+        const currentDate = buildDateStr(year, month, d);
+        const rowData = getMergedGroupDataForDay(currentDate, productoId, groupKey);
+        total += fields.reduce((acc, [k, sign]) => acc + sign * num(rowData?.[k]), 0);
+      }
+      return total;
+    };
+
+    return {
+      alvearChica:   _calcGroup('cajaChica',        'alvearChica',  [['alvPlus',1],['alvMinus',-1],['dif',1]]),
+      alvearGrande:  _calcGroup('cajaGrandeAlv',     'alvearGrande', [['alvPlus',1],['alvMinus',-1],['dif',1]]),
+      moronChica:    _calcGroup('moronChicaInterna', 'moronChica',   [['entrada',1],['sobrante',1],['pEmpaq',-1],['diferencia',1]]),
+      moronGrande:   _calcGroup('moronGrandeInterna','moronGrande',  [['entrada',1],['sobrante',1],['pEmpaq',-1],['diferencia',1]]),
+      secandoChica:  _calcGroup('banadoChica',       'secandoChica', [['banadoPlus',1],['cosecha',1],['salida',-1],['dif',1]]),
+      secandoGrande: _calcGroup('banadoGrande',      'secandoGrande',[['banadoPlus',1],['cosecha',1],['salida',-1],['dif',1]]),
+      banadoChica:   _calcGroup('banadoChica',       'banadoChica',  [['banadoPlus',1],['cosecha',1],['salida',-1],['dif',1]]),
+      banadoGrande:  _calcGroup('banadoGrande',      'banadoGrande', [['banadoPlus',1],['cosecha',1],['salida',-1],['dif',1]]),
+      linaresChica:  _calcGroup('linaresChica',      'linaresChica', [['linPlus',1],['linMinus',-1],['dif',1]]),
+      linaresGrande: _calcGroup('linaresGrande',     'linaresGrande',[['linPlus',1],['linMinus',-1],['dif',1]]),
+    };
+  }
+
+  // Fallback: calcular desde los reportes cargados en memoria
   const lastDate = getLastAvailableDateForMonth(previousMonth);
   if (!lastDate) return null;
 
@@ -1882,14 +1931,16 @@ function getClosingStockFromPreviousMonth(productoId, monthValue) {
   if (!lastRow) return null;
 
   return {
-    alvearChica: getCajaChicaAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
-    alvearGrande: getCajaGrandeAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
-    moronChica: getCajaChicaMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
-    moronGrande: getCajaGrandeMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
-    secandoChica: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
+    alvearChica:   getCajaChicaAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    alvearGrande:  getCajaGrandeAlvearRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    moronChica:    getCajaChicaMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    moronGrande:   getCajaGrandeMoronRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    secandoChica:  getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
     secandoGrande: getBanadoSecandoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {}),
-    banadoChica: getBanadoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
-    banadoGrande: getBanadoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {})
+    banadoChica:   getBanadoRunningTotal(lastDate, productoId, 'banadoChica', lastRow.stockInicial || {}),
+    banadoGrande:  getBanadoRunningTotal(lastDate, productoId, 'banadoGrande', lastRow.stockInicial || {}),
+    linaresChica:  getCajaChicaLinaresRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
+    linaresGrande: getCajaGrandeLinaresRunningTotal(lastDate, productoId, lastRow.stockInicial || {}),
   };
 }
 
@@ -4359,7 +4410,17 @@ async function _refreshStock() {
     const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })();
-  await Promise.all([loadStockMensual(mesActual), loadStockMensual(mesAnterior)]);
+
+  // También cargar el stock del mes seleccionado en carga diaria
+  // y el mes anterior a ese, para que los running totals funcionen en cualquier mes
+  const mesCarga = $('cargaFecha')?.value?.slice(0, 7) || mesActual;
+  const [y, m] = mesCarga.split('-').map(Number);
+  const mesAnteriorAlCarga = m === 1
+    ? `${y - 1}-12`
+    : `${y}-${String(m - 1).padStart(2, '0')}`;
+
+  const meses = [...new Set([mesActual, mesAnterior, mesCarga, mesAnteriorAlCarga])];
+  await Promise.all(meses.map((mes) => loadStockMensual(mes)));
 }
 
 function renderReportesFiltros() {
@@ -4994,15 +5055,35 @@ function bindEvents() {
 
   $('cargaFecha')?.addEventListener('change', () => {
     state.reporteActual = null;
-    state.cargaSoloConMovimientos = false; // reset filtro al cambiar fecha
-    // Limpiar botón del filtro para que se regenere
+    state.cargaSoloConMovimientos = false;
     document.getElementById('carga-filtro-movimientos-wrap')?.remove();
     const fechaEl = $('cargaFecha');
     if (fechaEl) fechaEl.style.opacity = '0.5';
-    cargarReporteDiario().finally(() => {
-      if (fechaEl) fechaEl.style.opacity = '';
-      fechaEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+
+    // Recargar stock e invalidar cache de running totals al cambiar mes
+    const mesCarga = fechaEl?.value?.slice(0, 7);
+    if (mesCarga) {
+      const [y, m] = mesCarga.split('-').map(Number);
+      const mesAnterior = m === 1
+        ? `${y - 1}-12`
+        : `${y}-${String(m - 1).padStart(2, '0')}`;
+      Promise.all([
+        loadStockMensual(mesCarga),
+        loadStockMensual(mesAnterior),
+        _refreshReportes()
+      ]).then(() => {
+        _invalidateRunningTotalCache();
+        cargarReporteDiario().finally(() => {
+          if (fechaEl) fechaEl.style.opacity = '';
+          fechaEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      });
+    } else {
+      cargarReporteDiario().finally(() => {
+        if (fechaEl) fechaEl.style.opacity = '';
+        fechaEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
   });
 
   // Búsqueda de aroma en carga diaria
@@ -5571,3 +5652,4 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
+
