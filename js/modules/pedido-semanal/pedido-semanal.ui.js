@@ -195,9 +195,18 @@ function _renderTableMoron(tableEl, rows, canEditField, onFieldChange) {
         >${row.moronObservacion || ''}</textarea>
       </td>
       <td class="pedido-col-alvear" style="min-width:140px;text-align:center;">
-        ${row.alvearFechaEntrega
-          ? `<div style="font-weight:700;color:#a78bfa;">${row.alvearFechaEntrega}</div>`
-          : '<span style="color:rgba(255,255,255,.25);font-size:12px;">Sin fecha</span>'}
+        ${(() => {
+          const dest = row.moronFabricaDestino || 'alvear';
+          const fecha = dest === 'banado'  ? row.banadoFechaEntrega
+                      : dest === 'linares' ? row.linaresFechaEntrega
+                      : row.alvearFechaEntrega;
+          const color = dest === 'banado'  ? '#34d399'
+                      : dest === 'linares' ? '#f9a8d4'
+                      : '#a78bfa';
+          return fecha
+            ? `<div style="font-weight:700;color:${color}">${fecha}</div>`
+            : '<span style="color:rgba(255,255,255,.25);font-size:12px;">Sin fecha</span>';
+        })()}
       </td>
       <td class="pedido-col-alvear" style="min-width:120px;text-align:center;">
         ${(() => {
@@ -474,20 +483,45 @@ function _renderTableGerencia(tableEl, rows, canEditField, selectedRowIndex, onF
           >${row.moronObservacion || ''}</textarea>
         </td>
         <td class="pedido-col-alvear" style="min-width:150px;">
-          <input class="excel-input"
-            data-row="${rowIndex}" data-field="alvearFechaEntrega"
-            type="date" value="${row.alvearFechaEntrega || ''}"
-            ${canEditField('alvearFechaEntrega') ? '' : 'disabled'}
-            style="min-width:130px;"
-          />
+          ${(() => {
+            const dest = row.moronFabricaDestino || 'alvear';
+            if (dest === 'banado') {
+              const f = row.banadoFechaEntrega;
+              return f
+                ? `<div style="font-weight:700;color:#34d399;padding:6px">${f}</div>`
+                : '<span style="color:rgba(255,255,255,.25);font-size:12px;padding:6px;display:block">Sin fecha</span>';
+            }
+            if (dest === 'linares') {
+              const f = row.linaresFechaEntrega;
+              return f
+                ? `<div style="font-weight:700;color:#f9a8d4;padding:6px">${f}</div>`
+                : '<span style="color:rgba(255,255,255,.25);font-size:12px;padding:6px;display:block">Sin fecha</span>';
+            }
+            // Alvear — editable
+            return `<input class="excel-input"
+              data-row="${rowIndex}" data-field="alvearFechaEntrega"
+              type="date" value="${row.alvearFechaEntrega || ''}"
+              ${canEditField('alvearFechaEntrega') ? '' : 'disabled'}
+              style="min-width:130px;"
+            />`;
+          })()}
         </td>
         <td class="pedido-col-alvear" style="min-width:120px;">
-          <input class="excel-input pedido-col-alvear"
-            data-row="${rowIndex}" data-field="alvearCantidadEntregada"
-            type="text" inputmode="numeric" autocomplete="off"
-            value="${ent}"
-            ${canEditField('alvearCantidadEntregada') ? '' : 'disabled'}
-          />
+          ${(() => {
+            const dest = row.moronFabricaDestino || 'alvear';
+            if (dest === 'banado') {
+              return `<div style="font-weight:700;color:#34d399;text-align:center">${Number(row.banadoCantidadEntregada || 0)}</div>`;
+            }
+            if (dest === 'linares') {
+              return `<div style="font-weight:700;color:#f9a8d4;text-align:center">${Number(row.linaresCantidadEntregada || 0)}</div>`;
+            }
+            return `<input class="excel-input pedido-col-alvear"
+              data-row="${rowIndex}" data-field="alvearCantidadEntregada"
+              type="text" inputmode="numeric" autocomplete="off"
+              value="${ent}"
+              ${canEditField('alvearCantidadEntregada') ? '' : 'disabled'}
+            />`;
+          })()}
         </td>
         <td class="pedido-col-alvear" style="min-width:200px;">
           ${_renderMotivos(rowIndex, row.alvearMotivos || [], canEditField('alvearMotivos'))}
